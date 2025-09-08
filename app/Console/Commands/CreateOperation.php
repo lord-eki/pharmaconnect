@@ -58,6 +58,8 @@ class CreateOperation extends Command
 
     $user->assignRole('Operation');
     $this->info('Operation user created successfully.');
+    $this->info('Email: ' . $email);
+    $this->info('Password: ' . $password);
     }
 
    

@@ -58,6 +58,8 @@ class CreateSupplier extends Command
 
     $user->assignRole('Supplier');
     $this->info('Supplier user created successfully.');
+    $this->info('Email: ' . $email);
+    $this->info('Password: ' . $password);
     }
 
    

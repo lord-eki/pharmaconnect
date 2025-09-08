@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Traits\Traits;
+namespace App\Traits;
 
 use App\Models\Notification;
 use Illuminate\Database\Eloquent\Relations\HasMany;

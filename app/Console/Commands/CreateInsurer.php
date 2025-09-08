@@ -58,6 +58,8 @@ class CreateInsurer extends Command
 
     $user->assignRole('Insurer');
     $this->info('Insurer user created successfully.');
+    $this->info('Email: ' . $email);
+    $this->info('Password: ' . $password);
     }
 
    

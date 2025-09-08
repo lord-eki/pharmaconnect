@@ -58,6 +58,8 @@ class CreatePhysician extends Command
 
     $user->assignRole('Physician');
     $this->info('Physician user created successfully.');
+    $this->info('Email: ' . $email);
+    $this->info('Password: ' . $password);
     }
 
    

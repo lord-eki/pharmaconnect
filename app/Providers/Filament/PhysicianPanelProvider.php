@@ -29,7 +29,7 @@ class PhysicianPanelProvider extends PanelProvider
             ->id('Physician')
             ->path('physician')
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::Green,
             ])->login()
             ->discoverResources(in: app_path('Filament/Physician/Resources'), for: 'App\Filament\Physician\Resources')
             ->discoverPages(in: app_path('Filament/Physician/Pages'), for: 'App\Filament\Physician\Pages')
