@@ -16,29 +16,22 @@ class UsersTable
     {
         return $table
             ->columns([
-                TextColumn::make('email')
-                    ->label('Email address')
-                    ->searchable(),
-                TextColumn::make('email_verified_at')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('phone')
-                    ->searchable(),
-                TextColumn::make('phone_verified_at')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('name')
-                    ->searchable(),
-                ImageColumn::make('profile_image'),
-                IconColumn::make('is_active')
-                    ->boolean(),
-                TextColumn::make('last_login_at')
-                    ->dateTime()
-                    ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(isToggledHiddenByDefault: true)->label('Date'),
+                TextColumn::make('name')
+                    ->searchable(),
+                TextColumn::make('email')
+                    ->label('Email address')
+                    ->searchable(),
+                TextColumn::make('phone')
+                    ->searchable(),
+              
+                IconColumn::make('is_active')
+                    ->boolean()->label('Status'),
+            
+                
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
