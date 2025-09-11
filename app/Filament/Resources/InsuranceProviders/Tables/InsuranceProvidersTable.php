@@ -1,43 +1,40 @@
 <?php
 
-namespace App\Filament\Resources\Users\Tables;
+namespace App\Filament\Resources\InsuranceProviders\Tables;
 
-use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
-use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-class UsersTable
+class InsuranceProvidersTable
 {
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
                 TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true)->label('Date'),
-                TextColumn::make('name')
+                    ->date()->sortable()->label('Date'),
+                TextColumn::make('user.name')
+                    ->searchable(),
+                TextColumn::make('company_name')
+                    ->searchable(),
+                TextColumn::make('registration_number')
+                    ->searchable(),
+                TextColumn::make('contact_person')
+                    ->searchable(),
+                TextColumn::make('phone')
                     ->searchable(),
                 TextColumn::make('email')
                     ->label('Email address')
                     ->searchable(),
-                TextColumn::make('phone')
-                    ->searchable(),
 
                 IconColumn::make('is_active')
-                    ->boolean()->label('Status'),
+                    ->boolean()->label('Active'),
 
-
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 //

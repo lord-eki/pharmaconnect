@@ -17,7 +17,7 @@ class SupplierForm
             ->components([
                 Select::make('user_id')
                     ->options(function () {
-                        return User::whereHas('roles', fn($q) => $q->where('name', 'supplier'))
+                        return User::whereHas('roles', fn($q) => $q->where('name', 'Supplier'))
                             ->whereDoesntHave('supplier')
                             ->pluck('name', 'id');
                     }),
