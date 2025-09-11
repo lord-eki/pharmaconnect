@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Suppliers\Schemas;
 
+use App\Models\User;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -15,8 +16,11 @@ class SupplierForm
         return $schema
             ->components([
                 Select::make('user_id')
-                    ->relationship('user', 'name')
-                    ->required(),
+                    ->options(function () {
+                        return User::whereHas('roles', fn($q) => $q->where('name', 'supplier'))
+                            ->whereDoesntHave('supplier')
+                            ->pluck('name', 'id');
+                    }),
                 TextInput::make('company_name')
                     ->required(),
                 TextInput::make('registration_number')
