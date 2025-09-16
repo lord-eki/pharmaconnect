@@ -10,6 +10,8 @@ class RecentActivitiesWidget extends Widget
     protected string $view = 'filament.widgets.recent-activities-widget';
     protected int|string|array $columnSpan = 1;
 
+    
+
     public function getActivities(): array
     {
         return [

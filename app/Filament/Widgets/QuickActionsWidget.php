@@ -11,6 +11,9 @@ class QuickActionsWidget extends Widget
 
     protected int | string | array $columnSpan = 1;
 
+
+    
+
     public function getActions(): array
     {
         return [
