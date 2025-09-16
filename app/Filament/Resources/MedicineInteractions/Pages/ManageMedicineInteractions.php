@@ -13,7 +13,7 @@ class ManageMedicineInteractions extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()->icon('heroicon-o-plus-circle')->label('Add Medicine Interaction'),
         ];
     }
 }
