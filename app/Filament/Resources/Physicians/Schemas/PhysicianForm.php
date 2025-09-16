@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Physicians\Schemas;
 
+use App\Models\User;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
@@ -18,8 +19,11 @@ class PhysicianForm
         return $schema
             ->components([
                 Select::make('user_id')
-                    ->relationship('user', 'name')
-                    ->required(),
+                    ->options(function () {
+                        return User::whereHas('roles', fn($q) => $q->where('name', 'Physician'))
+                            ->whereDoesntHave('physician')
+                            ->pluck('name', 'id');
+                    }),
                 TextInput::make('license_number')
                     ->required(),
                 DatePicker::make('license_expiry_date'),
@@ -32,12 +36,12 @@ class PhysicianForm
                     ->default(null),
                 Select::make('qualification_level')
                     ->options([
-            'diploma' => 'Diploma',
-            'degree' => 'Degree',
-            'masters' => 'Masters',
-            'phd' => 'Phd',
-            'fellowship' => 'Fellowship',
-        ])
+                        'diploma' => 'Diploma',
+                        'degree' => 'Degree',
+                        'masters' => 'Masters',
+                        'phd' => 'Phd',
+                        'fellowship' => 'Fellowship',
+                    ])
                     ->default(null),
                 TextInput::make('practice_name')
                     ->default(null),
@@ -61,11 +65,11 @@ class PhysicianForm
                     ->default(null),
                 Select::make('verification_status')
                     ->options([
-            'pending' => 'Pending',
-            'verified' => 'Verified',
-            'rejected' => 'Rejected',
-            'suspended' => 'Suspended',
-        ])
+                        'pending' => 'Pending',
+                        'verified' => 'Verified',
+                        'rejected' => 'Rejected',
+                        'suspended' => 'Suspended',
+                    ])
                     ->default('pending')
                     ->required(),
                 DateTimePicker::make('verified_at'),
