@@ -1,0 +1,108 @@
+<?php
+
+namespace App\Filament\Resources\QuotationItems;
+
+use App\Filament\Resources\QuotationItems\Pages\ManageQuotationItems;
+use App\Models\QuotationItem;
+use BackedEnum;
+use UnitEnum;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+class QuotationItemResource extends Resource
+{
+    protected static ?string $model = QuotationItem::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
+
+    protected static string|UnitEnum|null $navigationGroup = 'Order & Quotations';
+
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                Select::make('quotation_id')
+                    ->relationship('quotation', 'id')
+                    ->required(),
+                Select::make('prescription_item_id')
+                    ->relationship('prescriptionItem', 'id')
+                    ->required(),
+                Select::make('supplier_id')
+                    ->relationship('supplier', 'id')
+                    ->required(),
+                Select::make('supplier_medicine_id')
+                    ->relationship('supplierMedicine', 'id')
+                    ->required(),
+                TextInput::make('quantity')
+                    ->required()
+                    ->numeric(),
+                TextInput::make('unit_price')
+                    ->required()
+                    ->numeric(),
+                TextInput::make('total_price')
+                    ->required()
+                    ->numeric(),
+            ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('quotation.id')
+                    ->searchable(),
+                TextColumn::make('prescriptionItem.id')
+                    ->searchable(),
+                TextColumn::make('supplier.id')
+                    ->searchable(),
+                TextColumn::make('supplierMedicine.id')
+                    ->searchable(),
+                TextColumn::make('quantity')
+                    ->numeric()
+                    ->sortable(),
+                TextColumn::make('unit_price')
+                    ->numeric()
+                    ->sortable(),
+                TextColumn::make('total_price')
+                    ->numeric()
+                    ->sortable(),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                //
+            ])
+            ->recordActions([
+                EditAction::make(),
+                DeleteAction::make(),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => ManageQuotationItems::route('/'),
+        ];
+    }
+}
