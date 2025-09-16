@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Widgets\QuickActionsWidget;
 use App\Http\Responses\CustomLoginResponse;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Http\Middleware\Authenticate;
