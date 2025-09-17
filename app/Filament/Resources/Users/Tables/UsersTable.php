@@ -19,9 +19,7 @@ class UsersTable
         return $table
             ->columns([
                 TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true)->label('Date'),
+                    ->date()->sortable()->label('Date'),
                 TextColumn::make('name')
                     ->searchable(),
                 TextColumn::make('email')
@@ -29,15 +27,9 @@ class UsersTable
                     ->searchable(),
                 TextColumn::make('phone')
                     ->searchable(),
-
                 IconColumn::make('is_active')
                     ->boolean()->label('Status'),
 
-
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 //

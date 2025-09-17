@@ -10,6 +10,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class PhysicianForm
@@ -18,12 +19,14 @@ class PhysicianForm
     {
         return $schema
             ->components([
+
+                Section::make('')->schema([
                 Select::make('user_id')
                     ->options(function () {
                         return User::whereHas('roles', fn($q) => $q->where('name', 'Physician'))
                             ->whereDoesntHave('physician')
                             ->pluck('name', 'id');
-                    }),
+                    })->label('Name'),
                 TextInput::make('license_number')
                     ->required(),
                 DatePicker::make('license_expiry_date'),
@@ -47,7 +50,7 @@ class PhysicianForm
                     ->default(null),
                 Textarea::make('practice_address')
                     ->default(null)
-                    ->columnSpanFull(),
+                    ->columnSpanFull()->label('Address'),
                 TextInput::make('county')
                     ->default(null),
                 TextInput::make('city')
@@ -56,10 +59,10 @@ class PhysicianForm
                     ->default(null),
                 TextInput::make('practice_phone')
                     ->tel()
-                    ->default(null),
+                    ->default(null)->label('Phone Number'),
                 TextInput::make('practice_email')
                     ->email()
-                    ->default(null),
+                    ->default(null)->label('Email'),
                 Select::make('practice_type')
                     ->options(['private' => 'Private', 'public' => 'Public', 'ngo' => 'Ngo', 'faith_based' => 'Faith based'])
                     ->default(null),
@@ -73,30 +76,13 @@ class PhysicianForm
                     ->default('pending')
                     ->required(),
                 DateTimePicker::make('verified_at'),
-                TextInput::make('verified_by')
-                    ->numeric()
-                    ->default(null),
                 Textarea::make('verification_notes')
                     ->default(null)
                     ->columnSpanFull(),
-                TextInput::make('document_path')
-                    ->default(null),
                 TextInput::make('commission_rate')
                     ->required()
                     ->numeric()
                     ->default(5.0),
-                TextInput::make('total_commissions_earned')
-                    ->required()
-                    ->numeric()
-                    ->default(0.0),
-                TextInput::make('total_prescriptions')
-                    ->required()
-                    ->numeric()
-                    ->default(0),
-                TextInput::make('total_fulfilled_prescriptions')
-                    ->required()
-                    ->numeric()
-                    ->default(0),
                 Textarea::make('prescription_preferences')
                     ->default(null)
                     ->columnSpanFull(),
@@ -116,6 +102,7 @@ class PhysicianForm
                 Textarea::make('working_days')
                     ->default(null)
                     ->columnSpanFull(),
+                ])->columnSpanFull()->columns(3)
             ]);
     }
 }

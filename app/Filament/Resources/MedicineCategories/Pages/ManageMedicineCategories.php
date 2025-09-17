@@ -10,6 +10,7 @@ class ManageMedicineCategories extends ManageRecords
 {
     protected static string $resource = MedicineCategoryResource::class;
 
+
     protected function getHeaderActions(): array
     {
         return [

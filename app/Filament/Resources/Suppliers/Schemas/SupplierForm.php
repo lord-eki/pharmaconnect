@@ -7,6 +7,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class SupplierForm
@@ -15,12 +16,13 @@ class SupplierForm
     {
         return $schema
             ->components([
+                Section::make('')->schema([
                 Select::make('user_id')
                     ->options(function () {
                         return User::whereHas('roles', fn($q) => $q->where('name', 'Supplier'))
                             ->whereDoesntHave('supplier')
                             ->pluck('name', 'id');
-                    }),
+                    })->label('Name'),
                 TextInput::make('company_name')
                     ->required(),
                 TextInput::make('registration_number')
@@ -66,6 +68,7 @@ class SupplierForm
                     ->required()
                     ->numeric()
                     ->default(24),
+                ])->columnSpanFull()->columns(3)
             ]);
     }
 }

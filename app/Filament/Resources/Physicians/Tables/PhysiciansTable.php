@@ -15,6 +15,9 @@ class PhysiciansTable
     {
         return $table
             ->columns([
+                TextColumn::make('created_at')
+                    ->dateTime()->label('Date')
+                    ->sortable(),
                 TextColumn::make('user.name')
                     ->searchable(),
                 TextColumn::make('license_number')
@@ -36,22 +39,15 @@ class PhysiciansTable
                     ->searchable(),
                 TextColumn::make('city')
                     ->searchable(),
-                TextColumn::make('postal_code')
-                    ->searchable(),
                 TextColumn::make('practice_phone')
                     ->searchable(),
                 TextColumn::make('practice_email')
                     ->searchable(),
                 TextColumn::make('practice_type'),
                 TextColumn::make('verification_status'),
-                TextColumn::make('verified_at')
-                    ->dateTime()
-                    ->sortable(),
                 TextColumn::make('verified_by')
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('document_path')
-                    ->searchable(),
                 TextColumn::make('commission_rate')
                     ->numeric()
                     ->sortable(),
@@ -78,14 +74,7 @@ class PhysiciansTable
                 TextColumn::make('practice_end_time')
                     ->time()
                     ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+
             ])
             ->filters([
                 //

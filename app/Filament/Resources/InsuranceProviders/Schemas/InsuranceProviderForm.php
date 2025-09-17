@@ -7,6 +7,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class InsuranceProviderForm
@@ -15,6 +16,8 @@ class InsuranceProviderForm
     {
         return $schema
             ->components([
+
+                Section::make('')->schema([
                 Select::make('user_id')->options(function () {
                     return User::whereHas('roles', fn($q) => $q->where('name', 'Insurer'))
                         ->whereDoesntHave('insuranceProvider')
@@ -40,7 +43,7 @@ class InsuranceProviderForm
                     ->default(null),
                 Toggle::make('is_active')
                     ->required(),
-                
+                ])->columnSpanFull()->columns(2) 
             ]);
     }
 }

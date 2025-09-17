@@ -16,6 +16,8 @@ class SuppliersTable
     {
         return $table
             ->columns([
+                TextColumn::make('created_at')
+                    ->date()->label('Date')->sortable(),
                 TextColumn::make('user.name')
                     ->searchable(),
                 TextColumn::make('company_name')
@@ -37,34 +39,12 @@ class SuppliersTable
                     ->searchable(),
                 TextColumn::make('postal_code')
                     ->searchable(),
-                TextColumn::make('bank_account_name')
-                    ->searchable(),
-                TextColumn::make('bank_account_number')
-                    ->searchable(),
-                TextColumn::make('bank_name')
-                    ->searchable(),
-                TextColumn::make('bank_branch')
-                    ->searchable(),
-                TextColumn::make('tax_pin')
-                    ->searchable(),
-                IconColumn::make('is_verified')
-                    ->boolean(),
                 IconColumn::make('is_active')
                     ->boolean(),
-                TextColumn::make('rating')
-                    ->numeric()
-                    ->sortable(),
                 TextColumn::make('fulfillment_sla_hours')
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+
             ])
             ->filters([
                 //
@@ -73,7 +53,7 @@ class SuppliersTable
                 ActionGroup::make([
                     EditAction::make(),
 
-                ])
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

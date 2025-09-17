@@ -14,12 +14,15 @@ class DeliveriesTable
     {
         return $table
             ->columns([
+                       TextColumn::make('created_at')
+                    ->dateTime()->sortable()
+                    ->label('Date'),
                 TextColumn::make('delivery_number')
                     ->searchable(),
                 TextColumn::make('order.id')
-                    ->searchable(),
+                    ->searchable()->label('Order'),
                 TextColumn::make('rider.id')
-                    ->searchable(),
+                    ->searchable()->label('Rider'),
                 TextColumn::make('pickup_latitude')
                     ->numeric()
                     ->sortable(),
@@ -34,20 +37,15 @@ class DeliveriesTable
                     ->sortable(),
                 TextColumn::make('estimated_distance_km')
                     ->numeric()
-                    ->sortable(),
+                    ->sortable()->label('Distance (km)'),
                 TextColumn::make('delivery_fee')
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('status'),
-                TextColumn::make('scheduled_pickup')
-                    ->dateTime()
-                    ->sortable(),
                 TextColumn::make('actual_pickup')
                     ->dateTime()
                     ->sortable(),
-                TextColumn::make('estimated_delivery')
-                    ->dateTime()
-                    ->sortable(),
+           
                 TextColumn::make('actual_delivery')
                     ->dateTime()
                     ->sortable(),
@@ -57,14 +55,8 @@ class DeliveriesTable
                     ->searchable(),
                 TextColumn::make('proof_of_delivery')
                     ->searchable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+         
+           
             ])
             ->filters([
                 //

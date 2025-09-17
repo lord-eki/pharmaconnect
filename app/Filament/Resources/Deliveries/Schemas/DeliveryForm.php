@@ -6,6 +6,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class DeliveryForm
@@ -14,6 +15,7 @@ class DeliveryForm
     {
         return $schema
             ->components([
+                Section::make('Delivery Details')->schema([
                 TextInput::make('delivery_number')
                     ->required(),
                 Select::make('order_id')
@@ -72,6 +74,7 @@ class DeliveryForm
                     ->default(null),
                 TextInput::make('proof_of_delivery')
                     ->default(null),
+                ])->columns(2)->columnSpanFull()
             ]);
     }
 }

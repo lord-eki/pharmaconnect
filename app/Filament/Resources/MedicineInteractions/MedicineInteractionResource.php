@@ -5,6 +5,7 @@ namespace App\Filament\Resources\MedicineInteractions;
 use App\Filament\Resources\MedicineInteractions\Pages\ManageMedicineInteractions;
 use App\Models\MedicineInteraction;
 use BackedEnum;
+use Filament\Schemas\Components\Section;
 use UnitEnum;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -31,6 +32,7 @@ class MedicineInteractionResource extends Resource
     {
         return $schema
             ->components([
+                Section::make()->schema([
                 Select::make('medicine_id')
                     ->relationship('medicine', 'id')
                     ->required(),
@@ -46,6 +48,7 @@ class MedicineInteractionResource extends Resource
                 Textarea::make('clinical_significance')
                     ->default(null)
                     ->columnSpanFull(),
+                ])->columns(2)->columnSpanFull(),
             ]);
     }
 
@@ -59,13 +62,8 @@ class MedicineInteractionResource extends Resource
                     ->searchable(),
                 TextColumn::make('interaction_type'),
                 TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->dateTime()->label('Date')
+                    ->sortable(),
             ])
             ->filters([
                 //
