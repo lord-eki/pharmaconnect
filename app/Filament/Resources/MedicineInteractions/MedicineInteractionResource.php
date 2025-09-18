@@ -56,9 +56,9 @@ class MedicineInteractionResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('medicine.id')
+                TextColumn::make('medicine.generic_name')
                     ->searchable(),
-                TextColumn::make('interactingMedicine.id')
+                TextColumn::make('interactingMedicine.generic_name')
                     ->searchable(),
                 TextColumn::make('interaction_type'),
                 TextColumn::make('created_at')

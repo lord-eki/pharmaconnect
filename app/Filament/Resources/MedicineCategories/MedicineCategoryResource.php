@@ -63,7 +63,7 @@ class MedicineCategoryResource extends Resource
                     ->sortable()->label('Date'),
                 TextColumn::make('name')
                     ->searchable(),
-                TextColumn::make('parent.name')
+                TextColumn::make('description')
                     ->searchable(),
                 IconColumn::make('is_active')
                     ->boolean(),
