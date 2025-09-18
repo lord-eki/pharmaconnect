@@ -5,6 +5,7 @@ namespace App\Filament\Resources\PrescriptionItems;
 use App\Filament\Resources\PrescriptionItems\Pages\ManagePrescriptionItems;
 use App\Models\PrescriptionItem;
 use BackedEnum;
+use Filament\Schemas\Components\Section;
 use UnitEnum;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -32,6 +33,7 @@ class PrescriptionItemResource extends Resource
     {
         return $schema
             ->components([
+                Section::make()->schema([
                 Select::make('prescription_id')
                     ->relationship('prescription', 'id')
                     ->required(),
@@ -67,6 +69,7 @@ class PrescriptionItemResource extends Resource
                 Textarea::make('notes')
                     ->default(null)
                     ->columnSpanFull(),
+                ])->columns(2)->columnSpanFull(),
             ]);
     }
 
@@ -95,12 +98,10 @@ class PrescriptionItemResource extends Resource
                 TextColumn::make('status'),
                 TextColumn::make('created_at')
                     ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->sortable(),
                 TextColumn::make('updated_at')
                     ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->sortable(),
             ])
             ->filters([
                 //

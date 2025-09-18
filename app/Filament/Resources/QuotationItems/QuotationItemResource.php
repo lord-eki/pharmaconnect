@@ -5,7 +5,6 @@ namespace App\Filament\Resources\QuotationItems;
 use App\Filament\Resources\QuotationItems\Pages\ManageQuotationItems;
 use App\Models\QuotationItem;
 use BackedEnum;
-use UnitEnum;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -17,6 +16,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class QuotationItemResource extends Resource
 {
@@ -25,7 +25,6 @@ class QuotationItemResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
 
     protected static string|UnitEnum|null $navigationGroup = 'Order & Quotations';
-
 
     public static function form(Schema $schema): Schema
     {
@@ -59,6 +58,9 @@ class QuotationItemResource extends Resource
     {
         return $table
             ->columns([
+                TextColumn::make('created_at')
+                    ->date()->label('Date')
+                    ->sortable(),
                 TextColumn::make('quotation.id')
                     ->searchable(),
                 TextColumn::make('prescriptionItem.id')
@@ -76,14 +78,7 @@ class QuotationItemResource extends Resource
                 TextColumn::make('total_price')
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+
             ])
             ->filters([
                 //

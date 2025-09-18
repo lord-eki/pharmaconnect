@@ -63,6 +63,9 @@ class QuotationResource extends Resource
     {
         return $table
             ->columns([
+                 TextColumn::make('created_at')
+                    ->date()->label('Date')
+                    ->sortable(),
                 TextColumn::make('quotation_number')
                     ->searchable(),
                 TextColumn::make('prescription.id')
@@ -74,14 +77,8 @@ class QuotationResource extends Resource
                 TextColumn::make('valid_until')
                     ->dateTime()
                     ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+               
+               
             ])
             ->filters([
                 //

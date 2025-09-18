@@ -5,20 +5,20 @@ namespace App\Filament\Resources\Orders;
 use App\Filament\Resources\Orders\Pages\ManageOrders;
 use App\Models\Order;
 use BackedEnum;
-use UnitEnum;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class OrderResource extends Resource
 {
@@ -48,13 +48,13 @@ class OrderResource extends Resource
                     ->numeric(),
                 Select::make('status')
                     ->options([
-            'pending' => 'Pending',
-            'confirmed' => 'Confirmed',
-            'processing' => 'Processing',
-            'shipped' => 'Shipped',
-            'delivered' => 'Delivered',
-            'cancelled' => 'Cancelled',
-        ])
+                        'pending' => 'Pending',
+                        'confirmed' => 'Confirmed',
+                        'processing' => 'Processing',
+                        'shipped' => 'Shipped',
+                        'delivered' => 'Delivered',
+                        'cancelled' => 'Cancelled',
+                    ])
                     ->default('pending')
                     ->required(),
                 DateTimePicker::make('ordered_at')
@@ -71,6 +71,9 @@ class OrderResource extends Resource
     {
         return $table
             ->columns([
+                TextColumn::make('created_at')
+                    ->date()->label('Date')
+                    ->sortable(),
                 TextColumn::make('order_number')
                     ->searchable(),
                 TextColumn::make('quotation.id')
@@ -86,20 +89,10 @@ class OrderResource extends Resource
                 TextColumn::make('ordered_at')
                     ->dateTime()
                     ->sortable(),
-                TextColumn::make('expected_delivery')
-                    ->dateTime()
-                    ->sortable(),
                 TextColumn::make('delivered_at')
                     ->dateTime()
                     ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+
             ])
             ->filters([
                 //
