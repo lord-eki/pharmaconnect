@@ -39,7 +39,7 @@ class OrderItemResource extends Resource
                         ->relationship('quotationItem', 'id')
                         ->required(),
                     Select::make('medicine_id')
-                        ->relationship('medicine', 'id')
+                        ->relationship('medicine', 'generic_name')
                         ->required(),
                     TextInput::make('quantity')
                         ->required()

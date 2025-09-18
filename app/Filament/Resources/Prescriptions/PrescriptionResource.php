@@ -39,8 +39,10 @@ class PrescriptionResource extends Resource
                     TextInput::make('prescription_number')
                         ->required(),
                     Select::make('physician_id')
-                        ->relationship('physician', 'name')
+                        ->relationship('physician', 'name', fn ($query) => $query->role('physician') 
+                        )
                         ->required(),
+
                     Select::make('patient_id')
                         ->relationship('patient', 'id')
                         ->required(),

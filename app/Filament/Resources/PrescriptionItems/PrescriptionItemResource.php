@@ -38,7 +38,7 @@ class PrescriptionItemResource extends Resource
                     ->relationship('prescription', 'id')
                     ->required(),
                 Select::make('medicine_id')
-                    ->relationship('medicine', 'id')
+                    ->relationship('medicine', 'generic_name')
                     ->required(),
                 TextInput::make('quantity')
                     ->required()

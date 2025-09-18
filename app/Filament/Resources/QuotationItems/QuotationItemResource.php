@@ -37,7 +37,7 @@ class QuotationItemResource extends Resource
                     ->relationship('prescriptionItem', 'id')
                     ->required(),
                 Select::make('supplier_id')
-                    ->relationship('supplier', 'id')
+                    ->relationship('supplier', 'company_name')
                     ->required(),
                 Select::make('supplier_medicine_id')
                     ->relationship('supplierMedicine', 'id')

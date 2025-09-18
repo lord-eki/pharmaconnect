@@ -34,10 +34,10 @@ class MedicineInteractionResource extends Resource
             ->components([
                 Section::make()->schema([
                 Select::make('medicine_id')
-                    ->relationship('medicine', 'id')
+                    ->relationship('medicine', 'generic_name')
                     ->required(),
-                Select::make('interacting_medicine_id')
-                    ->relationship('interactingMedicine', 'id')
+                Select::make('interacting_medicine')
+                    ->relationship('interactingMedicine', 'generic_name')
                     ->required(),
                 Select::make('interaction_type')
                     ->options(['minor' => 'Minor', 'moderate' => 'Moderate', 'major' => 'Major'])

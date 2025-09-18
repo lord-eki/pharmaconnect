@@ -38,7 +38,7 @@ class OrderResource extends Resource
                     ->relationship('quotation', 'id')
                     ->required(),
                 Select::make('supplier_id')
-                    ->relationship('supplier', 'id')
+                    ->relationship('supplier', 'company_name')
                     ->required(),
                 Select::make('prescription_id')
                     ->relationship('prescription', 'id')
