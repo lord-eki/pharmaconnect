@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Medicines;
 
+use App\Filament\Imports\MedicineImporter;
 use App\Filament\Resources\Medicines\Pages\ManageMedicines;
 use App\Models\Medicine;
 use BackedEnum;
@@ -9,6 +10,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -103,6 +105,9 @@ class MedicineResource extends Resource
                     ->searchable(),
                 IconColumn::make('is_active')
                     ->boolean(),
+            ])
+            ->headerActions([
+                ImportAction::make('Import Medicine Catalog')->icon(Heroicon::OutlinedArrowDownTray)->importer(MedicineImporter::class),
             ])
             ->filters([
                 //

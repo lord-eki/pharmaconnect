@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Widgets\QuickActionsWidget;
 use App\Http\Responses\CustomLoginResponse;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
+use Filament\Auth\MultiFactor\Email\EmailAuthentication;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -31,7 +32,13 @@ class AdminPanelProvider extends PanelProvider
             ->id('Admin')
             ->path('admin')
             ->login()
-            ->colors([
+            ->passwordReset()
+            ->emailVerification()
+            ->emailChangeVerification()
+            ->profile()
+            ->multiFactorAuthentication(
+                EmailAuthentication::make()
+            )->colors([
                 'primary' => Color::Emerald,
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
@@ -56,7 +63,6 @@ class AdminPanelProvider extends PanelProvider
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
             ->sidebarCollapsibleOnDesktop()->sidebarWidth('17rem')
             ->databaseNotifications()
-            ->profile()
             ->authMiddleware([
                 Authenticate::class,
             ]);

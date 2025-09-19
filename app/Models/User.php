@@ -5,7 +5,9 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Traits\HasAuditLog;
 use App\Traits\HasNotifications;
+use Filament\Auth\MultiFactor\Email\Contracts\HasEmailAuthentication;
 use Filament\Models\Contracts\FilamentUser;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -13,10 +15,10 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable implements FilamentUser, HasEmailAuthentication , MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, HasRoles , HasAuditLog , HasNotifications;
+    use HasFactory, HasRoles , HasAuditLog , Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -35,6 +37,7 @@ class User extends Authenticatable implements FilamentUser
         'last_login_at',
         'two_factor_secret',
         'two_factor_recovery_codes',
+        'has_email_authentication',
     ];
 
     /**
@@ -63,7 +66,24 @@ class User extends Authenticatable implements FilamentUser
             'last_login_at' => 'datetime',
             'two_factor_recovery_codes' => 'array',
             'password' => 'hashed',
+            'has_email_authentication' => 'boolean',
         ];
+    }
+
+
+        public function hasEmailAuthentication(): bool
+    {
+        // This method should return true if the user has enabled email authentication.
+        
+        return $this->has_email_authentication;
+    }
+
+    public function toggleEmailAuthentication(bool $condition): void
+    {
+        // This method should save whether or not the user has enabled email authentication.
+    
+        $this->has_email_authentication = $condition;
+        $this->save();
     }
 
 
