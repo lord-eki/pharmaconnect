@@ -50,7 +50,7 @@ class PhysicianPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
-            ])
+            ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
             ->authMiddleware([
                 Authenticate::class,
             ]);
