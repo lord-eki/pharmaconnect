@@ -38,7 +38,7 @@ class PhysicianPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Physician/Widgets'), for: 'App\Filament\Physician\Widgets')
             ->widgets([
-                AccountWidget::class,
+                // AccountWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
