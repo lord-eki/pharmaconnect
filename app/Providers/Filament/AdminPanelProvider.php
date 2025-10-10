@@ -60,7 +60,7 @@ class AdminPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
-            ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
+            ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')->spa()
             ->sidebarCollapsibleOnDesktop()->sidebarWidth('17rem')
             ->databaseNotifications()
             ->authMiddleware([

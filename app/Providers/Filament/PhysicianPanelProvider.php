@@ -51,7 +51,7 @@ class PhysicianPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
-            ->sidebarWidth('17rem')
+            ->sidebarWidth('17rem')->spa()->topNavigation()
             ->authMiddleware([
                 Authenticate::class,
             ]);

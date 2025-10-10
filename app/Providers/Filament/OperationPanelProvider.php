@@ -50,7 +50,7 @@ class OperationPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
-            ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
+            ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')->spa()
             ->authMiddleware([
                 Authenticate::class,
             ]);

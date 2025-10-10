@@ -38,7 +38,7 @@ class SupplierPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Supplier/Widgets'), for: 'App\Filament\Supplier\Widgets')
             ->widgets([
-                AccountWidget::class,
+                // AccountWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -50,7 +50,8 @@ class SupplierPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
-            ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
+            ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')->spa()
+            ->sidebarWidth('17rem')
             ->authMiddleware([
                 Authenticate::class,
             ]);
