@@ -208,7 +208,7 @@ class Quotation extends Model
             return true;
         }
         
-        // Implement condition checking logic based on your business rules
+        // Implement condition checking logic based on the  business rules
         // Example: Check medicine category, supplier rating, order value, etc.
         
         return true;
