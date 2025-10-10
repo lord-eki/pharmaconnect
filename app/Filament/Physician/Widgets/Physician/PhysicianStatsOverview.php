@@ -65,6 +65,7 @@ protected function getStats(): array
                 ->description('Awaiting approval')
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color('warning'),
+                
         ];
     }
 }

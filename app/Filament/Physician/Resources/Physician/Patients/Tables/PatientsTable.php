@@ -3,10 +3,12 @@
 namespace App\Filament\Physician\Resources\Physician\Patients\Tables;
 
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Support\Enums\Size;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
@@ -44,7 +46,6 @@ class PatientsTable
                     ->color(fn (string $state): string => match ($state) {
                         'male' => 'info',
                         'female' => 'success',
-                        'other' => 'warning',
                     }),
 
                 IconColumn::make('insurance_provider')
@@ -63,14 +64,11 @@ class PatientsTable
 
                 IconColumn::make('is_active')
                     ->label('Status')
-                    ->boolean()
-                    ->toggleable(),
-
+                    ->boolean(),
                 TextColumn::make('created_at')
                     ->label('Registered')
                     ->date('M j, Y')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
 
             ])
             ->filters([
@@ -84,7 +82,6 @@ class PatientsTable
                     ->options([
                         'male' => 'Male',
                         'female' => 'Female',
-                        'other' => 'Other',
                     ])
                     ->multiple(),
 
@@ -98,23 +95,29 @@ class PatientsTable
 
             ])
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make(),
-                Action::make('create_prescription')
-                    ->label('New Prescription')
-                    ->icon('heroicon-o-document-plus')
-                    ->color('success')
-                    ->url(fn ($record) => route('filament.physician.resources.prescriptions.create', [
-                        'patient_id' => $record->id,
-                    ])),            ])
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make(),
+                    Action::make('create_prescription')
+                        ->label('New Prescription')
+                        ->icon('heroicon-o-document-plus')
+                        ->color('success'),
+                    // ->url(fn ($record) => route('filament.physician.resources.prescriptions.create', [
+                    //     'patient_id' => $record->id,
+                    // ])),
+                ])->label('More actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->size(Size::Small)
+                    ->color('gray')
+                    ->button(),
+            ])
             ->toolbarActions([
-                  BulkActionGroup::make([
+                BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->visible(fn () => Auth::user()->can('delete_patient')),
-                ])
-            ]) ->defaultSort('created_at', 'desc')
-            ->modifyQueryUsing(fn ($query) => 
-                $query->where('physician_id', Auth::id())
+                ]),
+            ])->defaultSort('created_at', 'desc')
+            ->modifyQueryUsing(fn ($query) => $query->where('physician_id', Auth::id())
             );
     }
 }

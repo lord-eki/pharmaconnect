@@ -20,7 +20,20 @@ class OrderItem extends Model
     protected $casts = [
         'unit_price' => 'decimal:2',
         'total_price' => 'decimal:2',
+        'quantity' => 'integer',
     ];
+
+     protected static function boot()
+    {
+        parent::boot();
+
+        static::saving(function ($item) {
+            // Auto-calculate total price
+            if ($item->quantity && $item->unit_price) {
+                $item->total_price = $item->quantity * $item->unit_price;
+            }
+        });
+    }
 
     public function order(): BelongsTo
     {

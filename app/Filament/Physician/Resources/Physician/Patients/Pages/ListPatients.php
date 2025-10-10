@@ -13,7 +13,7 @@ class ListPatients extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()->label('Add Patient')->icon('heroicon-o-user-plus'),
         ];
     }
 }

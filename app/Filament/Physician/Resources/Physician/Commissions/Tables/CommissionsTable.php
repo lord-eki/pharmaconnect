@@ -2,8 +2,10 @@
 
 namespace App\Filament\Physician\Resources\Physician\Commissions\Tables;
 
+use App\Models\Commission;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
@@ -17,60 +19,73 @@ class CommissionsTable
     {
         return $table
             ->columns([
-                TextColumn::make('prescription.prescription_number')
-                    ->label('Prescription')
-                    ->searchable()
-                    ->sortable()
-                    ->copyable(),
-                    
-                TextColumn::make('order.order_number')
-                    ->label('Order')
-                    ->searchable()
-                    ->copyable(),
-                    
-                TextColumn::make('prescription.patient.first_name')
-                    ->label('Patient')
-                    ->formatStateUsing(fn ($record) => 
-                        "{$record->prescription->patient->first_name} {$record->prescription->patient->last_name}"
-                    )
-                    ->searchable(['first_name', 'last_name']),
-                    
-                TextColumn::make('commission_rate')
-                    ->label('Rate')
-                    ->suffix('%')
+         TextColumn::make('created_at')
+                    ->label('Date')
+                    ->date('M d, Y')
                     ->sortable(),
-                    
-                TextColumn::make('gross_amount')
+
+               TextColumn::make('prescription.prescription_number')
+                    ->label('Prescription #')
+                    ->searchable()
+                    ->copyable()
+                    // ->url(fn (Commission $record): string => 
+                    //     route('filament.physician.resources.prescriptions.view', $record->prescription))
+                    ->color('primary'),
+
+               TextColumn::make('order.order_number')
+                    ->label('Order #')
+                    ->searchable()
+                    ->copyable()
+                    // ->url(fn (Commission $record): string => 
+                    //     route('filament.physician.resources.orders.view', $record->order))
+                    ->color('info'),
+
+               TextColumn::make('prescription.patient.full_name')
+                    ->label('Patient')
+                    ->searchable(['first_name', 'last_name']),
+
+               TextColumn::make('gross_amount')
                     ->label('Order Amount')
                     ->money('KES')
                     ->sortable(),
-                    
-                TextColumn::make('commission_amount')
+
+               TextColumn::make('commission_rate')
+                    ->label('Rate')
+                    ->suffix('%')
+                    ->sortable(),
+
+               TextColumn::make('commission_amount')
                     ->label('Commission')
                     ->money('KES')
                     ->sortable()
-                    ->weight('bold')
+                    ->weight(FontWeight::Bold)
                     ->color('success'),
-                    
-                BadgeColumn::make('status')
+
+               BadgeColumn::make('status')
                     ->colors([
                         'warning' => 'pending',
                         'info' => 'approved',
                         'success' => 'paid',
                     ])
-                    ->sortable(),
-                    
+                    ->icons([
+                        'heroicon-o-clock' => 'pending',
+                        'heroicon-o-check-circle' => 'approved',
+                        'heroicon-o-banknotes' => 'paid',
+                    ]),
+
+                TextColumn::make('approved_at')
+                    ->label('Approved')
+                    ->dateTime('M d, Y')
+                    ->sortable()
+                    ->toggleable()
+                    ->placeholder('Pending'),
+
                 TextColumn::make('paid_at')
-                    ->label('Payment Date')
-                    ->dateTime('M j, Y')
+                    ->label('Paid')
+                    ->dateTime('M d, Y')
                     ->sortable()
-                    ->toggleable(),
-                    
-                TextColumn::make('created_at')
-                    ->label('Created')
-                    ->dateTime('M j, Y')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable()
+                    ->placeholder('Pending'),
             ])
             ->filters([
                 SelectFilter::make('status')

@@ -37,6 +37,21 @@ class Patient extends Model
         'is_active' => 'boolean',
     ];
 
+     protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($patient) {
+            if (!$patient->patient_number) {
+                $patient->patient_number = static::generatePatientNumber();
+            }
+            
+            if (!$patient->physician_id) {
+                $patient->physician_id = auth()->id();
+            }
+        });
+    }
+
     public function physician(): BelongsTo
     {
         return $this->belongsTo(User::class, 'physician_id');
@@ -51,14 +66,54 @@ class Patient extends Model
     {
         return $this->hasMany(InsuranceClaim::class);
     }
-
-    public function getFullNameAttribute(): string
+ // Generate unique patient number
+    public static function generatePatientNumber(): string
     {
-        return $this->first_name . ' ' . $this->last_name;
+        $prefix = 'PT';
+        $year = date('Y');
+        
+        $lastPatient = static::whereYear('created_at', $year)
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if ($lastPatient && preg_match('/\d+$/', $lastPatient->patient_number, $matches)) {
+            $sequence = intval($matches[0]) + 1;
+        } else {
+            $sequence = 1;
+        }
+
+        return sprintf('%s%s%06d', $prefix, $year, $sequence);
     }
 
+    // Accessor for full name
+    public function getFullNameAttribute(): string
+    {
+        return "{$this->first_name} {$this->last_name}";
+    }
+
+    // Accessor for age
     public function getAgeAttribute(): int
     {
-        return $this->date_of_birth->age;
+        return $this->date_of_birth ? $this->date_of_birth->age : 0;
+    }
+
+    // Check if patient has insurance
+    public function hasInsurance(): bool
+    {
+        return !empty($this->insurance_number) && !empty($this->insurance_provider);
+    }
+
+    // Get active prescriptions
+    public function activePrescriptions()
+    {
+        return $this->prescriptions()
+            ->whereIn('status', ['submitted', 'processing'])
+            ->orderBy('prescribed_at', 'desc');
+    }
+
+    // Scope for active patients
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
     }
 }

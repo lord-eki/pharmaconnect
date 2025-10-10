@@ -29,6 +29,34 @@ class Order extends Model
         'delivered_at' => 'datetime',
     ];
 
+
+     protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($order) {
+            if (!$order->order_number) {
+                $order->order_number = static::generateOrderNumber();
+            }
+            
+            if (!$order->ordered_at) {
+                $order->ordered_at = now();
+            }
+
+            // Set expected delivery (default 24 hours)
+            if (!$order->expected_delivery) {
+                $order->expected_delivery = now()->addHours(24);
+            }
+        });
+
+        static::saved(function ($order) {
+            // Update prescription status based on order status
+            if ($order->status === 'delivered' && $order->prescription) {
+                $order->prescription->markFulfilled();
+            }
+        });
+    }
+
     public function quotation(): BelongsTo
     {
         return $this->belongsTo(Quotation::class);
@@ -62,5 +90,321 @@ class Order extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
+    }
+
+     public function commission(): HasOne
+    {
+        return $this->hasOne(Commission::class);
+    }
+
+
+    // Generate unique order number (LPO)
+    public static function generateOrderNumber(): string
+    {
+        $prefix = 'LPO';
+        $year = date('Y');
+        $month = date('m');
+        
+        $lastOrder = static::whereYear('created_at', $year)
+            ->whereMonth('created_at', $month)
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if ($lastOrder && preg_match('/\d+$/', $lastOrder->order_number, $matches)) {
+            $sequence = intval($matches[0]) + 1;
+        } else {
+            $sequence = 1;
+        }
+
+        return sprintf('%s%s%s%05d', $prefix, $year, $month, $sequence);
+    }
+
+    // Confirm order (supplier accepts)
+    public function confirm(): bool
+    {
+        return DB::transaction(function () {
+            $this->status = 'confirmed';
+            $this->save();
+
+            // Update stock quantities
+            foreach ($this->items as $item) {
+                $supplierMedicine = $item->medicine->supplierMedicines()
+                    ->where('supplier_id', $this->supplier_id)
+                    ->first();
+                
+                if ($supplierMedicine) {
+                    $supplierMedicine->decrement('stock_quantity', $item->quantity);
+                }
+            }
+
+            // Notify physician and operations
+            $this->notifyStakeholders('confirmed');
+
+            return true;
+        });
+    }
+
+    // Mark as shipped
+    public function ship(): bool
+    {
+        if ($this->status !== 'confirmed') {
+            throw new \Exception('Order must be confirmed before shipping');
+        }
+
+        $this->status = 'shipped';
+        $this->save();
+
+        // Create delivery record
+        $this->createDelivery();
+
+        // Notify stakeholders
+        $this->notifyStakeholders('shipped');
+
+        return true;
+    }
+
+    // Create delivery assignment
+    protected function createDelivery(): void
+    {
+        if ($this->delivery) {
+            return; // Delivery already exists
+        }
+
+        $patient = $this->prescription->patient;
+
+        Delivery::create([
+            'delivery_number' => Delivery::generateDeliveryNumber(),
+            'order_id' => $this->id,
+            'pickup_address' => $this->supplier->address,
+            'delivery_address' => $patient->address ?? 'Not specified',
+            'delivery_latitude' => null, // Set if you have coordinates
+            'delivery_longitude' => null,
+            'delivery_fee' => $this->calculateDeliveryFee(),
+            'status' => 'pending',
+            'recipient_name' => $patient->full_name,
+            'recipient_phone' => $patient->phone,
+        ]);
+    }
+
+    // Calculate delivery fee based on distance/location
+    protected function calculateDeliveryFee(): float
+    {
+        // Simple logic - you can enhance this
+        // Based on county/city or actual distance calculation
+        
+        $patient = $this->prescription->patient;
+        $supplier = $this->supplier;
+
+        // Same county = KES 200
+        // Different county = KES 500
+        if ($patient->county === $supplier->county) {
+            return 200.00;
+        }
+
+        return 500.00;
+    }
+
+    // Mark as delivered
+    public function markDelivered(array $deliveryData = []): bool
+    {
+        return DB::transaction(function () use ($deliveryData) {
+            $this->status = 'delivered';
+            $this->delivered_at = now();
+            $this->save();
+
+            // Update delivery record
+            if ($this->delivery) {
+                $this->delivery->update([
+                    'status' => 'delivered',
+                    'actual_delivery' => now(),
+                    'proof_of_delivery' => $deliveryData['proof'] ?? null,
+                ]);
+            }
+
+            // Process payments
+            $this->processPayments();
+
+            // Calculate and create commission
+            $this->calculateCommission();
+
+            // Update prescription status
+            $this->prescription->markFulfilled();
+
+            // Notify stakeholders
+            $this->notifyStakeholders('delivered');
+
+            return true;
+        });
+    }
+
+    // Process payments for the order
+    protected function processPayments(): void
+    {
+        $patient = $this->prescription->patient;
+        $physician = $this->prescription->physician;
+
+        // Calculate amounts
+        $totalAmount = $this->total_amount;
+        $deliveryFee = $this->delivery ? $this->delivery->delivery_fee : 0;
+        $grandTotal = $totalAmount + $deliveryFee;
+
+        // Insurance portion (if applicable)
+        $insuranceCovered = 0;
+        if ($this->prescription->insurance_covered && $this->prescription->insuranceClaim) {
+            $claim = $this->prescription->insuranceClaim;
+            if ($claim->status === 'approved') {
+                $insuranceCovered = $claim->approved_amount;
+            }
+        }
+
+        // Patient portion
+        $patientPortion = $grandTotal - $insuranceCovered;
+
+        // Create payment record for patient
+        if ($patientPortion > 0) {
+            Payment::create([
+                'payment_reference' => Payment::generateReference(),
+                'payer_id' => $patient->physician_id, // Physician handles payment collection
+                'order_id' => $this->id,
+                'prescription_id' => $this->prescription_id,
+                'amount' => $patientPortion,
+                'currency' => 'KES',
+                'payment_method' => 'mpesa', // Default - can be changed
+                'status' => 'pending',
+            ]);
+        }
+
+        // Create payment record for insurance (if applicable)
+        if ($insuranceCovered > 0) {
+            Payment::create([
+                'payment_reference' => Payment::generateReference(),
+                'order_id' => $this->id,
+                'prescription_id' => $this->prescription_id,
+                'amount' => $insuranceCovered,
+                'currency' => 'KES',
+                'payment_method' => 'insurance',
+                'status' => 'processing',
+            ]);
+        }
+    }
+
+    // Calculate and create physician commission
+    protected function calculateCommission(): void
+    {
+        $physician = $this->prescription->physician;
+        
+        // Get commission rate (default 10% - can be configured)
+        $commissionRate = $this->getCommissionRate();
+        
+        $grossAmount = $this->total_amount;
+        $commissionAmount = $grossAmount * ($commissionRate / 100);
+
+        Commission::create([
+            'physician_id' => $physician->id,
+            'prescription_id' => $this->prescription_id,
+            'order_id' => $this->id,
+            'commission_rate' => $commissionRate,
+            'gross_amount' => $grossAmount,
+            'commission_amount' => $commissionAmount,
+            'status' => 'pending',
+        ]);
+    }
+
+    // Get commission rate for physician
+    protected function getCommissionRate(): float
+    {
+        // You can make this dynamic based on:
+        // - Physician tier/level
+        // - Order volume
+        // - Medicine category
+        // For now, return fixed rate
+        
+        return 10.0; // 10%
+    }
+
+    // Send notifications to stakeholders
+    protected function notifyStakeholders(string $event): void
+    {
+        // Implement notification logic
+        // - Email to physician
+        // - SMS to patient
+        // - System notification to operations
+        // - Update to supplier
+    }
+
+    // Cancel order
+    public function cancel(string $reason): bool
+    {
+        if (!in_array($this->status, ['pending', 'confirmed'])) {
+            throw new \Exception('Cannot cancel order in current status');
+        }
+
+        return DB::transaction(function () use ($reason) {
+            $this->status = 'cancelled';
+            $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . "Cancelled: " . $reason;
+            $this->save();
+
+            // Restore stock quantities if order was confirmed
+            if ($this->wasChanged('status') && $this->getOriginal('status') === 'confirmed') {
+                foreach ($this->items as $item) {
+                    $supplierMedicine = $item->medicine->supplierMedicines()
+                        ->where('supplier_id', $this->supplier_id)
+                        ->first();
+                    
+                    if ($supplierMedicine) {
+                        $supplierMedicine->increment('stock_quantity', $item->quantity);
+                    }
+                }
+            }
+
+            // Cancel delivery if exists
+            if ($this->delivery) {
+                $this->delivery->update(['status' => 'cancelled']);
+            }
+
+            // Notify stakeholders
+            $this->notifyStakeholders('cancelled');
+
+            return true;
+        });
+    }
+
+    // Scopes
+    public function scopePending($query)
+    {
+        return $query->where('status', 'pending');
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->whereIn('status', ['confirmed', 'processing', 'shipped']);
+    }
+
+    public function scopeForSupplier($query, $supplierId)
+    {
+        return $query->where('supplier_id', $supplierId);
+    }
+
+    // Accessors
+    public function getIsOverdueAttribute(): bool
+    {
+        if ($this->status === 'delivered' || !$this->expected_delivery) {
+            return false;
+        }
+
+        return $this->expected_delivery->isPast();
+    }
+
+    public function getStatusColorAttribute(): string
+    {
+        return match($this->status) {
+            'pending' => 'warning',
+            'confirmed' => 'info',
+            'processing' => 'info',
+            'shipped' => 'primary',
+            'delivered' => 'success',
+            'cancelled' => 'danger',
+            default => 'gray',
+        };
     }
 }

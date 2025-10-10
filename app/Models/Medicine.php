@@ -48,6 +48,11 @@ class Medicine extends Model
         return $this->hasMany(MedicineInteraction::class);
     }
 
+    public function supplierMedicines(): HasMany
+    {
+        return $this->hasMany(SupplierMedicine::class);
+    }
+
     public function reverseInteractions(): HasMany
     {
         return $this->hasMany(MedicineInteraction::class, 'interacting_medicine_id');

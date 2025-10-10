@@ -60,4 +60,106 @@ class Commission extends Model
     {
         return $this->belongsTo(User::class, 'approved_by');
     }
+
+     // Approve commission
+    public function approve(int $approvedBy): bool
+    {
+        if ($this->status !== 'pending') {
+            throw new \Exception('Commission must be pending to approve');
+        }
+
+        $this->status = 'approved';
+        $this->approved_at = now();
+        $this->approved_by = $approvedBy;
+        $this->save();
+
+        // Notify physician
+        $this->notifyPhysician();
+
+        return true;
+    }
+
+    // Process payment of commission
+    public function processPayout(string $paymentReference): bool
+    {
+        if ($this->status !== 'approved') {
+            throw new \Exception('Commission must be approved before payout');
+        }
+
+        $this->status = 'paid';
+        $this->paid_at = now();
+        $this->payment_reference = $paymentReference;
+        $this->save();
+
+        // Create payment record
+        Payment::create([
+            'payment_reference' => $paymentReference,
+            'payee_id' => $this->physician_id,
+            'amount' => $this->commission_amount,
+            'currency' => 'KES',
+            'payment_method' => 'bank_transfer',
+            'status' => 'completed',
+            'processed_at' => now(),
+            'notes' => "Commission payment for order {$this->order->order_number}",
+        ]);
+
+        return true;
+    }
+
+    // Notify physician
+    protected function notifyPhysician(): void
+    {
+        // Implement notification logic
+    }
+
+    // Scopes
+    public function scopePending($query)
+    {
+        return $query->where('status', 'pending');
+    }
+
+    public function scopeApproved($query)
+    {
+        return $query->where('status', 'approved');
+    }
+
+    public function scopePaid($query)
+    {
+        return $query->where('status', 'paid');
+    }
+
+    public function scopeForPhysician($query, int $physicianId)
+    {
+        return $query->where('physician_id', $physicianId);
+    }
+
+    public function scopeForPeriod($query, $startDate, $endDate)
+    {
+        return $query->whereBetween('created_at', [$startDate, $endDate]);
+    }
+
+    // Calculate total commissions for a physician
+    public static function totalForPhysician(int $physicianId, string $status = null): float
+    {
+        $query = static::where('physician_id', $physicianId);
+        
+        if ($status) {
+            $query->where('status', $status);
+        }
+        
+        return $query->sum('commission_amount');
+    }
+
+    // Get monthly earnings
+    public static function monthlyEarnings(int $physicianId, int $year = null, int $month = null): float
+    {
+        $year = $year ?? date('Y');
+        $month = $month ?? date('m');
+        
+        return static::where('physician_id', $physicianId)
+            ->whereYear('created_at', $year)
+            ->whereMonth('created_at', $month)
+            ->where('status', 'paid')
+            ->sum('commission_amount');
+    }
 }

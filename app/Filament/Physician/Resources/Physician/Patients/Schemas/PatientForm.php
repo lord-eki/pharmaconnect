@@ -39,7 +39,6 @@ class PatientForm
                                     ->options([
                                         'male' => 'Male',
                                         'female' => 'Female',
-                                        'other' => 'Other',
                                     ])
                                     ->required(),
                             ]),
