@@ -31,7 +31,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('Admin')
             ->path('admin')
-            ->login()->registration()
+            ->login()
             ->passwordReset()
             ->emailVerification()
             ->emailChangeVerification()
