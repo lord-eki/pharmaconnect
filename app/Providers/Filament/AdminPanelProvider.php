@@ -33,7 +33,6 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->passwordReset()
-            ->emailVerification()
             ->emailChangeVerification()
             ->profile()
             ->multiFactorAuthentication(
