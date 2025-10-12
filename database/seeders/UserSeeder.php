@@ -15,6 +15,7 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
+        // Sample Admin
         // Create Admin User
         $admin = User::firstOrCreate(
             ['email' => 'admin@pharmaconnect.com'],
