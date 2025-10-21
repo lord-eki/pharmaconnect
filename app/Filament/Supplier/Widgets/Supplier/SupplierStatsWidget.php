@@ -11,27 +11,29 @@ use Illuminate\Support\Facades\Auth;
 
 class SupplierStatsWidget extends StatsOverviewWidget
 {
-protected function getStats(): array
-    {
-        $supplierId = Auth::user()->userProfile->id ?? null;
+    protected static ?int $sort = 0;
 
-        if (!$supplierId) {
+    protected function getStats(): array
+    {
+        $supplierId = Auth::user()->supplier?->id;
+
+        if (! $supplierId) {
             return [];
         }
 
         // Pending Quotations
-        $pendingQuotations = Quotation::whereHas('quotationItems', function ($q) use ($supplierId) {
+        $pendingQuotations = Quotation::whereHas('items', function ($q) use ($supplierId) {
             $q->where('supplier_id', $supplierId);
         })
-        ->where('status', 'pending')
-        ->count();
+            ->where('status', 'pending')
+            ->count();
 
-        $lastWeekPendingQuotations = Quotation::whereHas('quotationItems', function ($q) use ($supplierId) {
+        $lastWeekPendingQuotations = Quotation::whereHas('items', function ($q) use ($supplierId) {
             $q->where('supplier_id', $supplierId);
         })
-        ->where('status', 'pending')
-        ->where('created_at', '>=', now()->subWeek())
-        ->count();
+            ->where('status', 'pending')
+            ->where('created_at', '>=', now()->subWeek())
+            ->count();
 
         // Active Orders
         $activeOrders = Order::where('supplier_id', $supplierId)
@@ -56,8 +58,8 @@ protected function getStats(): array
             ->whereYear('delivered_at', now()->subMonth()->year)
             ->sum('total_amount');
 
-        $revenueChange = $lastMonthRevenue > 0 
-            ? (($thisMonthRevenue - $lastMonthRevenue) / $lastMonthRevenue) * 100 
+        $revenueChange = $lastMonthRevenue > 0
+            ? (($thisMonthRevenue - $lastMonthRevenue) / $lastMonthRevenue) * 100
             : 0;
 
         // Low Stock Items
@@ -78,19 +80,19 @@ protected function getStats(): array
 
         return [
             Stat::make('Pending Quotations', $pendingQuotations)
-                ->description($lastWeekPendingQuotations . ' new this week')
+                ->description($lastWeekPendingQuotations.' new this week')
                 ->descriptionIcon('heroicon-m-arrow-trending-up')
                 ->color('warning')
                 ->chart([7, 3, 4, 5, 6, 3, $lastWeekPendingQuotations]),
 
             Stat::make('Active Orders', $activeOrders)
-                ->description($lastWeekActiveOrders . ' orders this week')
+                ->description($lastWeekActiveOrders.' orders this week')
                 ->descriptionIcon('heroicon-m-shopping-bag')
                 ->color('success')
                 ->chart([12, 8, 15, 10, 9, 11, $lastWeekActiveOrders]),
 
-            Stat::make('This Month Revenue', 'KES ' . number_format($thisMonthRevenue, 2))
-                ->description(($revenueChange >= 0 ? '+' : '') . number_format($revenueChange, 1) . '% from last month')
+            Stat::make('This Month Revenue', 'KES '.number_format($thisMonthRevenue, 2))
+                ->description(($revenueChange >= 0 ? '+' : '').number_format($revenueChange, 1).'% from last month')
                 ->descriptionIcon($revenueChange >= 0 ? 'heroicon-m-arrow-trending-up' : 'heroicon-m-arrow-trending-down')
                 ->color($revenueChange >= 0 ? 'success' : 'danger')
                 ->chart([
@@ -100,15 +102,15 @@ protected function getStats(): array
                     $lastMonthRevenue,
                     $thisMonthRevenue * 0.8,
                     $thisMonthRevenue * 0.9,
-                    $thisMonthRevenue
+                    $thisMonthRevenue,
                 ]),
 
             Stat::make('Low Stock Alert', $lowStockItems)
-                ->description($totalProducts . ' total products')
+                ->description($totalProducts.' total products')
                 ->descriptionIcon('heroicon-m-exclamation-triangle')
                 ->color($lowStockItems > 5 ? 'danger' : 'warning'),
 
-            Stat::make('Avg Order Value', 'KES ' . number_format($avgOrderValue, 2))
+            Stat::make('Avg Order Value', 'KES '.number_format($avgOrderValue, 2))
                 ->description('Average per order')
                 ->descriptionIcon('heroicon-m-currency-dollar')
                 ->color('info'),

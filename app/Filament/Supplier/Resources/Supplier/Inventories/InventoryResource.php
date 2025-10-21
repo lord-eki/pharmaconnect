@@ -28,10 +28,10 @@ class InventoryResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $supplierId = Auth::user()->userProfile->id ?? null;
+        $supplier  =  Auth::user()->supplier;
 
         return parent::getEloquentQuery()
-            ->where('supplier_id', $supplierId)
+            ->where('supplier_id', $supplier->id)
             ->with(['medicine']);
     }
 

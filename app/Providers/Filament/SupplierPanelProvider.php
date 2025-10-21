@@ -51,7 +51,8 @@ class SupplierPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')->spa()
-            ->sidebarWidth('17rem')->topNavigation()
+            ->sidebarWidth('17rem')->topNavigation()->databaseNotifications()
+            ->databaseNotificationsPolling('30s')
             ->authMiddleware([
                 Authenticate::class,
             ]);
