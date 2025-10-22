@@ -2,6 +2,8 @@
 
 namespace App\Filament\Supplier\Resources\Supplier\Inventories\Tables;
 
+use App\Filament\Exports\SupplierMedicineExporter;
+use App\Filament\Imports\SupplierMedicineImporter;
 use App\Models\SupplierMedicine;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -10,6 +12,9 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ExportBulkAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -99,7 +104,7 @@ class InventoriesTable
             ->recordActions([
                 ActionGroup::make([
                     EditAction::make(),
-                    
+
                     Action::make('quick_update_stock')
                         ->label('Update Stock')
                         ->icon('heroicon-o-arrow-path')
@@ -144,7 +149,15 @@ class InventoriesTable
                 ]),
             ])
             ->toolbarActions([
-               BulkActionGroup::make([
+                BulkActionGroup::make([
+
+                    ExportBulkAction::make()
+                        ->exporter(SupplierMedicineExporter::class)
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->label('Export Selected')
+                        ->color('primary')
+                        ->fileName(fn (): string => 'selected-medicines-' . now()->format('Y-m-d-His')),
+
                     BulkAction::make('mark_available')
                         ->label('Mark as Available')
                         ->icon('heroicon-o-check-circle')
@@ -163,6 +176,20 @@ class InventoriesTable
 
                     DeleteBulkAction::make(),
                 ]),
+            ])->headerActions([
+                ImportAction::make()->importer(SupplierMedicineImporter::class)->icon('heroicon-o-arrow-up-tray')
+                    ->label('Import Medicines')
+                    ->color('gray')
+                    ->csvDelimiter(',')
+                    ->maxRows(10000),
+
+                ExportAction::make()
+                    ->exporter(SupplierMedicineExporter::class)
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->label('Export Medicines')
+                    ->color('primary')
+                    ->fileName(fn (): string => 'supplier-medicines-'.now()->format('Y-m-d-His'))
+                    ->csvDelimiter(','),
             ]);
     }
 }

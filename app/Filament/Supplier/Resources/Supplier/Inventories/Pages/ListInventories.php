@@ -22,15 +22,15 @@ class ListInventories extends ListRecords
 
      public function getTabs(): array
     {
-        $supplierId = Auth::user()->userProfile->id ?? null;
+        $supplier =  Auth::user()->supplier;
 
         return [
             'all' => Tab::make('All Products')
-                ->badge(fn () => \App\Models\SupplierMedicine::where('supplier_id', $supplierId)->count()),
+                ->badge(fn () => \App\Models\SupplierMedicine::where('supplier_id', $supplier->id)->count()),
 
             'available' => Tab::make('Available')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('is_available', true))
-                ->badge(fn () => \App\Models\SupplierMedicine::where('supplier_id', $supplierId)
+                ->badge(fn () => \App\Models\SupplierMedicine::where('supplier_id', $supplier->id)
                     ->where('is_available', true)->count())
                 ->badgeColor('success'),
 
@@ -39,7 +39,7 @@ class ListInventories extends ListRecords
                     ->where('stock_quantity', '<=', 10)
                     ->where('stock_quantity', '>', 0)
                 )
-                ->badge(fn () => \App\Models\SupplierMedicine::where('supplier_id', $supplierId)
+                ->badge(fn () => \App\Models\SupplierMedicine::where('supplier_id', $supplier->id)
                     ->where('stock_quantity', '<=', 10)
                     ->where('stock_quantity', '>', 0)
                     ->count())
@@ -47,7 +47,7 @@ class ListInventories extends ListRecords
 
             'out_of_stock' => Tab::make('Out of Stock')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('stock_quantity', 0))
-                ->badge(fn () => \App\Models\SupplierMedicine::where('supplier_id', $supplierId)
+                ->badge(fn () => \App\Models\SupplierMedicine::where('supplier_id', $supplier->id)
                     ->where('stock_quantity', 0)->count())
                 ->badgeColor('danger'),
 
@@ -56,7 +56,7 @@ class ListInventories extends ListRecords
                     ->whereNotNull('expiry_date')
                     ->where('expiry_date', '<=', now()->addMonths(3))
                 )
-                ->badge(fn () => \App\Models\SupplierMedicine::where('supplier_id', $supplierId)
+                ->badge(fn () => \App\Models\SupplierMedicine::where('supplier_id', $supplier->id)
                     ->whereNotNull('expiry_date')
                     ->where('expiry_date', '<=', now()->addMonths(3))
                     ->count())
