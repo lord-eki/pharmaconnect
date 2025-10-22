@@ -255,7 +255,7 @@ class Prescription extends Model
     }
 
     // Cancel prescription
-    public function cancel(string $reason = null): bool
+    public function cancel(?string $reason = null): bool
     {
         if (!in_array($this->status, ['draft', 'submitted', 'processing'])) {
             throw new \Exception('Cannot cancel prescription in current status');
