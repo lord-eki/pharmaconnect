@@ -2,6 +2,7 @@
 
 namespace App\Filament\Physician\Resources\Physician\Patients\Schemas;
 
+use App\Models\InsuranceProvider;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -88,9 +89,9 @@ class PatientForm
                     ->schema([
                         Grid::make(2)
                             ->schema([
-                                TextInput::make('insurance_provider')
+                                Select::make('insurance_provider')
                                     ->label('Provider')
-                                    ->maxLength(255),
+                                    ->options(InsuranceProvider::query()->pluck('company_name', 'id')),
                                     
                                 TextInput::make('insurance_number')
                                     ->label('Policy/Member Number')

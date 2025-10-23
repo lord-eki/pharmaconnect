@@ -56,15 +56,7 @@ protected function getStats(): array
                 ->descriptionIcon('heroicon-m-clock')
                 ->color('warning'),
                 
-            Stat::make('Monthly Commission', 'KES ' . number_format($monthlyCommission, 2))
-                ->description('Earned this month')
-                ->descriptionIcon('heroicon-m-currency-dollar')
-                ->color('success'),
-                
-            Stat::make('Pending Commission', 'KES ' . number_format($pendingCommission, 2))
-                ->description('Awaiting approval')
-                ->descriptionIcon('heroicon-m-banknotes')
-                ->color('warning'),
+          
                 
         ];
     }

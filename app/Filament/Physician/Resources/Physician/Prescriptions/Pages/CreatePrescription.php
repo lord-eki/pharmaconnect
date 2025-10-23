@@ -36,8 +36,9 @@ class CreatePrescription extends CreateRecord
 
     protected function afterCreate(): void
     {
-        // Calculate total amount from items
-        $this->getRecord()->updateTotalAmount();
+        if ($this->getRecord()->items()->exists()) {
+            $this->getRecord()->updateTotalAmount();
+        }
     }
 
     protected function getHeaderActions(): array

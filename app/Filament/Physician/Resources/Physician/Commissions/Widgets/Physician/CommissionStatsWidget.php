@@ -87,15 +87,7 @@ class CommissionStatsWidget extends StatsOverviewWidget
                     $thisMonthEarnings
                 ]),
             
-            Stat::make('Total Earned', 'KES ' . number_format($totalEarnings, 2))
-                ->description('Lifetime earnings')
-                ->descriptionIcon('heroicon-o-banknotes')
-                ->color('success'),
-            
-            Stat::make('Average Per Order', 'KES ' . number_format($avgCommission ?? 0, 2))
-                ->description('Average commission amount')
-                ->descriptionIcon('heroicon-o-calculator')
-                ->color('gray'),
+          
         ];
     }
 }

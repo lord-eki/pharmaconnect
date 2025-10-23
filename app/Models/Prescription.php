@@ -11,7 +11,9 @@ use Illuminate\Support\Facades\DB;
 
 class Prescription extends Model
 {
-    use HasFactory , HasAuditLog;
+    use HasFactory, HasAuditLog;
+
+    protected bool $isUpdatingTotal = false;
 
     protected $fillable = [
         'prescription_number',
@@ -36,9 +38,6 @@ class Prescription extends Model
         'total_amount' => 'decimal:2',
     ];
 
-
-
-    //Automatically set physician_id and generate prescription_number
     protected static function boot()
     {
         parent::boot();
@@ -56,19 +55,12 @@ class Prescription extends Model
                 $prescription->prescribed_at = now();
             }
 
-            // Set default status
             if (!$prescription->status) {
                 $prescription->status = 'draft';
             }
         });
 
-        // Update total_amount after saving items
-        static::saved(function ($prescription) {
-            $prescription->updateTotalAmount();
-        });
     }
-
-
 
     public function physician(): BelongsTo
     {
@@ -105,16 +97,12 @@ class Prescription extends Model
         return $this->hasMany(Commission::class);
     }
 
-
-
-    // Generate unique prescription number
     public static function generatePrescriptionNumber(): string
     {
         $prefix = 'RX';
         $year = date('Y');
         $month = date('m');
         
-        // Get the last prescription number for this month
         $lastPrescription = static::whereYear('created_at', $year)
             ->whereMonth('created_at', $month)
             ->orderBy('id', 'desc')
@@ -129,33 +117,25 @@ class Prescription extends Model
         return sprintf('%s%s%s%05d', $prefix, $year, $month, $sequence);
     }
 
-    // Submit prescription for processing
     public function submit(): bool
     {
         return DB::transaction(function () {
-            // Validate prescription has items
             if ($this->items->isEmpty()) {
                 throw new \Exception('Cannot submit prescription without medicines');
             }
 
-            // Check for drug interactions
             $this->checkDrugInteractions();
 
-            // Update status
             $this->status = 'submitted';
             $this->save();
 
-            // Trigger quotation generation process
             $this->generateQuotation();
-
-            // Send notifications
             $this->notifyStakeholders();
 
             return true;
         });
     }
 
-    // Check for drug interactions
     protected function checkDrugInteractions(): void
     {
         $medicineIds = $this->items->pluck('medicine_id')->toArray();
@@ -165,10 +145,7 @@ class Prescription extends Model
                   ->whereIn('interacting_medicine_id', $medicineIds);
         })->get();
 
-        // Store interactions for physician review
         if ($interactions->isNotEmpty()) {
-            // You can implement a notification system here
-            // For now, we'll just log them
             foreach ($interactions as $interaction) {
                 if ($interaction->interaction_type === 'major') {
                     \Log::warning("Major drug interaction detected in prescription {$this->prescription_number}", [
@@ -180,11 +157,9 @@ class Prescription extends Model
             }
         }
 
-        // Check patient allergies
         if ($this->patient->allergies) {
             foreach ($this->items as $item) {
                 $medicine = $item->medicine;
-                // Simple check - you might want to make this more sophisticated
                 if (stripos($medicine->active_ingredients, $this->patient->allergies) !== false) {
                     \Log::warning("Potential allergy conflict in prescription {$this->prescription_number}", [
                         'medicine' => $medicine->generic_name,
@@ -195,20 +170,17 @@ class Prescription extends Model
         }
     }
 
-    // Generate quotation
     protected function generateQuotation(): void
     {
         $quotation = Quotation::create([
             'quotation_number' => Quotation::generateQuotationNumber(),
             'prescription_id' => $this->id,
-            'total_amount' => 0, // Will be calculated
+            'total_amount' => 0,
             'status' => 'pending',
-            'valid_until' => now()->addHours(24), // 24-hour validity
+            'valid_until' => now()->addHours(24),
         ]);
 
-        // Create quotation items and request quotes from suppliers
         foreach ($this->items as $item) {
-            // Get all suppliers who have this medicine
             $supplierMedicines = $item->medicine->supplierMedicines()
                 ->where('is_available', true)
                 ->where('stock_quantity', '>=', $item->quantity)
@@ -227,34 +199,41 @@ class Prescription extends Model
             }
         }
 
-        // Update quotation total
         $quotation->calculateTotal();
-        
-        // Trigger price optimization
         $quotation->optimizePricing();
     }
 
-    // Send notifications to stakeholders
     protected function notifyStakeholders(): void
     {
-        // Notify patient
-        // Notify operations team
-        // Create system notifications
-        // You'll implement actual notification logic based on your notification system
+        // Implement notification logic
     }
 
-    // Update total amount
     public function updateTotalAmount(): void
     {
-        $total = $this->items()->sum('total_price');
-        
-        if ($this->total_amount != $total) {
-            $this->total_amount = $total;
-            $this->saveQuietly(); // Avoid infinite loop
+        // Prevent recursive calls
+        if ($this->isUpdatingTotal) {
+            return;
+        }
+
+        $this->isUpdatingTotal = true;
+
+        try {
+            $total = $this->items()->sum('total_price');
+            
+            if ($this->total_amount != $total) {
+                // Use DB query to avoid triggering events
+                DB::table('prescriptions')
+                    ->where('id', $this->id)
+                    ->update(['total_amount' => $total]);
+                
+                // Update the model instance
+                $this->total_amount = $total;
+            }
+        } finally {
+            $this->isUpdatingTotal = false;
         }
     }
 
-    // Cancel prescription
     public function cancel(?string $reason = null): bool
     {
         if (!in_array($this->status, ['draft', 'submitted', 'processing'])) {
@@ -266,7 +245,6 @@ class Prescription extends Model
             $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . "Cancelled: " . $reason;
             $this->save();
 
-            // Cancel related quotations and orders
             if ($this->quotation) {
                 $this->quotation->update(['status' => 'rejected']);
             }
@@ -275,7 +253,6 @@ class Prescription extends Model
         });
     }
 
-    // Mark as fulfilled
     public function markFulfilled(): bool
     {
         $this->status = 'fulfilled';
@@ -283,7 +260,6 @@ class Prescription extends Model
         return $this->save();
     }
 
-    // Scope for filtering
     public function scopeActive($query)
     {
         return $query->whereIn('status', ['submitted', 'processing']);
@@ -294,7 +270,6 @@ class Prescription extends Model
         return $query->where('physician_id', $physicianId);
     }
 
-    // Accessor for full status display
     public function getStatusLabelAttribute(): string
     {
         return match($this->status) {
@@ -306,5 +281,4 @@ class Prescription extends Model
             default => 'Unknown',
         };
     }
-
 }

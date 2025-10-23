@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Patient extends Model
 {
-     use HasFactory;
+    use HasFactory;
 
     protected $fillable = [
         'physician_id',
@@ -37,16 +37,16 @@ class Patient extends Model
         'is_active' => 'boolean',
     ];
 
-     protected static function boot()
+    protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($patient) {
-            if (!$patient->patient_number) {
+            if (! $patient->patient_number) {
                 $patient->patient_number = static::generatePatientNumber();
             }
-            
-            if (!$patient->physician_id) {
+
+            if (! $patient->physician_id) {
                 $patient->physician_id = auth()->id();
             }
         });
@@ -66,18 +66,19 @@ class Patient extends Model
     {
         return $this->hasMany(InsuranceClaim::class);
     }
- // Generate unique patient number
+
+    // Generate unique patient number
     public static function generatePatientNumber(): string
     {
         $prefix = 'PT';
         $year = date('Y');
-        
+
         $lastPatient = static::whereYear('created_at', $year)
             ->orderBy('id', 'desc')
             ->first();
 
-        if ($lastPatient && preg_match('/\d+$/', $lastPatient->patient_number, $matches)) {
-            $sequence = intval($matches[0]) + 1;
+        if ($lastPatient && preg_match('/(\d{6})$/', $lastPatient->patient_number, $matches)) {
+            $sequence = intval($matches[1]) + 1;
         } else {
             $sequence = 1;
         }
@@ -100,7 +101,7 @@ class Patient extends Model
     // Check if patient has insurance
     public function hasInsurance(): bool
     {
-        return !empty($this->insurance_number) && !empty($this->insurance_provider);
+        return ! empty($this->insurance_number) && ! empty($this->insurance_provider);
     }
 
     // Get active prescriptions

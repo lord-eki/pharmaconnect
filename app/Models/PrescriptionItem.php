@@ -31,7 +31,6 @@ class PrescriptionItem extends Model
         'total_price' => 'decimal:2',
     ];
 
-
     protected static function boot()
     {
         parent::boot();
@@ -44,13 +43,16 @@ class PrescriptionItem extends Model
         });
 
         static::saved(function ($item) {
-            // Update prescription total
-            $item->prescription->updateTotalAmount();
+            if ($item->prescription_id && $item->prescription) {
+                $item->prescription->updateTotalAmount();
+            }
         });
 
         static::deleted(function ($item) {
             // Update prescription total when item is deleted
-            $item->prescription->updateTotalAmount();
+            if ($item->prescription_id && $item->prescription) {
+                $item->prescription->updateTotalAmount();
+            }
         });
     }
 
