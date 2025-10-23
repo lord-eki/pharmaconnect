@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Medicine extends Model
 {
@@ -68,5 +69,19 @@ class Medicine extends Model
     public function prescriptionItems(): HasMany
     {
         return $this->hasMany(PrescriptionItem::class);
+    }
+
+    public function getCheapestSupplierPrice(?int $quantity = null)
+    {
+        $query = DB::table('supplier_medicines')
+            ->where('medicine_id', $this->id)
+            ->where('is_available', true);
+
+        if ($quantity) {
+            $query->where('stock_quantity', '>=', $quantity);
+        }
+
+        return $query->orderBy('unit_price', 'asc')
+            ->value('unit_price');
     }
 }

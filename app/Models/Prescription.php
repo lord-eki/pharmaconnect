@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 class Prescription extends Model
 {
-    use HasFactory, HasAuditLog;
+    use HasAuditLog, HasFactory;
 
     protected bool $isUpdatingTotal = false;
 
@@ -43,19 +43,19 @@ class Prescription extends Model
         parent::boot();
 
         static::creating(function ($prescription) {
-            if (!$prescription->physician_id) {
+            if (! $prescription->physician_id) {
                 $prescription->physician_id = auth()->id();
             }
-            
-            if (!$prescription->prescription_number) {
+
+            if (! $prescription->prescription_number) {
                 $prescription->prescription_number = static::generatePrescriptionNumber();
             }
-            
-            if (!$prescription->prescribed_at) {
+
+            if (! $prescription->prescribed_at) {
                 $prescription->prescribed_at = now();
             }
 
-            if (!$prescription->status) {
+            if (! $prescription->status) {
                 $prescription->status = 'draft';
             }
         });
@@ -102,13 +102,13 @@ class Prescription extends Model
         $prefix = 'RX';
         $year = date('Y');
         $month = date('m');
-        
+
         $lastPrescription = static::whereYear('created_at', $year)
             ->whereMonth('created_at', $month)
             ->orderBy('id', 'desc')
             ->first();
 
-        if ($lastPrescription && preg_match('/\d+$/', $lastPrescription->prescription_number, $matches)) {
+        if ($lastPrescription && preg_match('/(\d{6})$/', $lastPrescription->prescription_number, $matches)) {
             $sequence = intval($matches[0]) + 1;
         } else {
             $sequence = 1;
@@ -139,10 +139,10 @@ class Prescription extends Model
     protected function checkDrugInteractions(): void
     {
         $medicineIds = $this->items->pluck('medicine_id')->toArray();
-        
+
         $interactions = MedicineInteraction::where(function ($query) use ($medicineIds) {
             $query->whereIn('medicine_id', $medicineIds)
-                  ->whereIn('interacting_medicine_id', $medicineIds);
+                ->whereIn('interacting_medicine_id', $medicineIds);
         })->get();
 
         if ($interactions->isNotEmpty()) {
@@ -219,13 +219,12 @@ class Prescription extends Model
 
         try {
             $total = $this->items()->sum('total_price');
-            
+
             if ($this->total_amount != $total) {
-                // Use DB query to avoid triggering events
                 DB::table('prescriptions')
                     ->where('id', $this->id)
                     ->update(['total_amount' => $total]);
-                
+
                 // Update the model instance
                 $this->total_amount = $total;
             }
@@ -236,13 +235,13 @@ class Prescription extends Model
 
     public function cancel(?string $reason = null): bool
     {
-        if (!in_array($this->status, ['draft', 'submitted', 'processing'])) {
+        if (! in_array($this->status, ['draft', 'submitted', 'processing'])) {
             throw new \Exception('Cannot cancel prescription in current status');
         }
 
         return DB::transaction(function () use ($reason) {
             $this->status = 'cancelled';
-            $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . "Cancelled: " . $reason;
+            $this->notes = ($this->notes ? $this->notes."\n\n" : '').'Cancelled: '.$reason;
             $this->save();
 
             if ($this->quotation) {
@@ -257,6 +256,7 @@ class Prescription extends Model
     {
         $this->status = 'fulfilled';
         $this->fulfilled_at = now();
+
         return $this->save();
     }
 
@@ -272,7 +272,7 @@ class Prescription extends Model
 
     public function getStatusLabelAttribute(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             'draft' => 'Draft',
             'submitted' => 'Submitted',
             'processing' => 'Processing',
@@ -281,4 +281,6 @@ class Prescription extends Model
             default => 'Unknown',
         };
     }
+
+  
 }

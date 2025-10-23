@@ -18,6 +18,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class PrescriptionForm
 {
@@ -80,15 +81,14 @@ class PrescriptionForm
                                             ->placeholder('List any existing medical conditions'),
                                     ]),
                             ])
-                            ->reactive()
+                            ->live(onBlur: true) // Changed from reactive
                             ->afterStateUpdated(function ($state, Set $set) {
-                                if ($state) {
-                                    $patient = Patient::find($state);
-                                    if ($patient) {
-                                        // Display patient info for reference
-                                        $set('patient_allergies_display', $patient->allergies);
-                                        $set('patient_conditions_display', $patient->medical_conditions);
-                                    }
+                                if (!$state) return;
+                                
+                                $patient = Patient::find($state);
+                                if ($patient) {
+                                    $set('patient_allergies_display', $patient->allergies);
+                                    $set('patient_conditions_display', $patient->medical_conditions);
                                 }
                             }),
                         
@@ -137,33 +137,28 @@ class PrescriptionForm
                                     ->searchable(['generic_name', 'brand_name', 'active_ingredients'])
                                     ->preload()
                                     ->required()
-                                    ->reactive()
+                                    ->live(debounce: 300)
                                     ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                                        if ($state) {
-                                            $medicine = Medicine::with(['supplierMedicines' => function($query) {
-                                                $query->where('is_available', true)
-                                                      ->orderBy('unit_price', 'asc');
-                                            }])->find($state);
+                                        if (!$state) return;
+                                        
+                                        // Use the alternative method
+                                        $medicine = Medicine::find($state);
+                                        if (!$medicine) return;
+                                        
+                                        $quantity = $get('quantity');
+                                        $lowestPrice = $medicine->getCheapestSupplierPrice($quantity);
+                                        
+                                        if ($lowestPrice) {
+                                            $set('unit_price', $lowestPrice);
                                             
-                                            if ($medicine && $medicine->supplierMedicines->isNotEmpty()) {
-                                                $lowestPrice = $medicine->supplierMedicines->first()->unit_price;
-                                                $set('unit_price', $lowestPrice);
-                                                
-                                                // Calculate total if quantity exists
-                                                $quantity = $get('quantity');
-                                                if ($quantity) {
-                                                    $set('total_price', $lowestPrice * $quantity);
-                                                }
+                                            // Calculate total if quantity exists
+                                            if ($quantity && $quantity > 0) {
+                                                $set('total_price', $lowestPrice * $quantity);
                                             }
-                                            
-                                            // Set medicine info for display
-                                            if ($medicine) {
-                                                $set('medicine_info', [
-                                                    'usage' => $medicine->usage_instructions,
-                                                    'side_effects' => $medicine->side_effects,
-                                                    'contraindications' => $medicine->contraindications,
-                                                ]);
-                                            }
+                                        } else {
+                                            // No supplier found with stock
+                                            $set('unit_price', 0);
+                                            $set('total_price', 0);
                                         }
                                     })
                                     ->columnSpan(2),
@@ -172,11 +167,28 @@ class PrescriptionForm
                                     ->numeric()
                                     ->required()
                                     ->minValue(1)
-                                    ->reactive()
+                                    ->live(debounce: 500)
                                     ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                                        $unitPrice = $get('unit_price');
-                                        if ($state && $unitPrice) {
-                                            $set('total_price', $state * $unitPrice);
+                                        if (!$state || $state <= 0) return;
+                                        
+                                        $medicineId = $get('medicine_id');
+                                        if (!$medicineId) return;
+                                        
+                                        // Re-check cheapest price with new quantity
+                                        $medicine = Medicine::find($medicineId);
+                                        if (!$medicine) return;
+                                        
+                                        $lowestPrice = $medicine->getCheapestSupplierPrice($state);
+                                        
+                                        if ($lowestPrice) {
+                                            $set('unit_price', $lowestPrice);
+                                            $set('total_price', $lowestPrice * $state);
+                                        } else {
+                                            // No supplier has enough stock
+                                            $unitPrice = $get('unit_price');
+                                            if ($unitPrice && $unitPrice > 0) {
+                                                $set('total_price', $unitPrice * $state);
+                                            }
                                         }
                                     }),
 
