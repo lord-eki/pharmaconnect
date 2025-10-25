@@ -43,7 +43,7 @@ class ViewOrder extends ViewRecord
                     ]);
 
                     // Deduct stock
-                    foreach ($record->orderItems as $item) {
+                    foreach ($record->items as $item) {
                         $supplierMedicine = \App\Models\SupplierMedicine::where('supplier_id', $record->supplier_id)
                             ->where('medicine_id', $item->medicine_id)
                             ->first();
@@ -122,7 +122,7 @@ class ViewOrder extends ViewRecord
                 ->action(function ($record, array $data) {
                     // Restore stock if order was confirmed
                     if (in_array($record->status, ['confirmed', 'processing', 'shipped'])) {
-                        foreach ($record->orderItems as $item) {
+                        foreach ($record->items as $item) {
                             $supplierMedicine = \App\Models\SupplierMedicine::where('supplier_id', $record->supplier_id)
                                 ->where('medicine_id', $item->medicine_id)
                                 ->first();

@@ -28,11 +28,12 @@ class OrderResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $supplierId = Auth::user()->userProfile->id ?? null;
+        
+        $supplier = Auth::user()->supplier;
 
         return parent::getEloquentQuery()
-            ->where('supplier_id', $supplierId)
-            ->with(['quotation.prescription.patient', 'quotation.prescription.physician', 'orderItems']);
+            ->where('supplier_id', $supplier->id)
+            ->with(['quotation.prescription.patient', 'quotation.prescription.physician', 'items']);
     }
 
     public static function form(Schema $schema): Schema
@@ -159,7 +160,7 @@ class OrderResource extends Resource
 
                 Section::make('Order Items')
                     ->schema([
-                        RepeatableEntry::make('orderItems')
+                        RepeatableEntry::make('items')
                             ->label('')
                             ->schema([
                                 Grid::make(4)
@@ -220,9 +221,9 @@ class OrderResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $supplierId = Auth::user()->userProfile->id ?? null;
+        $supplier = Auth::user()->supplier;
 
-        $pending = Order::where('supplier_id', $supplierId)
+        $pending = Order::where('supplier_id', $supplier->id)
             ->where('status', 'pending')
             ->count();
 

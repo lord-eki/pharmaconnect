@@ -13,7 +13,7 @@ class ListOrders extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->icon('heroicon-o-plus-circle')->label('Create Order')->button(),
+            // CreateAction::make()->icon('heroicon-o-plus-circle')->label('Create Order')->button(),
         ];
     }
 }

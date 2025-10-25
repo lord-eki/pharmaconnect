@@ -76,14 +76,13 @@ class OrderResource extends Resource
                     ->sortable(),
                 TextColumn::make('order_number')
                     ->searchable(),
-                TextColumn::make('quotation.id')
+                
+                TextColumn::make('supplier.company_name')
                     ->searchable(),
-                TextColumn::make('supplier.id')
-                    ->searchable(),
-                TextColumn::make('prescription.id')
+                TextColumn::make('prescription.prescription_number')
                     ->searchable(),
                 TextColumn::make('total_amount')
-                    ->numeric()
+                    ->numeric()->money('KES')
                     ->sortable(),
                 TextColumn::make('status'),
                 TextColumn::make('ordered_at')
@@ -98,12 +97,12 @@ class OrderResource extends Resource
                 //
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
+                // EditAction::make(),
+                // DeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    // DeleteBulkAction::make(),
                 ]),
             ]);
     }

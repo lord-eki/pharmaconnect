@@ -90,7 +90,7 @@ class PrescriptionResource extends Resource
                     ->searchable(),
                 TextColumn::make('status'),
                 TextColumn::make('total_amount')
-                    ->numeric()
+                    ->numeric()->money('KES')
                     ->sortable(),
                 IconColumn::make('insurance_covered')
                     ->boolean(),

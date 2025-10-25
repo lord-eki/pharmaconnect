@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Quotations;
 use App\Filament\Resources\Quotations\Pages\ManageQuotations;
 use App\Models\Quotation;
 use BackedEnum;
+use Filament\Tables\Columns\BadgeColumn;
 use UnitEnum;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -68,12 +69,11 @@ class QuotationResource extends Resource
                     ->sortable(),
                 TextColumn::make('quotation_number')
                     ->searchable(),
-                TextColumn::make('prescription.id')
-                    ->searchable(),
+              
                 TextColumn::make('total_amount')
-                    ->numeric()
+                    ->numeric()->money('KES')
                     ->sortable(),
-                TextColumn::make('status'),
+                BadgeColumn::make('status'),
                 TextColumn::make('valid_until')
                     ->dateTime()
                     ->sortable(),
@@ -84,12 +84,12 @@ class QuotationResource extends Resource
                 //
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
+                // EditAction::make(),
+                // DeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    // DeleteBulkAction::make(),
                 ]),
             ]);
     }

@@ -61,22 +61,20 @@ class QuotationItemResource extends Resource
                 TextColumn::make('created_at')
                     ->date()->label('Date')
                     ->sortable(),
-                TextColumn::make('quotation.id')
+                TextColumn::make('quotation.quotation_number')
                     ->searchable(),
-                TextColumn::make('prescriptionItem.id')
+             
+                TextColumn::make('supplier.company_name')
                     ->searchable(),
-                TextColumn::make('supplier.id')
-                    ->searchable(),
-                TextColumn::make('supplierMedicine.id')
-                    ->searchable(),
+               
                 TextColumn::make('quantity')
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('unit_price')
-                    ->numeric()
+                    ->numeric()->money('KES')
                     ->sortable(),
                 TextColumn::make('total_price')
-                    ->numeric()
+                    ->numeric()->money('KES')
                     ->sortable(),
 
             ])
@@ -84,12 +82,12 @@ class QuotationItemResource extends Resource
                 //
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
+                // EditAction::make(),
+                // DeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    // DeleteBulkAction::make(),
                 ]),
             ]);
     }

@@ -320,7 +320,7 @@ protected function getHeaderActions(): array
 
                Section::make('Timeline')
                     ->schema([
-                        Components\Grid::make(2)
+                        Grid::make(2)
                             ->schema([
                                 TextEntry::make('created_at')
                                     ->label('Created')

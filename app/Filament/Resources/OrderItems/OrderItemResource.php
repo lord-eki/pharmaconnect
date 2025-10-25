@@ -70,20 +70,19 @@ class OrderItemResource extends Resource
                 TextColumn::make('created_at')
                     ->date()->label('Date')
                     ->sortable(),
-                TextColumn::make('order.id')
+                TextColumn::make('order.order_number')
                     ->searchable(),
-                TextColumn::make('quotationItem.id')
-                    ->searchable(),
-                TextColumn::make('medicine.id')
+               
+                TextColumn::make('medicine.generic_name')
                     ->searchable(),
                 TextColumn::make('quantity')
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('unit_price')
-                    ->numeric()
+                    ->numeric()->money('KES')
                     ->sortable(),
                 TextColumn::make('total_price')
-                    ->numeric()
+                    ->numeric()->money('KES')
                     ->sortable(),
                 TextColumn::make('status'),
 
@@ -92,12 +91,12 @@ class OrderItemResource extends Resource
                 //
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
+                // EditAction::make(),
+                // DeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    // DeleteBulkAction::make(),
                 ]),
             ]);
     }

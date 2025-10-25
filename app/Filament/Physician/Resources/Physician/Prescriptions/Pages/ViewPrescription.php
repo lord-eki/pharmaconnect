@@ -238,7 +238,7 @@ class ViewPrescription extends ViewRecord
                                     ->color('warning'),
                             ])
                             ->contained(true),
-                    ]),
+                    ])->collapsible(),
 
                 Section::make('Financial Summary')
                     ->schema([

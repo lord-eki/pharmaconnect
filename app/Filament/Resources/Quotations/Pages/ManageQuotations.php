@@ -13,7 +13,7 @@ class ManageQuotations extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->icon('heroicon-o-plus-circle'),
+            // CreateAction::make()->icon('heroicon-o-plus-circle'),
         ];
     }
 }

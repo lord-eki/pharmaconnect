@@ -3,6 +3,11 @@
 namespace App\Providers;
 
 use App\Http\Responses\CustomLoginResponse;
+use App\Models\Prescription;
+use Illuminate\Database\Eloquent\Model;
+use App\Observers\PrescriptionObserver;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use Filament\Http\Responses\Auth\Contracts\LoginResponse;
 
@@ -23,6 +28,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        if(app()->isProduction()){
+            Model::preventLazyLoading();
+        }
+
+        DB::whenQueryingForLongerThan(500,function($connection){
+            Log::warning('Long running query detected exceeding 500ms on connection: '.$connection->getName());
+        });
+
+        Model::preventsAccessingMissingAttributes();
+
+        Prescription::observe(PrescriptionObserver::class);
     }
 }
