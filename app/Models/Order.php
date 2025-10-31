@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Log;
 
 class Order extends Model
 {
@@ -29,22 +30,21 @@ class Order extends Model
         'delivered_at' => 'datetime',
     ];
 
-
-     protected static function boot()
+    protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($order) {
-            if (!$order->order_number) {
+            if (! $order->order_number) {
                 $order->order_number = static::generateOrderNumber();
             }
-            
-            if (!$order->ordered_at) {
+
+            if (! $order->ordered_at) {
                 $order->ordered_at = now();
             }
 
             // Set expected delivery (default 24 hours)
-            if (!$order->expected_delivery) {
+            if (! $order->expected_delivery) {
                 $order->expected_delivery = now()->addHours(24);
             }
         });
@@ -57,14 +57,54 @@ class Order extends Model
         });
 
         static::updated(function ($order) {
-            if($order->isDirty('status') && $order->status == 'confirmed')
-            {
-                $prescription =  $order->prescription;
-                $allConfirmed = $prescription->orders()->whereNotIn('status', ['confirmed', 'delivered'])->doesntExist();
+            if ($order->isDirty('status') && $order->status == 'confirmed') {
+                Log::info('Order confirmed, checking if all orders confirmed', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'prescription_id' => $order->prescription_id,
+                ]);
 
-                if($allConfirmed)
-                {
-                    $prescription->createInsuranceClaim();
+                $prescription = $order->prescription;
+
+                if (! $prescription) {
+                    Log::error('No prescription found for order', [
+                        'order_id' => $order->id,
+                    ]);
+
+                    return;
+                }
+
+                // Refresh the orders relationship to get latest status
+                $prescription->load('orders');
+
+                // Check if all orders are confirmed or delivered
+                $allConfirmed = $prescription->orders()
+                    ->whereNotIn('status', ['confirmed', 'delivered'])
+                    ->doesntExist();
+
+                Log::info('Order confirmation check', [
+                    'prescription_id' => $prescription->id,
+                    'all_confirmed' => $allConfirmed,
+                    'total_orders' => $prescription->orders->count(),
+                    'confirmed_or_delivered' => $prescription->orders
+                        ->whereIn('status', ['confirmed', 'delivered'])
+                        ->count(),
+                ]);
+
+                if ($allConfirmed) {
+                    Log::info('All orders confirmed, creating insurance claim', [
+                        'prescription_id' => $prescription->id,
+                    ]);
+
+                    try {
+                        $prescription->createInsuranceClaim();
+                    } catch (\Exception $e) {
+                        Log::error('Error creating insurance claim from order update', [
+                            'order_id' => $order->id,
+                            'prescription_id' => $prescription->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
                 }
             }
         });
@@ -105,39 +145,36 @@ class Order extends Model
         return $this->hasMany(Invoice::class);
     }
 
-     public function commission(): HasOne
+    public function commission(): HasOne
     {
         return $this->hasOne(Commission::class);
     }
 
-
     // Generate unique order number (LPO)
-public static function generateOrderNumber(): string
-{
-    $prefix = 'LPO';
-    $year = date('Y');
-    $month = date('m');
-    $ym = $year . $month;
+    public static function generateOrderNumber(): string
+    {
+        $prefix = 'LPO';
+        $year = date('Y');
+        $month = date('m');
+        $ym = $year.$month;
 
-    // Get the last order for this year and month
-    $lastOrder = static::whereYear('created_at', $year)
-        ->whereMonth('created_at', $month)
-        ->orderBy('id', 'desc')
-        ->first();
+        // Get the last order for this year and month
+        $lastOrder = static::whereYear('created_at', $year)
+            ->whereMonth('created_at', $month)
+            ->orderBy('id', 'desc')
+            ->first();
 
-    $sequence = 1;
+        $sequence = 1;
 
-    if ($lastOrder && preg_match('/(\d{5})$/', $lastOrder->order_number, $matches)) {
-        $sequence = (int)$matches[1] + 1;
+        if ($lastOrder && preg_match('/(\d{5})$/', $lastOrder->order_number, $matches)) {
+            $sequence = (int) $matches[1] + 1;
+        }
+
+        // Pad the sequence to 5 digits
+        $sequencePadded = str_pad($sequence, 5, '0', STR_PAD_LEFT);
+
+        return sprintf('%s%s-%s', $prefix, $ym, $sequencePadded);
     }
-
-    // Pad the sequence to 5 digits
-    $sequencePadded = str_pad($sequence, 5, '0', STR_PAD_LEFT);
-
-    return sprintf('%s%s-%s', $prefix, $ym, $sequencePadded);
-}
-
-
 
     // Confirm order (supplier accepts)
     public function confirm(): bool
@@ -151,7 +188,7 @@ public static function generateOrderNumber(): string
                 $supplierMedicine = $item->medicine->supplierMedicines()
                     ->where('supplier_id', $this->supplier_id)
                     ->first();
-                
+
                 if ($supplierMedicine) {
                     $supplierMedicine->decrement('stock_quantity', $item->quantity);
                 }
@@ -211,7 +248,7 @@ public static function generateOrderNumber(): string
     {
         // Simple logic - you can enhance this
         // Based on county/city or actual distance calculation
-        
+
         $patient = $this->prescription->patient;
         $supplier = $this->supplier;
 
@@ -312,10 +349,10 @@ public static function generateOrderNumber(): string
     protected function calculateCommission(): void
     {
         $physician = $this->prescription->physician;
-        
+
         // Get commission rate (default 10% - can be configured)
         $commissionRate = $this->getCommissionRate();
-        
+
         $grossAmount = $this->total_amount;
         $commissionAmount = $grossAmount * ($commissionRate / 100);
 
@@ -338,7 +375,7 @@ public static function generateOrderNumber(): string
         // - Order volume
         // - Medicine category
         // For now, return fixed rate
-        
+
         return 10.0; // 10%
     }
 
@@ -355,13 +392,13 @@ public static function generateOrderNumber(): string
     // Cancel order
     public function cancel(string $reason): bool
     {
-        if (!in_array($this->status, ['pending', 'confirmed'])) {
+        if (! in_array($this->status, ['pending', 'confirmed'])) {
             throw new \Exception('Cannot cancel order in current status');
         }
 
         return DB::transaction(function () use ($reason) {
             $this->status = 'cancelled';
-            $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . "Cancelled: " . $reason;
+            $this->notes = ($this->notes ? $this->notes."\n\n" : '').'Cancelled: '.$reason;
             $this->save();
 
             // Restore stock quantities if order was confirmed
@@ -370,7 +407,7 @@ public static function generateOrderNumber(): string
                     $supplierMedicine = $item->medicine->supplierMedicines()
                         ->where('supplier_id', $this->supplier_id)
                         ->first();
-                    
+
                     if ($supplierMedicine) {
                         $supplierMedicine->increment('stock_quantity', $item->quantity);
                     }
@@ -408,7 +445,7 @@ public static function generateOrderNumber(): string
     // Accessors
     public function getIsOverdueAttribute(): bool
     {
-        if ($this->status === 'delivered' || !$this->expected_delivery) {
+        if ($this->status === 'delivered' || ! $this->expected_delivery) {
             return false;
         }
 
@@ -417,7 +454,7 @@ public static function generateOrderNumber(): string
 
     public function getStatusColorAttribute(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             'pending' => 'warning',
             'confirmed' => 'info',
             'processing' => 'info',

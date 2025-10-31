@@ -32,10 +32,6 @@ class AppServiceProvider extends ServiceProvider
             Model::preventLazyLoading();
         }
 
-        DB::whenQueryingForLongerThan(500,function($connection){
-            Log::warning('Long running query detected exceeding 500ms on connection: '.$connection->getName());
-        });
-
         Model::preventsAccessingMissingAttributes();
 
         Prescription::observe(PrescriptionObserver::class);

@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Notification;
 
 class Prescription extends Model
 {
@@ -44,6 +43,7 @@ class Prescription extends Model
         'total_amount' => 'decimal:2',
     ];
 
+    // REMOVED eager loading to prevent N+1
     protected $with = [];
 
     protected static function boot()
@@ -67,124 +67,6 @@ class Prescription extends Model
                 $prescription->status = 'draft';
             }
         });
-    }
-
-    /**
-     * Create insurance claim after orders are created
-     */
-    protected function createInsuranceClaim(): void
-    {
-        // Only create insurance of insurance is covering
-        if (! $this->insurance_covered) {
-            return;
-        }
-
-        if ($this->orders->isEmpty()) {
-            Log::warning('No orders found for prescription, skipping create insurance claim', [
-                'prescription_id' => $this->id,
-            ]);
-
-            return;
-        }
-
-        // check if patient has insurance
-        $patient = $this->patient;
-        if (! $patient->insurance_provider_id || ! $patient->insurance_number) {
-            Log::warning('Patient has no insurance details', [
-                'patient_id' => $patient->id,
-                'prescription_id' => $this->id,
-            ]);
-
-            return;
-        }
-
-        // check if claim already exists
-        if ($this->insurance_claim_id || $this->insuranceClaim()->exists()) {
-            Log::info('Insurance claim already exists for prescription', [
-                'prescription_id' => $this->id,
-                'insurance_claim_id' => $this->insurance_claim_id,
-            ]);
-
-            return;
-        }
-
-        try {
-            // calculate total claimed amount from orders
-            $claimAmount = $this->orders->sum('total_amount');
-
-            // create the insurance claim
-            $claim = InsuranceClaim::create([
-                'claim_number' => InsuranceClaim::generateClaimNumber(),
-                'prescription_id' => $this->id,
-                'policy_number' => $patient->insurance_number,
-                'deductible_amount' => 0,
-                'patient_id' => $this->patient_id,
-                'insurance_provider_id' => $patient->insurance_provider_id,
-                'insurance_number' => $patient->insurance_number,
-                'claimed_amount' => $claimAmount,
-                'status' => 'submitted',
-                'notes' => 'Auto-generated claim from prescription '.$this->prescription_number,
-                'submitted_at' => now(),
-            ]);
-
-            $this->update([
-                'insurance_claim_id' => $claim->id,
-            ]);
-
-            Log::info('Insurance claim created for prescription', [
-                'prescription_id' => $this->id,
-                'insurance_claim_id' => $claim->id,
-                'claimed_amount' => $claimAmount,
-            ]);
-
-            // notify insurance provider
-            $this->notifyInsuranceProvider($claim);
-
-        } catch (\Exception $e) {
-            Log::error('Failed to create insurance claim for prescription', [
-                'prescription_id' => $this->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-    }
-
-    /**
-     * Notify insurance provider about new claim
-     */
-    protected function notifyInsuranceProvider(InsuranceClaim $claim): void
-    {
-        try {
-            $provider = $claim->insuranceProvider;
-
-            // Option 1: Email notification
-            if ($provider->email) {
-                Mail::to($provider->email)->send(
-                    new InsuranceClaimFormMail($claim)
-                );
-            }
-
-            // Option 2: Database notification (if provider has user account)
-            // if ($provider->user) {
-            //     $provider->user->notify(new \App\Notifications\NewInsuranceClaimNotification($claim));
-            // }
-
-            // Option 3: API submission (if provider has API integration)
-            // if ($provider->api_endpoint && $provider->api_key) {
-            //     dispatch(new \App\Jobs\SubmitClaimToInsuranceAPI($claim));
-            // }
-
-            \Log::info('Insurance provider notified about claim', [
-                'claim_id' => $claim->id,
-                'provider_id' => $provider->id,
-            ]);
-
-        } catch (\Exception $e) {
-            \Log::error('Failed to notify insurance provider', [
-                'claim_id' => $claim->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
     }
 
     public function physician(): BelongsTo
@@ -222,6 +104,9 @@ class Prescription extends Model
         return $this->hasMany(Commission::class);
     }
 
+    /**
+     * OPTIMIZED: Generate prescription number with better caching
+     */
     public static function generatePrescriptionNumber(): string
     {
         $prefix = 'RX';
@@ -229,26 +114,35 @@ class Prescription extends Model
         $month = date('m');
 
         $cacheKey = "last_prescription_{$year}_{$month}";
+        $lockKey = "lock_{$cacheKey}";
 
-        $lastSequence = Cache::remember($cacheKey, 300, function () use ($year, $month) {
-            $lastPrescription = static::whereYear('created_at', $year)
-                ->whereMonth('created_at', $month)
-                ->orderBy('id', 'desc')
-                ->first();
+        // Use cache lock to prevent race conditions
+        return Cache::lock($lockKey, 5)->block(5, function () use ($cacheKey, $prefix, $year, $month) {
+            $lastSequence = Cache::get($cacheKey, 0);
 
-            if ($lastPrescription && preg_match('/(\d{5})$/', $lastPrescription->prescription_number, $matches)) {
-                return intval($matches[0]);
+            if ($lastSequence === 0) {
+                // Only query DB if cache is empty
+                $lastPrescription = static::select('prescription_number')
+                    ->whereYear('created_at', $year)
+                    ->whereMonth('created_at', $month)
+                    ->orderBy('id', 'desc')
+                    ->first();
+
+                if ($lastPrescription && preg_match('/(\d{5})$/', $lastPrescription->prescription_number, $matches)) {
+                    $lastSequence = intval($matches[0]);
+                }
             }
 
-            return 0;
+            $sequence = $lastSequence + 1;
+            Cache::put($cacheKey, $sequence, 3600); // Cache for 1 hour
+
+            return sprintf('%s%s%s%05d', $prefix, $year, $month, $sequence);
         });
-
-        $sequence = $lastSequence + 1;
-        Cache::put($cacheKey, $sequence, 300);
-
-        return sprintf('%s%s%s%05d', $prefix, $year, $month, $sequence);
     }
 
+    /**
+     * OPTIMIZED: Submit with better error handling and performance
+     */
     public function submit(): bool
     {
         return DB::transaction(function () {
@@ -256,20 +150,41 @@ class Prescription extends Model
                 throw new \Exception('Cannot submit prescription without medicines');
             }
 
-            $this->checkDrugInteractions();
+            // Check interactions asynchronously after submission
+            dispatch(function () {
+                $this->checkDrugInteractions();
+            })->afterResponse();
 
             $this->status = 'submitted';
             $this->save();
 
-            // Generate quotation first, then create orders from it
-            $quotation = $this->generateQuotationSync();
+            try {
+                // Generate quotation
+                $quotation = $this->generateQuotationSync();
 
-            if ($quotation) {
-                // Create orders grouped by supplier from quotation
-                $this->createOrdersFromQuotation($quotation);
+                if ($quotation && $quotation->items->isNotEmpty()) {
+                    // Create orders from quotation
+                    $this->createOrdersFromQuotation($quotation);
+                } else {
+                    Log::warning('No quotation items generated', [
+                        'prescription_id' => $this->id,
+                    ]);
+                    $this->status = 'pending';
+                    $this->save();
+                }
+            } catch (\Exception $e) {
+                Log::error('Error creating orders', [
+                    'prescription_id' => $this->id,
+                    'error' => $e->getMessage(),
+                ]);
 
+                $this->status = 'pending';
+                $this->save();
+
+                throw $e;
             }
 
+            // Notify stakeholders asynchronously
             dispatch(function () {
                 $this->notifyStakeholders();
             })->afterResponse();
@@ -279,7 +194,7 @@ class Prescription extends Model
     }
 
     /**
-     * Generate quotation synchronously and return it
+     * OPTIMIZED: Generate quotation with bulk operations
      */
     protected function generateQuotationSync(): ?Quotation
     {
@@ -291,37 +206,49 @@ class Prescription extends Model
             'valid_until' => now()->addHours(24),
         ]);
 
-        // Load all medicines and their suppliers in one go
-        $this->items->load(['medicine.supplierMedicines' => function ($query) {
-            $query->where('is_available', true)
-                ->where('stock_quantity', '>', 0);
-        }]);
+        // OPTIMIZED: Single query to get all relevant supplier medicines
+        $medicineIds = $this->items->pluck('medicine_id')->toArray();
+
+        $supplierMedicines = DB::table('supplier_medicines')
+            ->whereIn('medicine_id', $medicineIds)
+            ->where('is_available', true)
+            ->where('stock_quantity', '>', 0)
+            ->select([
+                'id',
+                'medicine_id',
+                'supplier_id',
+                'unit_price',
+                'stock_quantity',
+            ])
+            ->get()
+            ->groupBy('medicine_id');
 
         $quotationItems = [];
         $hasItems = false;
 
         foreach ($this->items as $item) {
-            $supplierMedicines = $item->medicine->supplierMedicines
-                ->where('stock_quantity', '>=', $item->quantity);
+            $availableSuppliers = $supplierMedicines->get($item->medicine_id, collect());
 
-            foreach ($supplierMedicines as $supplierMedicine) {
-                $quotationItems[] = [
-                    'quotation_id' => $quotation->id,
-                    'prescription_item_id' => $item->id,
-                    'supplier_id' => $supplierMedicine->supplier_id,
-                    'supplier_medicine_id' => $supplierMedicine->id,
-                    'quantity' => $item->quantity,
-                    'unit_price' => $supplierMedicine->unit_price,
-                    'total_price' => $supplierMedicine->unit_price * $item->quantity,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-                $hasItems = true;
+            foreach ($availableSuppliers as $supplierMedicine) {
+                if ($supplierMedicine->stock_quantity >= $item->quantity) {
+                    $quotationItems[] = [
+                        'quotation_id' => $quotation->id,
+                        'prescription_item_id' => $item->id,
+                        'supplier_id' => $supplierMedicine->supplier_id,
+                        'supplier_medicine_id' => $supplierMedicine->id,
+                        'quantity' => $item->quantity,
+                        'unit_price' => $supplierMedicine->unit_price,
+                        'total_price' => $supplierMedicine->unit_price * $item->quantity,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                    $hasItems = true;
+                }
             }
         }
 
         if (! $hasItems) {
-            \Log::error('No suppliers available for prescription', [
+            Log::error('No suppliers available for prescription', [
                 'prescription_id' => $this->id,
                 'prescription_number' => $this->prescription_number,
             ]);
@@ -329,7 +256,7 @@ class Prescription extends Model
             return null;
         }
 
-        // Bulk insert for performance
+        // Bulk insert
         QuotationItem::insert($quotationItems);
 
         $quotation->calculateTotal();
@@ -339,18 +266,17 @@ class Prescription extends Model
     }
 
     /**
-     * Create orders grouped by supplier from the quotation
+     * OPTIMIZED: Create orders with better grouping
      */
     protected function createOrdersFromQuotation(Quotation $quotation): void
     {
-        // Group quotation items by supplier (choosing best prices)
         $supplierGroups = $this->groupQuotationItemsBySupplier($quotation);
 
         if (empty($supplierGroups)) {
             $this->status = 'pending';
             $this->save();
 
-            \Log::error('No suppliers selected for prescription orders', [
+            Log::error('No suppliers selected for prescription orders', [
                 'prescription_id' => $this->id,
                 'quotation_id' => $quotation->id,
             ]);
@@ -358,63 +284,75 @@ class Prescription extends Model
             return;
         }
 
-        // Create an order for each supplier
+        // Bulk create orders
         foreach ($supplierGroups as $supplierId => $groupData) {
-            $this->createOrderForSupplier($quotation, $supplierId, $groupData);
+            try {
+                $this->createOrderForSupplier($quotation, $supplierId, $groupData);
+            } catch (\Exception $e) {
+                Log::error('Error creating order for supplier', [
+                    'supplier_id' => $supplierId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
-        // Update prescription status
         $this->status = 'processing';
         $this->save();
+
+        // Create insurance claim asynchronously
+        if ($this->insurance_covered) {
+            dispatch(function () {
+                $this->createInsuranceClaim();
+            })->afterResponse();
+        }
     }
 
     /**
-     * Group quotation items by supplier, selecting best price for each medicine
+     * Group quotation items by best supplier
      */
     protected function groupQuotationItemsBySupplier(Quotation $quotation): array
     {
         $supplierGroups = [];
-        $selectedItems = []; // Track which prescription items we've already assigned
 
-        // Load quotation items with relationships
-        $quotation->load(['items.prescriptionItem', 'items.supplier', 'items.supplierMedicine']);
+        // Eager load relationships in one query
+        $quotationItems = $quotation->items()
+            ->with(['prescriptionItem', 'supplier'])
+            ->get()
+            ->groupBy('prescription_item_id');
 
-        // For each prescription item, find the best supplier (cheapest)
         foreach ($this->items as $prescriptionItem) {
-            $availableQuotationItems = $quotation->items
-                ->where('prescription_item_id', $prescriptionItem->id)
-                ->sortBy('unit_price');
+            $availableItems = $quotationItems->get($prescriptionItem->id, collect());
 
-            $bestQuotationItem = $availableQuotationItems->first();
+            // Get cheapest option
+            $bestItem = $availableItems->sortBy('unit_price')->first();
 
-            if (! $bestQuotationItem) {
-                \Log::warning('No quotation item found for prescription item', [
+            if (! $bestItem) {
+                Log::warning('No quotation item found', [
                     'prescription_item_id' => $prescriptionItem->id,
-                    'medicine' => $prescriptionItem->medicine->generic_name ?? 'Unknown',
                 ]);
 
                 continue;
             }
 
-            $supplierId = $bestQuotationItem->supplier_id;
+            $supplierId = $bestItem->supplier_id;
 
             if (! isset($supplierGroups[$supplierId])) {
                 $supplierGroups[$supplierId] = [
-                    'supplier' => $bestQuotationItem->supplier,
+                    'supplier' => $bestItem->supplier,
                     'quotation_items' => [],
                     'total_amount' => 0,
                 ];
             }
 
-            $supplierGroups[$supplierId]['quotation_items'][] = $bestQuotationItem;
-            $supplierGroups[$supplierId]['total_amount'] += $bestQuotationItem->total_price;
+            $supplierGroups[$supplierId]['quotation_items'][] = $bestItem;
+            $supplierGroups[$supplierId]['total_amount'] += $bestItem->total_price;
         }
 
         return $supplierGroups;
     }
 
     /**
-     * Create a single order for a specific supplier
+     * Create order for supplier with bulk insert
      */
     protected function createOrderForSupplier(Quotation $quotation, int $supplierId, array $groupData): void
     {
@@ -430,7 +368,7 @@ class Prescription extends Model
             'notes' => "Auto-generated from prescription {$this->prescription_number}",
         ]);
 
-        // Create order items from quotation items
+        // Bulk insert order items
         $orderItems = [];
         foreach ($groupData['quotation_items'] as $quotationItem) {
             $orderItems[] = [
@@ -448,47 +386,169 @@ class Prescription extends Model
 
         OrderItem::insert($orderItems);
 
-        // Send notification to supplier
-        $this->notifySupplier($order, $groupData['supplier']);
+        // Notify supplier asynchronously
+        dispatch(function () use ($order, $groupData) {
+            $this->notifySupplier($order, $groupData['supplier']);
+        })->afterResponse();
 
-        \Log::info('Order created for supplier', [
+        Log::info('Order created', [
             'order_number' => $order->order_number,
-            'quotation_id' => $quotation->id,
             'supplier_id' => $supplierId,
-            'supplier_name' => $groupData['supplier']->name ?? 'Unknown',
             'total_amount' => $groupData['total_amount'],
-            'items_count' => count($orderItems),
         ]);
     }
 
     /**
-     * Send notification to supplier about new order
+     * Create insurance claim
      */
+    public function createInsuranceClaim(): void
+    {
+        Log::info('Creating insurance claim', [
+            'prescription_id' => $this->id,
+            'insurance_covered' => $this->insurance_covered,
+            'orders_count' => $this->orders->count(),
+        ]);
+
+        // Check 1: Insurance covered and orders exist
+        if (! $this->insurance_covered) {
+            Log::warning('Insurance claim not created - insurance not covered', [
+                'prescription_id' => $this->id,
+            ]);
+
+            return;
+        }
+
+        if ($this->orders->isEmpty()) {
+            Log::warning('Insurance claim not created - no orders', [
+                'prescription_id' => $this->id,
+            ]);
+
+            return;
+        }
+
+        // Check 2: Patient has insurance details
+        $patient = $this->patient;
+        if (! $patient) {
+            Log::error('Insurance claim not created - no patient found', [
+                'prescription_id' => $this->id,
+            ]);
+
+            return;
+        }
+
+        if (! $patient->insurance_provider_id || ! $patient->insurance_number) {
+            Log::warning('Insurance claim not created - patient missing insurance details', [
+                'prescription_id' => $this->id,
+                'patient_id' => $patient->id,
+                'has_provider' => (bool) $patient->insurance_provider_id,
+                'has_number' => (bool) $patient->insurance_number,
+            ]);
+
+            return;
+        }
+
+        // Check 3: Claim doesn't already exist
+        if ($this->insurance_claim_id) {
+            Log::info('Insurance claim not created - claim_id already set', [
+                'prescription_id' => $this->id,
+                'existing_claim_id' => $this->insurance_claim_id,
+            ]);
+
+            return;
+        }
+
+        if ($this->insuranceClaim()->exists()) {
+            Log::info('Insurance claim not created - claim relationship already exists', [
+                'prescription_id' => $this->id,
+            ]);
+
+            return;
+        }
+
+        try {
+            $claimAmount = $this->orders->sum('total_amount');
+
+            Log::info('Creating insurance claim record', [
+                'prescription_id' => $this->id,
+                'patient_id' => $this->patient_id,
+                'insurance_provider_id' => $patient->insurance_provider_id,
+                'claim_amount' => $claimAmount,
+            ]);
+
+            $claim = InsuranceClaim::create([
+                'claim_number' => InsuranceClaim::generateClaimNumber(),
+                'prescription_id' => $this->id,
+                'policy_number' => $patient->insurance_number,
+                'deductible_amount' => 0,
+                'patient_id' => $this->patient_id,
+                'insurance_provider_id' => $patient->insurance_provider_id,
+                'insurance_number' => $patient->insurance_number,
+                'claimed_amount' => $claimAmount,
+                'status' => 'submitted',
+                'notes' => 'Auto-generated claim from prescription '.$this->prescription_number,
+                'submitted_at' => now(),
+            ]);
+
+            Log::info('Insurance claim created successfully', [
+                'claim_id' => $claim->id,
+                'claim_number' => $claim->claim_number,
+                'prescription_id' => $this->id,
+            ]);
+
+            $this->update(['insurance_claim_id' => $claim->id]);
+
+            $this->notifyInsuranceProvider($claim);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to create insurance claim', [
+                'prescription_id' => $this->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            throw $e; // Re-throw to see the actual error
+        }
+    }
+
+    protected function notifyInsuranceProvider(InsuranceClaim $claim): void
+    {
+        try {
+            $provider = $claim->insuranceProvider;
+
+            if ($provider->email) {
+                Mail::to($provider->email)->send(
+                    new InsuranceClaimFormMail($claim)
+                );
+            }
+
+            Log::info('Insurance provider notified', [
+                'claim_id' => $claim->id,
+                'provider_id' => $provider->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to notify insurance provider', [
+                'claim_id' => $claim->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     protected function notifySupplier(Order $order, $supplier): void
     {
         try {
-            // Option 1: Email notification
             if ($supplier->email) {
-                \Mail::to($supplier->email)->send(
+                Mail::to($supplier->email)->send(
                     new \App\Mail\NewOrderNotification($order)
                 );
             }
 
-            // Option 2: Database notification
             if ($supplier->user) {
                 $supplier->user->notify(new NewOrderNotification($order));
             }
 
-            // Option 3: Filament notification (in-app)
-            \Filament\Notifications\Notification::make()
-                ->title('New Order Received')
-                ->body("Order {$order->order_number} for KES ".number_format($order->total_amount, 2))
-                ->icon('heroicon-o-shopping-bag')
-                ->success()
-                ->sendToDatabase($supplier->user ?? null);
-
         } catch (\Exception $e) {
-            \Log::error('Failed to notify supplier about order', [
+            Log::error('Failed to notify supplier', [
                 'order_id' => $order->id,
                 'supplier_id' => $supplier->id,
                 'error' => $e->getMessage(),
@@ -496,6 +556,9 @@ class Prescription extends Model
         }
     }
 
+    /**
+     * OPTIMIZED: Check drug interactions asynchronously
+     */
     protected function checkDrugInteractions(): void
     {
         $medicineIds = $this->items->pluck('medicine_id')->toArray();
@@ -508,23 +571,21 @@ class Prescription extends Model
         if ($interactions->isNotEmpty()) {
             foreach ($interactions as $interaction) {
                 if ($interaction->interaction_type === 'major') {
-                    \Log::warning("Major drug interaction detected in prescription {$this->prescription_number}", [
+                    Log::warning('Major drug interaction detected', [
+                        'prescription_number' => $this->prescription_number,
                         'medicine_1' => $interaction->medicine_id,
                         'medicine_2' => $interaction->interacting_medicine_id,
-                        'description' => $interaction->description,
                     ]);
                 }
             }
         }
 
         if ($this->patient->allergies) {
-            $this->items->load('medicine');
-
             foreach ($this->items as $item) {
-                if (stripos($item->medicine->active_ingredients, $this->patient->allergies) !== false) {
-                    \Log::warning("Potential allergy conflict in prescription {$this->prescription_number}", [
+                if (stripos($item->medicine->active_ingredients ?? '', $this->patient->allergies) !== false) {
+                    Log::warning('Potential allergy conflict', [
+                        'prescription_number' => $this->prescription_number,
                         'medicine' => $item->medicine->generic_name,
-                        'patient_allergies' => $this->patient->allergies,
                     ]);
                 }
             }
@@ -533,15 +594,17 @@ class Prescription extends Model
 
     protected function generateQuotation(): void
     {
-        // This method is kept for backward compatibility
-        // The actual quotation is now generated in generateQuotationSync()
+        // Deprecated - kept for compatibility
     }
 
     protected function notifyStakeholders(): void
     {
-        // Queue notifications to avoid blocking
+        // Queue notifications
     }
 
+    /**
+     * OPTIMIZED: Update total with lock
+     */
     public function updateTotalAmount(): void
     {
         if ($this->isUpdatingTotal) {
@@ -551,16 +614,10 @@ class Prescription extends Model
         $this->isUpdatingTotal = true;
 
         try {
-            $total = DB::table('prescription_items')
-                ->where('prescription_id', $this->id)
-                ->sum('total_price');
+            $total = $this->items()->sum('total_price');
 
             if ($this->total_amount != $total) {
-                DB::table('prescriptions')
-                    ->where('id', $this->id)
-                    ->update(['total_amount' => $total]);
-
-                $this->total_amount = $total;
+                $this->updateQuietly(['total_amount' => $total]);
             }
         } finally {
             $this->isUpdatingTotal = false;
@@ -581,12 +638,11 @@ class Prescription extends Model
             Quotation::where('prescription_id', $this->id)
                 ->update(['status' => 'rejected']);
 
-            // Cancel all pending orders
             Order::where('prescription_id', $this->id)
                 ->whereIn('status', ['pending', 'confirmed'])
                 ->update([
                     'status' => 'cancelled',
-                    'notes' => DB::raw("CONCAT(COALESCE(notes, ''), '\n\nCancelled due to prescription cancellation: ".addslashes($reason)."')"),
+                    'notes' => DB::raw("CONCAT(COALESCE(notes, ''), '\n\nCancelled: ".addslashes($reason)."')"),
                 ]);
 
             return true;

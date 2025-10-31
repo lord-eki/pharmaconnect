@@ -40,8 +40,7 @@ class Medicine extends Model
         'is_active' => 'boolean',
     ];
 
-    // Eager load to prevent N+1 queries
-    protected $with = ['category'];
+    protected $with = [];
 
     public function category(): BelongsTo
     {
@@ -76,8 +75,7 @@ class Medicine extends Model
     }
 
     /**
-     * Optimized method to get cheapest supplier price
-     * 
+     * Get cheapest supplier price 
      */
     public function getCheapestSupplierPrice(?int $quantity = 1): ?float
     {
@@ -85,141 +83,166 @@ class Medicine extends Model
             $quantity = 1;
         }
 
-        $cacheKey = "medicine:{$this->id}:price:{$quantity}";
+        $cacheQuantity = $quantity <= 10 ? $quantity : (ceil($quantity / 10) * 10);
+        $cacheKey = "medicine:{$this->id}:price:{$cacheQuantity}_v2";
 
-        return Cache::remember($cacheKey, 900, function () use ($quantity) {
-            return DB::table('supplier_medicines')
-                ->where('medicine_id', $this->id)
-                ->where('is_available', true)
-                ->where('stock_quantity', '>=', $quantity)
-                ->useIndex('idx_medicine_available_stock,idx_medicine_price')
-                ->min('unit_price');
-        });
+        try {
+            return Cache::remember($cacheKey, 600, function () use ($quantity) {
+                return DB::table('supplier_medicines')
+                    ->where('medicine_id', $this->id)
+                    ->where('is_available', true)
+                    ->where('stock_quantity', '>=', $quantity)
+                    ->min('unit_price');
+            });
+        } catch (\Exception $e) {
+            \Log::error('Error fetching cheapest price', [
+                'medicine_id' => $this->id,
+                'quantity' => $quantity,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
     }
 
     /**
-     * Get all available suppliers with stock
+     *  Get available suppliers
      */
     public function getAvailableSuppliers(int $quantity = 1)
     {
-        $cacheKey = "medicine:{$this->id}:suppliers:{$quantity}";
+        $cacheKey = "medicine:{$this->id}:suppliers:{$quantity}_v2";
         
         return Cache::remember($cacheKey, 600, function () use ($quantity) {
-            return $this->supplierMedicines()
-                ->with('supplier:id,name,phone,email') // Only load needed columns
-                ->select(['id', 'supplier_id', 'medicine_id', 'unit_price', 'stock_quantity', 'expiry_date', 'batch_number'])
-                ->where('is_available', true)
-                ->where('stock_quantity', '>=', $quantity)
-                ->where('expiry_date', '>', now()->addMonths(1)) // Don't show expiring stock
-                ->orderBy('unit_price', 'asc')
-                ->limit(10) // Only return top 10 cheapest
+            return DB::table('supplier_medicines')
+                ->join('suppliers', 'suppliers.id', '=', 'supplier_medicines.supplier_id')
+                ->where('supplier_medicines.medicine_id', $this->id)
+                ->where('supplier_medicines.is_available', true)
+                ->where('supplier_medicines.stock_quantity', '>=', $quantity)
+                ->where('supplier_medicines.expiry_date', '>', now()->addMonths(1))
+                ->select([
+                    'supplier_medicines.id',
+                    'supplier_medicines.supplier_id',
+                    'supplier_medicines.unit_price',
+                    'supplier_medicines.stock_quantity',
+                    'supplier_medicines.expiry_date',
+                    'supplier_medicines.batch_number',
+                    'suppliers.name as supplier_name',
+                    'suppliers.phone as supplier_phone',
+                    'suppliers.email as supplier_email'
+                ])
+                ->orderBy('supplier_medicines.unit_price', 'asc')
+                ->limit(10)
                 ->get();
         });
     }
 
-    /**
-     * Scope for active medicines only
-     */
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
     }
 
     /**
-     * Scope for medicines with available stock
-     * OPTIMIZED: Better subquery performance
+     * Subquery for stock check
      */
     public function scopeWithStock($query, int $minQuantity = 1)
     {
-        return $query->whereHas('supplierMedicines', function ($q) use ($minQuantity) {
-            $q->where('is_available', true)
-              ->where('stock_quantity', '>=', $minQuantity);
+        return $query->whereExists(function ($q) use ($minQuantity) {
+            $q->select(DB::raw(1))
+              ->from('supplier_medicines')
+              ->whereColumn('supplier_medicines.medicine_id', 'medicines.id')
+              ->where('supplier_medicines.is_available', true)
+              ->where('supplier_medicines.stock_quantity', '>=', $minQuantity);
         });
     }
 
     /**
-     * Get formatted medicine display name
-     * OPTIMIZED: Better cache key naming, added fallback
+     *  Get display name without cache 
      */
     public function getDisplayNameAttribute(): string
     {
-        return Cache::remember("medicine:{$this->id}:display", 3600, function () {
-            $brandInfo = $this->brand_name ? " ({$this->brand_name})" : '';
-            $strength = $this->strength ?: '';
-            $form = $this->dosage_form ?: '';
-            
-            return trim("{$this->generic_name}{$brandInfo} - {$strength} - {$form}");
-        });
+        $brandInfo = $this->brand_name ? " ({$this->brand_name})" : '';
+        $strength = $this->strength ?: '';
+        $form = $this->dosage_form ?: '';
+        
+        return trim("{$this->generic_name}{$brandInfo} - {$strength} - {$form}");
     }
 
     /**
-     * Clear medicine-related caches
-     * IMPROVED: Clear all cache variations efficiently
+     * OPTIMIZED: Clear caches more efficiently
      */
     public function clearCaches(): void
     {
-        // Clear display name cache
-        Cache::forget("medicine:{$this->id}:display");
-        
-        // Clear price caches for common quantities
-        foreach ([1, 10, 30, 60, 90, 100] as $qty) {
-            Cache::forget("medicine:{$this->id}:price:{$qty}");
-            Cache::forget("medicine:{$this->id}:suppliers:{$qty}");
+        // Clear specific cache patterns
+        $patterns = [
+            "medicine:{$this->id}:price:*",
+            "medicine:{$this->id}:suppliers:*",
+            "medicine:{$this->id}:has_stock",
+            "medicine_name_{$this->id}",
+        ];
+
+        foreach ($patterns as $pattern) {
+            // For Redis
+            if (config('cache.default') === 'redis') {
+                $keys = Cache::getRedis()->keys(config('cache.prefix') . ':' . $pattern);
+                if (!empty($keys)) {
+                    Cache::getRedis()->del($keys);
+                }
+            } else {
+                // For other drivers, clear common quantities
+                foreach ([1, 5, 10, 20, 30, 50, 60, 90, 100] as $qty) {
+                    Cache::forget("medicine:{$this->id}:price:{$qty}_v2");
+                    Cache::forget("medicine:{$this->id}:suppliers:{$qty}_v2");
+                }
+            }
         }
 
-        // Clear tags if using Redis/Memcached
-        if (in_array(config('cache.default'), ['redis', 'memcached'])) {
-            Cache::tags(['medicine', "medicine:{$this->id}"])->flush();
-        }
+        // Clear medicine options cache
+        Cache::forget('medicine_options_v2');
     }
 
     /**
      * Bulk clear caches for multiple medicines
-     * NEW: For mass updates
      */
     public static function clearCachesForMedicines(array $medicineIds): void
     {
-        if (in_array(config('cache.default'), ['redis', 'memcached'])) {
-            foreach ($medicineIds as $id) {
-                Cache::tags(['medicine', "medicine:{$id}"])->flush();
-            }
-        } else {
-            // Fallback for database/file cache
-            foreach ($medicineIds as $id) {
-                $medicine = new static(['id' => $id]);
-                $medicine->clearCaches();
-            }
+        foreach ($medicineIds as $id) {
+            $medicine = new static(['id' => $id]);
+            $medicine->exists = true;
+            $medicine->clearCaches();
         }
+        
+        // Clear global medicine options
+        Cache::forget('medicine_options_v2');
     }
 
     /**
-     * Boot method to clear caches on updates
+     * Boot method with optimized cache clearing
      */
     protected static function boot()
     {
         parent::boot();
 
         static::updated(function ($medicine) {
-            $medicine->clearCaches();
+            // Defer cache clearing to after response
+            dispatch(function () use ($medicine) {
+                $medicine->clearCaches();
+            })->afterResponse();
         });
 
         static::deleted(function ($medicine) {
-            $medicine->clearCaches();
-        });
-
-        // Clear cache when new supplier medicine is added
-        static::saved(function ($medicine) {
-            Cache::forget("medicine:{$medicine->id}:has_stock");
+            dispatch(function () use ($medicine) {
+                $medicine->clearCaches();
+            })->afterResponse();
         });
     }
 
     /**
-     * NEW: Check if medicine has any stock (cached)
+     * Check if medicine has stock (cached with shorter TTL)
      */
     public function hasStock(): bool
     {
-        return Cache::remember("medicine:{$this->id}:has_stock", 300, function () {
-            return $this->supplierMedicines()
+        return Cache::remember("medicine:{$this->id}:has_stock", 180, function () {
+            return DB::table('supplier_medicines')
+                ->where('medicine_id', $this->id)
                 ->where('is_available', true)
                 ->where('stock_quantity', '>', 0)
                 ->exists();
@@ -227,7 +250,7 @@ class Medicine extends Model
     }
 
     /**
-     * NEW: Get medicine with cheapest price (for listings)
+     * Get medicine with cheapest price (for listings)
      */
     public function scopeWithCheapestPrice($query)
     {

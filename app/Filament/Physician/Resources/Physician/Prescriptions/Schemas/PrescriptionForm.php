@@ -19,6 +19,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class PrescriptionForm
 {
@@ -34,7 +35,9 @@ class PrescriptionForm
                             ->relationship(
                                 name: 'patient',
                                 titleAttribute: 'first_name',
-                                modifyQueryUsing: fn (Builder $query) => $query->where('physician_id', Auth::id())
+                                modifyQueryUsing: fn (Builder $query) => $query
+                                    ->where('physician_id', Auth::id())
+                                    ->select(['id', 'first_name', 'last_name', 'patient_number', 'phone', 'allergies', 'medical_conditions'])
                             )
                             ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->first_name} {$record->last_name} - {$record->patient_number}")
                             ->searchable(['first_name', 'last_name', 'patient_number', 'phone'])
@@ -82,12 +85,20 @@ class PrescriptionForm
                                             ->placeholder('List any existing medical conditions'),
                                     ]),
                             ])
-                            ->live(onBlur: true) 
+                            ->live(debounce: 500) // Debounce to reduce queries
                             ->afterStateUpdated(function ($state, Set $set) {
-                                if (!$state) return;
+                                if (!$state) {
+                                    $set('patient_allergies_display', null);
+                                    $set('patient_conditions_display', null);
+                                    return;
+                                }
                                 
-                                $patient = Patient::select('id', 'allergies', 'medical_conditions')
-                                    ->find($state);
+                                // Use cache to avoid repeated queries
+                                $patient = Cache::remember(
+                                    "patient_info_{$state}",
+                                    300, // 5 minutes
+                                    fn () => Patient::select('id', 'allergies', 'medical_conditions')->find($state)
+                                );
                                     
                                 if ($patient) {
                                     $set('patient_allergies_display', $patient->allergies);
@@ -133,10 +144,13 @@ class PrescriptionForm
                                 Select::make('medicine_id')
                                     ->label('Medicine')
                                     ->options(function () {
-                                        return Cache::remember('medicine_options', 300, function () {
+                                        // Cache medicine options for longer (15 minutes)
+                                        return Cache::remember('medicine_options_v2', 900, function () {
                                             return Medicine::query()
-                                                ->select('id', 'generic_name', 'brand_name', 'strength', 'dosage_form')
+                                                ->select(['id', 'generic_name', 'brand_name', 'strength', 'dosage_form'])
+                                                ->where('is_active', true)
                                                 ->orderBy('generic_name')
+                                                ->limit(500) // Limit to prevent excessive data
                                                 ->get()
                                                 ->mapWithKeys(function ($medicine) {
                                                     $brandInfo = $medicine->brand_name ? " ({$medicine->brand_name})" : '';
@@ -147,15 +161,30 @@ class PrescriptionForm
                                     })
                                     ->searchable()
                                     ->required()
-                                    ->columnSpan(2),
+                                    ->columnSpan(2)
+                                    ->live(debounce: 500) // Add debounce
+                                    ->afterStateUpdated(function ($state, Set $set, Get $get) {
+                                        if (!$state) return;
+                                        
+                                        $quantity = $get('quantity') ?: 1;
+                                        $priceData = self::getMedicinePricing($state, $quantity);
+                                        
+                                        $set('unit_price', $priceData['unit_price']);
+                                        $set('total_price', $priceData['unit_price'] * $quantity);
+                                    }),
 
                                 TextInput::make('quantity')
                                     ->numeric()
                                     ->required()
                                     ->minValue(1)
-                                    ->live(onBlur: true)
+                                    ->default(1)
+                                    ->live(debounce: 800) // Longer debounce for quantity
                                     ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                                        if (!$state || $state <= 0) return;
+                                        if (!$state || $state <= 0) {
+                                            $set('unit_price', 0);
+                                            $set('total_price', 0);
+                                            return;
+                                        }
                                         
                                         $medicineId = $get('medicine_id');
                                         if (!$medicineId) return;
@@ -208,8 +237,8 @@ class PrescriptionForm
                             ->cloneable()
                             ->itemLabel(fn (array $state): ?string => 
                                 isset($state['medicine_id']) && $state['medicine_id']
-                                    ? Cache::remember("medicine_name_{$state['medicine_id']}", 300, function () use ($state) {
-                                        return Medicine::find($state['medicine_id'])?->generic_name;
+                                    ? Cache::remember("medicine_name_{$state['medicine_id']}", 900, function () use ($state) {
+                                        return Medicine::where('id', $state['medicine_id'])->value('generic_name');
                                     })
                                     : null
                             ),
@@ -231,24 +260,39 @@ class PrescriptionForm
     }
 
     /**
-     * Get cached medicine pricing data
+     * OPTIMIZED: Get cached medicine pricing with better error handling
      */
     protected static function getMedicinePricing(int $medicineId, int $quantity = 1): array
     {
-        $cacheKey = "medicine_price_{$medicineId}_{$quantity}";
+        if ($quantity <= 0) {
+            $quantity = 1;
+        }
+
+        // Round quantity to nearest 10 to improve cache hits
+        $cacheQuantity = $quantity <= 10 ? $quantity : (ceil($quantity / 10) * 10);
+        $cacheKey = "medicine_price_{$medicineId}_{$cacheQuantity}_v2";
         
-        return Cache::remember($cacheKey, 60, function () use ($medicineId, $quantity) {
-            $medicine = Medicine::find($medicineId);
+        try {
+            return Cache::remember($cacheKey, 300, function () use ($medicineId, $quantity) {
+                // Use optimized query with proper indexes
+                $lowestPrice = DB::table('supplier_medicines')
+                    ->where('medicine_id', $medicineId)
+                    ->where('is_available', true)
+                    ->where('stock_quantity', '>=', $quantity)
+                    ->min('unit_price');
+                
+                return [
+                    'unit_price' => $lowestPrice ?? 0,
+                ];
+            });
+        } catch (\Exception $e) {
+            \Log::error('Error fetching medicine pricing', [
+                'medicine_id' => $medicineId,
+                'quantity' => $quantity,
+                'error' => $e->getMessage()
+            ]);
             
-            if (!$medicine) {
-                return ['unit_price' => 0];
-            }
-            
-            $lowestPrice = $medicine->getCheapestSupplierPrice($quantity);
-            
-            return [
-                'unit_price' => $lowestPrice ?? 0,
-            ];
-        });
+            return ['unit_price' => 0];
+        }
     }
 }

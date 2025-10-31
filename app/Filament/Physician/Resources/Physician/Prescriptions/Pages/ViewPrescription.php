@@ -116,6 +116,7 @@ class ViewPrescription extends ViewRecord
                                         'processing' => 'info',
                                         'fulfilled' => 'success',
                                         'cancelled' => 'danger',
+                                        default => 'secondary',
                                     }),
                                 
                                 TextEntry::make('prescribed_at')

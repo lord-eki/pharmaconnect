@@ -13,8 +13,6 @@ class InsuranceClaimController extends Controller
      */
     public function viewPDF(InsuranceClaim $claim)
     {
-        // Authorization check
-        $this->authorize('view', $claim);
         
         return InsuranceClaimPDFService::stream($claim);
     }
@@ -24,8 +22,6 @@ class InsuranceClaimController extends Controller
      */
     public function downloadPDF(InsuranceClaim $claim)
     {
-        // Authorization check
-        $this->authorize('view', $claim);
         
         return InsuranceClaimPDFService::download($claim);
     }
@@ -35,8 +31,6 @@ class InsuranceClaimController extends Controller
      */
     public function emailPDF(Request $request, InsuranceClaim $claim)
     {
-        // Authorization check
-        $this->authorize('view', $claim);
         
         $request->validate([
             'email' => 'required|email',

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\InsuranceClaims\Tables;
 
 use App\Services\InsuranceClaimPDFService;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -20,7 +21,6 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
 
 class InsuranceClaimsTable
 {
@@ -130,10 +130,12 @@ class InsuranceClaimsTable
                     }),
             ])
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make(),
 
-                 // Download Claim Form PDF
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make(),
+
+                    // Download Claim Form PDF
                     Action::make('download_claim')
                         ->label('Download Claim Form')
                         ->icon('heroicon-o-document-arrow-down')
@@ -141,7 +143,7 @@ class InsuranceClaimsTable
                         ->action(function ($record) {
                             return InsuranceClaimPDFService::download($record);
                         }),
-                    
+
                     // View Claim Form PDF (in browser)
                     Action::make('view_claim')
                         ->label('View Claim Form')
@@ -149,7 +151,7 @@ class InsuranceClaimsTable
                         ->color('info')
                         ->url(fn ($record) => route('insurance-claims.pdf', $record))
                         ->openUrlInNewTab(),
-                    
+
                     // Email Claim Form
                     Action::make('email_claim')
                         ->label('Email Claim Form')
@@ -170,27 +172,30 @@ class InsuranceClaimsTable
                             // \Mail::to($data['email'])->send(
                             //     new \App\Mail\InsuranceClaimFormMail($record, $data['message'])
                             // );
-                            
+
                             Notification::make()
                                 ->title('Claim form sent')
                                 ->success()
                                 ->send();
                         }),
-            
+
+                ])->button()
+                    ->label('Actions'),
+
             ])
             ->toolbarActions([
-                    BulkActionGroup::make([
-                        DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
 
-                        BulkAction::make('mark_as_under_review')
-                            ->label('Mark as Under Review')
-                            ->icon('heroicon-o-eye')
-                            ->color('warning')
-                            ->requiresConfirmation()
-                            ->action(function ($records) {
-                                $records->each->update(['status' => 'under_review']);
-                            }),
-                 ]),
+                    BulkAction::make('mark_as_under_review')
+                        ->label('Mark as Under Review')
+                        ->icon('heroicon-o-eye')
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->action(function ($records) {
+                            $records->each->update(['status' => 'under_review']);
+                        }),
+                ]),
             ])->defaultSort('submitted_at', 'desc');
     }
 }
