@@ -11,6 +11,8 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Forms\Get;
+use Illuminate\Support\Facades\Auth;
 
 class InventoryForm
 {
@@ -22,7 +24,24 @@ class InventoryForm
                     ->schema([
                         Select::make('medicine_id')
                             ->label('Medicine')
-                            ->relationship('medicine', 'generic_name')
+                            ->relationship(
+                                name: 'medicine',
+                                titleAttribute: 'generic_name',
+                                modifyQueryUsing: fn ($query, $record) => $query
+                                    ->when(
+                                        // Only filter when creating new record (not editing)
+                                        !$record,
+                                        fn ($q) => $q->whereDoesntHave('supplierMedicines', function ($subQuery) {
+                                            // Get current supplier's ID
+                                            $supplierId = Auth::user()->supplier?->id;
+                                            if ($supplierId) {
+                                                $subQuery->where('supplier_id', $supplierId);
+                                            }
+                                        })
+                                    )
+                                    ->where('is_active', true)
+                                    ->orderBy('generic_name')
+                            )
                             ->searchable(['generic_name', 'brand_name'])
                             ->preload()
                             ->required()
@@ -39,6 +58,7 @@ class InventoryForm
                                     ->required()
                                     ->maxLength(255),
                             ])
+                            ->helperText('Only medicines not yet in your inventory are shown')
                             ->columnSpanFull(),
                     ]),
 

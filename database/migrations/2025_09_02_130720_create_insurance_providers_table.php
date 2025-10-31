@@ -22,7 +22,7 @@ return new class extends Migration {
             $table->string('website')->nullable();
             $table->boolean('is_active')->default(true);
             $table->string('api_endpoint')->nullable();
-            $table->text('api_key')->nullable(); // Should be encrypted
+            $table->text('api_key')->nullable(); 
             $table->timestamps();
 
             $table->index(['is_active']);

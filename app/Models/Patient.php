@@ -13,6 +13,7 @@ class Patient extends Model
 
     protected $fillable = [
         'physician_id',
+        'insurance_provider_id',
         'patient_number',
         'first_name',
         'last_name',
@@ -101,7 +102,8 @@ class Patient extends Model
     // Check if patient has insurance
     public function hasInsurance(): bool
     {
-        return ! empty($this->insurance_number) && ! empty($this->insurance_provider);
+        return !empty($this->insurance_number) && 
+        (!empty($this->insurance_provider_id) || !empty($this->insurance_provider));
     }
 
     // Get active prescriptions
@@ -116,5 +118,10 @@ class Patient extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    public function insuranceProvider(): BelongsTo
+    {
+        return $this->belongsTo(InsuranceProvider::class, 'insurance_provider_id');
     }
 }

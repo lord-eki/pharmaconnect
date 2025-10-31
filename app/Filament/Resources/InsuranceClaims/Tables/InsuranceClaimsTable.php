@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\InsuranceClaims\Tables;
 
+use App\Services\InsuranceClaimPDFService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -11,6 +12,7 @@ use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Columns\TextColumn;
@@ -131,60 +133,50 @@ class InsuranceClaimsTable
                 ViewAction::make(),
                 EditAction::make(),
 
-                Action::make('approve')
-                    ->icon('heroicon-o-check-circle')
-                    ->color('success')
-                    ->visible(fn ($record) => in_array($record->status, ['submitted', 'under_review']))
-                    ->requiresConfirmation()
-                    ->form([
-                        TextInput::make('approved_amount')
-                            ->label('Approved Amount (KES)')
-                            ->numeric()
-                            ->prefix('KES')
-                            ->required()
-                            ->default(fn ($record) => $record->claimed_amount),
-                        Textarea::make('notes')
-                            ->label('Approval Notes')
-                            ->rows(3),
-                    ])
-                    ->action(function ($record, array $data) {
-                        $record->update([
-                            'status' => 'approved',
-                            'approved_amount' => $data['approved_amount'],
-                            'reviewed_at' => now(),
-                            'reviewed_by' => Auth::id(),
-                            'notes' => $data['notes'] ?? $record->notes,
-                        ]);
-                    })
-                    ->successNotificationTitle('Claim approved successfully'),
-
-                Action::make('reject')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('danger')
-                    ->visible(fn ($record) => in_array($record->status, ['submitted', 'under_review']))
-                    ->requiresConfirmation()
-                    ->form([
-                        Textarea::make('rejection_reason')
-                            ->label('Reason for Rejection')
-                            ->required()
-                            ->rows(3),
-                    ])
-                    ->action(function ($record, array $data) {
-                        $record->update([
-                            'status' => 'rejected',
-                            'rejection_reason' => $data['rejection_reason'],
-                            'reviewed_at' => now(),
-                            'reviewed_by' => Auth::id(),
-                        ]);
-                    })
-                    ->successNotificationTitle('Claim rejected'),
-
-                Action::make('download_pdf')
-                    ->label('PDF')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->color('info')
-                    ->url(fn ($record) => route('insurance-claims.download-pdf', $record))
-                    ->openUrlInNewTab(),
+                 // Download Claim Form PDF
+                    Action::make('download_claim')
+                        ->label('Download Claim Form')
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->color('success')
+                        ->action(function ($record) {
+                            return InsuranceClaimPDFService::download($record);
+                        }),
+                    
+                    // View Claim Form PDF (in browser)
+                    Action::make('view_claim')
+                        ->label('View Claim Form')
+                        ->icon('heroicon-o-eye')
+                        ->color('info')
+                        ->url(fn ($record) => route('insurance-claims.pdf', $record))
+                        ->openUrlInNewTab(),
+                    
+                    // Email Claim Form
+                    Action::make('email_claim')
+                        ->label('Email Claim Form')
+                        ->icon('heroicon-o-envelope')
+                        ->color('warning')
+                        ->form([
+                            TextInput::make('email')
+                                ->label('Email Address')
+                                ->email()
+                                ->required()
+                                ->default(fn ($record) => $record->insuranceProvider->email),
+                            Textarea::make('message')
+                                ->label('Message')
+                                ->rows(3)
+                                ->default('Please find attached the insurance claim form for review.'),
+                        ])
+                        ->action(function ($record, array $data) {
+                            // \Mail::to($data['email'])->send(
+                            //     new \App\Mail\InsuranceClaimFormMail($record, $data['message'])
+                            // );
+                            
+                            Notification::make()
+                                ->title('Claim form sent')
+                                ->success()
+                                ->send();
+                        }),
+            
             ])
             ->toolbarActions([
                     BulkActionGroup::make([

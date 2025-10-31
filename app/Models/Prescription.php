@@ -2,15 +2,18 @@
 
 namespace App\Models;
 
+use App\Mail\InsuranceClaimFormMail;
+use App\Notifications\NewOrderNotification;
 use App\Traits\HasAuditLog;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
-use App\Notifications\NewOrderNotification;
 
 class Prescription extends Model
 {
@@ -66,6 +69,124 @@ class Prescription extends Model
         });
     }
 
+    /**
+     * Create insurance claim after orders are created
+     */
+    protected function createInsuranceClaim(): void
+    {
+        // Only create insurance of insurance is covering
+        if (! $this->insurance_covered) {
+            return;
+        }
+
+        if ($this->orders->isEmpty()) {
+            Log::warning('No orders found for prescription, skipping create insurance claim', [
+                'prescription_id' => $this->id,
+            ]);
+
+            return;
+        }
+
+        // check if patient has insurance
+        $patient = $this->patient;
+        if (! $patient->insurance_provider_id || ! $patient->insurance_number) {
+            Log::warning('Patient has no insurance details', [
+                'patient_id' => $patient->id,
+                'prescription_id' => $this->id,
+            ]);
+
+            return;
+        }
+
+        // check if claim already exists
+        if ($this->insurance_claim_id || $this->insuranceClaim()->exists()) {
+            Log::info('Insurance claim already exists for prescription', [
+                'prescription_id' => $this->id,
+                'insurance_claim_id' => $this->insurance_claim_id,
+            ]);
+
+            return;
+        }
+
+        try {
+            // calculate total claimed amount from orders
+            $claimAmount = $this->orders->sum('total_amount');
+
+            // create the insurance claim
+            $claim = InsuranceClaim::create([
+                'claim_number' => InsuranceClaim::generateClaimNumber(),
+                'prescription_id' => $this->id,
+                'policy_number' => $patient->insurance_number,
+                'deductible_amount' => 0,
+                'patient_id' => $this->patient_id,
+                'insurance_provider_id' => $patient->insurance_provider_id,
+                'insurance_number' => $patient->insurance_number,
+                'claimed_amount' => $claimAmount,
+                'status' => 'submitted',
+                'notes' => 'Auto-generated claim from prescription '.$this->prescription_number,
+                'submitted_at' => now(),
+            ]);
+
+            $this->update([
+                'insurance_claim_id' => $claim->id,
+            ]);
+
+            Log::info('Insurance claim created for prescription', [
+                'prescription_id' => $this->id,
+                'insurance_claim_id' => $claim->id,
+                'claimed_amount' => $claimAmount,
+            ]);
+
+            // notify insurance provider
+            $this->notifyInsuranceProvider($claim);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to create insurance claim for prescription', [
+                'prescription_id' => $this->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+    }
+
+    /**
+     * Notify insurance provider about new claim
+     */
+    protected function notifyInsuranceProvider(InsuranceClaim $claim): void
+    {
+        try {
+            $provider = $claim->insuranceProvider;
+
+            // Option 1: Email notification
+            if ($provider->email) {
+                Mail::to($provider->email)->send(
+                    new InsuranceClaimFormMail($claim)
+                );
+            }
+
+            // Option 2: Database notification (if provider has user account)
+            // if ($provider->user) {
+            //     $provider->user->notify(new \App\Notifications\NewInsuranceClaimNotification($claim));
+            // }
+
+            // Option 3: API submission (if provider has API integration)
+            // if ($provider->api_endpoint && $provider->api_key) {
+            //     dispatch(new \App\Jobs\SubmitClaimToInsuranceAPI($claim));
+            // }
+
+            \Log::info('Insurance provider notified about claim', [
+                'claim_id' => $claim->id,
+                'provider_id' => $provider->id,
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to notify insurance provider', [
+                'claim_id' => $claim->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     public function physician(): BelongsTo
     {
         return $this->belongsTo(User::class, 'physician_id');
@@ -108,7 +229,7 @@ class Prescription extends Model
         $month = date('m');
 
         $cacheKey = "last_prescription_{$year}_{$month}";
-        
+
         $lastSequence = Cache::remember($cacheKey, 300, function () use ($year, $month) {
             $lastPrescription = static::whereYear('created_at', $year)
                 ->whereMonth('created_at', $month)
@@ -118,7 +239,7 @@ class Prescription extends Model
             if ($lastPrescription && preg_match('/(\d{5})$/', $lastPrescription->prescription_number, $matches)) {
                 return intval($matches[0]);
             }
-            
+
             return 0;
         });
 
@@ -142,10 +263,11 @@ class Prescription extends Model
 
             // Generate quotation first, then create orders from it
             $quotation = $this->generateQuotationSync();
-            
+
             if ($quotation) {
                 // Create orders grouped by supplier from quotation
                 $this->createOrdersFromQuotation($quotation);
+
             }
 
             dispatch(function () {
@@ -172,7 +294,7 @@ class Prescription extends Model
         // Load all medicines and their suppliers in one go
         $this->items->load(['medicine.supplierMedicines' => function ($query) {
             $query->where('is_available', true)
-                  ->where('stock_quantity', '>', 0);
+                ->where('stock_quantity', '>', 0);
         }]);
 
         $quotationItems = [];
@@ -198,17 +320,18 @@ class Prescription extends Model
             }
         }
 
-        if (!$hasItems) {
-            \Log::error("No suppliers available for prescription", [
+        if (! $hasItems) {
+            \Log::error('No suppliers available for prescription', [
                 'prescription_id' => $this->id,
                 'prescription_number' => $this->prescription_number,
             ]);
+
             return null;
         }
 
         // Bulk insert for performance
         QuotationItem::insert($quotationItems);
-        
+
         $quotation->calculateTotal();
         $quotation->optimizePricing();
 
@@ -226,11 +349,12 @@ class Prescription extends Model
         if (empty($supplierGroups)) {
             $this->status = 'pending';
             $this->save();
-            
-            \Log::error("No suppliers selected for prescription orders", [
+
+            \Log::error('No suppliers selected for prescription orders', [
                 'prescription_id' => $this->id,
                 'quotation_id' => $quotation->id,
             ]);
+
             return;
         }
 
@@ -263,17 +387,18 @@ class Prescription extends Model
 
             $bestQuotationItem = $availableQuotationItems->first();
 
-            if (!$bestQuotationItem) {
-                \Log::warning("No quotation item found for prescription item", [
+            if (! $bestQuotationItem) {
+                \Log::warning('No quotation item found for prescription item', [
                     'prescription_item_id' => $prescriptionItem->id,
                     'medicine' => $prescriptionItem->medicine->generic_name ?? 'Unknown',
                 ]);
+
                 continue;
             }
 
             $supplierId = $bestQuotationItem->supplier_id;
 
-            if (!isset($supplierGroups[$supplierId])) {
+            if (! isset($supplierGroups[$supplierId])) {
                 $supplierGroups[$supplierId] = [
                     'supplier' => $bestQuotationItem->supplier,
                     'quotation_items' => [],
@@ -326,7 +451,7 @@ class Prescription extends Model
         // Send notification to supplier
         $this->notifySupplier($order, $groupData['supplier']);
 
-        \Log::info("Order created for supplier", [
+        \Log::info('Order created for supplier', [
             'order_number' => $order->order_number,
             'quotation_id' => $quotation->id,
             'supplier_id' => $supplierId,
@@ -349,7 +474,7 @@ class Prescription extends Model
                 );
             }
 
-            // Option 2: Database notification (if supplier has user account)
+            // Option 2: Database notification
             if ($supplier->user) {
                 $supplier->user->notify(new NewOrderNotification($order));
             }
@@ -357,13 +482,13 @@ class Prescription extends Model
             // Option 3: Filament notification (in-app)
             \Filament\Notifications\Notification::make()
                 ->title('New Order Received')
-                ->body("Order {$order->order_number} for KES " . number_format($order->total_amount, 2))
+                ->body("Order {$order->order_number} for KES ".number_format($order->total_amount, 2))
                 ->icon('heroicon-o-shopping-bag')
                 ->success()
                 ->sendToDatabase($supplier->user ?? null);
 
         } catch (\Exception $e) {
-            \Log::error("Failed to notify supplier about order", [
+            \Log::error('Failed to notify supplier about order', [
                 'order_id' => $order->id,
                 'supplier_id' => $supplier->id,
                 'error' => $e->getMessage(),
@@ -394,7 +519,7 @@ class Prescription extends Model
 
         if ($this->patient->allergies) {
             $this->items->load('medicine');
-            
+
             foreach ($this->items as $item) {
                 if (stripos($item->medicine->active_ingredients, $this->patient->allergies) !== false) {
                     \Log::warning("Potential allergy conflict in prescription {$this->prescription_number}", [
@@ -461,7 +586,7 @@ class Prescription extends Model
                 ->whereIn('status', ['pending', 'confirmed'])
                 ->update([
                     'status' => 'cancelled',
-                    'notes' => DB::raw("CONCAT(COALESCE(notes, ''), '\n\nCancelled due to prescription cancellation: " . addslashes($reason) . "')"),
+                    'notes' => DB::raw("CONCAT(COALESCE(notes, ''), '\n\nCancelled due to prescription cancellation: ".addslashes($reason)."')"),
                 ]);
 
             return true;

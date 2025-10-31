@@ -55,6 +55,19 @@ class Order extends Model
                 $order->prescription->markFulfilled();
             }
         });
+
+        static::updated(function ($order) {
+            if($order->isDirty('status') && $order->status == 'confirmed')
+            {
+                $prescription =  $order->prescription;
+                $allConfirmed = $prescription->orders()->whereNotIn('status', ['confirmed', 'delivered'])->doesntExist();
+
+                if($allConfirmed)
+                {
+                    $prescription->createInsuranceClaim();
+                }
+            }
+        });
     }
 
     public function quotation(): BelongsTo
@@ -99,25 +112,32 @@ class Order extends Model
 
 
     // Generate unique order number (LPO)
-    public static function generateOrderNumber(): string
-    {
-        $prefix = 'LPO';
-        $year = date('Y');
-        $month = date('m');
-        
-        $lastOrder = static::whereYear('created_at', $year)
-            ->whereMonth('created_at', $month)
-            ->orderBy('id', 'desc')
-            ->first();
+public static function generateOrderNumber(): string
+{
+    $prefix = 'LPO';
+    $year = date('Y');
+    $month = date('m');
+    $ym = $year . $month;
 
-        if ($lastOrder && preg_match('/\d+$/', $lastOrder->order_number, $matches)) {
-            $sequence = intval($matches[0]) + 1;
-        } else {
-            $sequence = 1;
-        }
+    // Get the last order for this year and month
+    $lastOrder = static::whereYear('created_at', $year)
+        ->whereMonth('created_at', $month)
+        ->orderBy('id', 'desc')
+        ->first();
 
-        return sprintf('%s%s%s%05d', $prefix, $year, $month, $sequence);
+    $sequence = 1;
+
+    if ($lastOrder && preg_match('/(\d{5})$/', $lastOrder->order_number, $matches)) {
+        $sequence = (int)$matches[1] + 1;
     }
+
+    // Pad the sequence to 5 digits
+    $sequencePadded = str_pad($sequence, 5, '0', STR_PAD_LEFT);
+
+    return sprintf('%s%s-%s', $prefix, $ym, $sequencePadded);
+}
+
+
 
     // Confirm order (supplier accepts)
     public function confirm(): bool

@@ -3,46 +3,65 @@
 namespace App\Http\Controllers;
 
 use App\Models\InsuranceClaim;
+use App\Services\InsuranceClaimPDFService;
 use Illuminate\Http\Request;
 
 class InsuranceClaimController extends Controller
 {
-    protected InsuranceClaimPdfGenerator $pdfGenerator;
-
-    public function __construct(InsuranceClaimPdfGenerator $pdfGenerator)
+     /**
+     * View claim form PDF in browser
+     */
+    public function viewPDF(InsuranceClaim $claim)
     {
-        $this->pdfGenerator = $pdfGenerator;
+        // Authorization check
+        $this->authorize('view', $claim);
+        
+        return InsuranceClaimPDFService::stream($claim);
     }
 
     /**
-     * Download claim PDF
+     * Download claim form PDF
      */
-
-    public function downloadClaimPdf(InsuranceClaim $claim)
+    public function downloadPDF(InsuranceClaim $claim)
     {
-        return $this->pdfGenerator->download($claim);
+        // Authorization check
+        $this->authorize('view', $claim);
+        
+        return InsuranceClaimPDFService::download($claim);
     }
 
     /**
-     * View claim PDF in browser
+     * Email claim form
      */
-    public function previewPdf(InsuranceClaim $claim)
+    public function emailPDF(Request $request, InsuranceClaim $claim)
     {
-        return $this->pdfGenerator->stream($claim);
-    }
-
-    /**
-     * Generate  and store claim PDF
-     */
-
-    public function generatePdf(InsuranceClaim $claim)
-    {
-        $filename = $this->pdfGenerator->generate($claim);
-
-        return response()->json([
-            'success' => true,
-            'filename' => $filename,
-            'message' => 'PDF generated successfully.'
+        // Authorization check
+        $this->authorize('view', $claim);
+        
+        $request->validate([
+            'email' => 'required|email',
+            'message' => 'nullable|string',
         ]);
+
+        try {
+            // \Mail::to($request->email)->send(
+            //     new \App\Mail\InsuranceClaimFormMail($claim, $request->message)
+            // );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Claim form sent successfully',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to send claim form email', [
+                'claim_id' => $claim->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send email',
+            ], 500);
+        }
     }
 }
