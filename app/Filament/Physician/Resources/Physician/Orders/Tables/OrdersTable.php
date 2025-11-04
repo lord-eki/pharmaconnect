@@ -2,11 +2,9 @@
 
 namespace App\Filament\Physician\Resources\Physician\Orders\Tables;
 
+use App\Filament\Physician\Pages\TrackPage;
 use App\Models\Order;
 use Filament\Actions\Action;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Columns\BadgeColumn;
@@ -24,7 +22,7 @@ class OrdersTable
     {
         return $table
             ->columns([
-                 TextColumn::make('order_number')
+                TextColumn::make('order_number')
                     ->label('Order # (LPO)')
                     ->searchable()
                     ->sortable()
@@ -34,15 +32,14 @@ class OrdersTable
                 TextColumn::make('prescription.prescription_number')
                     ->label('Prescription #')
                     ->searchable()
-                    // ->url(fn (Order $record): string => 
+                    // ->url(fn (Order $record): string =>
                     //     route('filament.physician.resources.prescriptions.view', $record->prescription))
                     ->color('primary'),
 
                 TextColumn::make('prescription.patient.full_name')
                     ->label('Patient')
                     ->searchable(['first_name', 'last_name'])
-                    ->description(fn (Order $record): string => 
-                        $record->prescription->patient->patient_number),
+                    ->description(fn (Order $record): string => $record->prescription->patient->patient_number),
 
                 TextColumn::make('supplier.company_name')
                     ->label('Supplier')
@@ -88,8 +85,8 @@ class OrdersTable
                 TextColumn::make('ordered_at')
                     ->label('Ordered')
                     ->dateTime('M d, Y H:i')
-                    ->sortable()
-,
+                    ->sortable(),
+
                 TextColumn::make('expected_delivery')
                     ->label('Expected')
                     ->dateTime('M d, Y H:i')
@@ -114,13 +111,12 @@ class OrdersTable
                     ->multiple(),
 
                 Filter::make('overdue')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->where('expected_delivery', '<', now())
-                              ->whereNotIn('status', ['delivered', 'cancelled']))
+                    ->query(fn (Builder $query): Builder => $query->where('expected_delivery', '<', now())
+                        ->whereNotIn('status', ['delivered', 'cancelled']))
                     ->label('Overdue Orders')
                     ->toggle(),
 
-               Filter::make('ordered_at')
+                Filter::make('ordered_at')
                     ->form([
                         DatePicker::make('from')
                             ->label('From Date'),
@@ -140,24 +136,24 @@ class OrdersTable
                     }),
             ])
             ->recordActions([
-               ViewAction::make(),
-                
+                ViewAction::make(),
+
                 Action::make('track')
                     ->label('Track')
                     ->icon('heroicon-o-map-pin')
                     ->color('info')
-                    ->visible(fn (Order $record) => in_array($record->status, ['shipped', 'confirmed', 'processing']))
-                    // ->url(fn (Order $record): string => 
-                    //     $record->delivery 
-                    //         ? route('filament.physician.resources.deliveries.view', $record->delivery)
-                    //         : '#')
-                    ->disabled(fn (Order $record) => !$record->delivery),
+                    ->visible(fn (Order $record) => 
+                        in_array($record->status, ['shipped', 'confirmed', 'processing'])
+                    )
+                    // ->url(fn (Order $record): string => TrackPage::getUrl(['record' => $record->delivery->id])
+                    // )
+                    // ->openUrlInNewTab(false),
+
             ])
-              ->defaultSort('ordered_at', 'desc')
-            ->modifyQueryUsing(fn (Builder $query) => 
-                $query->whereHas('prescription', fn ($q) => 
-                    $q->where('physician_id', Auth::id())
+            ->defaultSort('ordered_at', 'desc')
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['delivery'])
+                ->whereHas('prescription', fn ($q) => $q->where('physician_id', Auth::id())
                 )
-            );;
+            );
     }
 }

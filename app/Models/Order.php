@@ -74,7 +74,6 @@ class Order extends Model
                     return;
                 }
 
-                // Refresh the orders relationship to get latest status
                 $prescription->load('orders');
 
                 // Check if all orders are confirmed or delivered

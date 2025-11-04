@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\InsuranceClaims\Tables;
 
+use App\Mail\InsuranceClaimFormMail;
 use App\Services\InsuranceClaimPDFService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -21,6 +22,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Mail;
 
 class InsuranceClaimsTable
 {
@@ -169,9 +171,9 @@ class InsuranceClaimsTable
                                 ->default('Please find attached the insurance claim form for review.'),
                         ])
                         ->action(function ($record, array $data) {
-                            // \Mail::to($data['email'])->send(
-                            //     new \App\Mail\InsuranceClaimFormMail($record, $data['message'])
-                            // );
+                            Mail::to($data['email'])->send(
+                                new InsuranceClaimFormMail($record, $data['message'])
+                            );
 
                             Notification::make()
                                 ->title('Claim form sent')

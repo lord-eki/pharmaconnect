@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Physician\Pages\TrackPage;
 use App\Http\Responses\CustomLoginResponse;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Http\Middleware\Authenticate;
@@ -35,6 +36,7 @@ class PhysicianPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Physician/Pages'), for: 'App\Filament\Physician\Pages')
             ->pages([
                 Dashboard::class,
+                TrackPage::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Physician/Widgets'), for: 'App\Filament\Physician\Widgets')
             ->widgets([
@@ -51,7 +53,7 @@ class PhysicianPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
-            ->sidebarWidth('17rem')->spa()->topNavigation()
+            ->sidebarWidth('17rem')->spa()->topNavigation()->databaseNotifications()
             ->authMiddleware([
                 Authenticate::class,
             ]);

@@ -50,7 +50,8 @@ class InsurerPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
-            ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')->spa()
+            ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
+            ->spa()->databaseNotifications()
             ->authMiddleware([
                 Authenticate::class,
             ]);
