@@ -62,7 +62,7 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')->spa()
             ->sidebarCollapsibleOnDesktop()->sidebarWidth('17rem')
-            ->databaseNotifications()
+            ->databaseNotifications()->font('Lato')
             ->authMiddleware([
                 Authenticate::class,
             ]);

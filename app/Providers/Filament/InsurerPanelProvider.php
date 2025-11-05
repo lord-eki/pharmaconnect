@@ -51,7 +51,7 @@ class InsurerPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
-            ->spa()->databaseNotifications()
+            ->spa()->databaseNotifications()->font('Lato')
             ->authMiddleware([
                 Authenticate::class,
             ]);

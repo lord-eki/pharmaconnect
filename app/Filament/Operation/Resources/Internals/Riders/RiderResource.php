@@ -9,6 +9,7 @@ use App\Filament\Operation\Resources\Internals\Riders\Schemas\RiderForm;
 use App\Filament\Operation\Resources\Internals\Riders\Tables\RidersTable;
 use App\Models\Rider;
 use BackedEnum;
+use UnitEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -17,6 +18,9 @@ use Filament\Tables\Table;
 class RiderResource extends Resource
 {
     protected static ?string $model = Rider::class;
+
+        protected static string | UnitEnum | null $navigationGroup = 'Logistics';
+
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCheckBadge;
 
