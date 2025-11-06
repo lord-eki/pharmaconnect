@@ -506,7 +506,7 @@ class Prescription extends Model
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            throw $e; // Re-throw to see the actual error
+            throw $e; 
         }
     }
 
