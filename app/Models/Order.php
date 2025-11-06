@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\OrderFulfillmentService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -50,63 +51,68 @@ class Order extends Model
         });
 
         static::saved(function ($order) {
-            // Update prescription status based on order status
             if ($order->status === 'delivered' && $order->prescription) {
                 $order->prescription->markFulfilled();
             }
         });
 
         static::updated(function ($order) {
-            if ($order->isDirty('status') && $order->status == 'confirmed') {
-                Log::info('Order confirmed, checking if all orders confirmed', [
-                    'order_id' => $order->id,
-                    'order_number' => $order->order_number,
-                    'prescription_id' => $order->prescription_id,
-                ]);
+            if ($order->isDirty('status')) {
+                $fulfillmentService = app(OrderFulfillmentService::class);
 
-                $prescription = $order->prescription;
+                switch ($order->status) {
+                    case 'confirmed':
+                        // Check if all prescription orders are confirmed
+                        static::handlePrescriptionOrdersConfirmed($order);
+                        break;
 
-                if (! $prescription) {
-                    Log::error('No prescription found for order', [
-                        'order_id' => $order->id,
-                    ]);
+                    case 'processing':
+                        // Automatically create delivery and assign rider
+                        $fulfillmentService->handleOrderProcessing($order);
+                        break;
 
-                    return;
-                }
-
-                $prescription->load('orders');
-
-                // Check if all orders are confirmed or delivered
-                $allConfirmed = $prescription->orders()
-                    ->whereNotIn('status', ['confirmed', 'delivered'])
-                    ->doesntExist();
-
-                Log::info('Order confirmation check', [
-                    'prescription_id' => $prescription->id,
-                    'all_confirmed' => $allConfirmed,
-                    'total_orders' => $prescription->orders->count(),
-                    'confirmed_or_delivered' => $prescription->orders
-                        ->whereIn('status', ['confirmed', 'delivered'])
-                        ->count(),
-                ]);
-
-                if ($allConfirmed) {
-                    Log::info('All orders confirmed, creating insurance claim', [
-                        'prescription_id' => $prescription->id,
-                    ]);
-
-                    try {
-                        $prescription->createInsuranceClaim();
-                    } catch (\Exception $e) {
-                        Log::error('Error creating insurance claim from order update', [
-                            'order_id' => $order->id,
-                            'prescription_id' => $prescription->id,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
+                    case 'delivered':
+                        // Update prescription status
+                        $order->prescription->markFulfilled();
+                        break;
                 }
             }
         });
+    }
+
+    /**
+     * Check if all orders for prescription are confirmed and create insurance claim
+     */
+    protected static function handlePrescriptionOrdersConfirmed(Order $order): void
+    {
+        $prescription = $order->prescription;
+
+        if (! $prescription) {
+            return;
+        }
+
+        $prescription->load('orders');
+
+        // Check if all orders are confirmed or delivered
+        $allConfirmed = $prescription->orders()
+            ->whereNotIn('status', ['confirmed', 'delivered'])
+            ->doesntExist();
+
+        if ($allConfirmed) {
+            Log::info('All orders confirmed, creating insurance claim', [
+                'prescription_id' => $prescription->id,
+            ]);
+
+            try {
+                $prescription->createInsuranceClaim();
+            } catch (\Exception $e) {
+                Log::error('Error creating insurance claim', [
+                    'order_id' => $order->id,
+                    'prescription_id' => $prescription->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     public function payables(): HasMany
@@ -255,7 +261,6 @@ class Order extends Model
     // Calculate delivery fee based on distance/location
     protected function calculateDeliveryFee(): float
     {
-        // Simple logic - you can enhance this
         // Based on county/city or actual distance calculation
 
         $patient = $this->prescription->patient;

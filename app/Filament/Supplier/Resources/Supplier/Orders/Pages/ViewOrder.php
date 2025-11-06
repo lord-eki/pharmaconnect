@@ -3,6 +3,7 @@
 namespace App\Filament\Supplier\Resources\Supplier\Orders\Pages;
 
 use App\Filament\Supplier\Resources\Supplier\Orders\OrderResource;
+use App\Services\OrderFulfillmentService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
@@ -28,7 +29,7 @@ class ViewOrder extends ViewRecord
                 ->visible(fn ($record) => $record->status === 'pending')
                 ->requiresConfirmation()
                 ->modalHeading('Confirm Order')
-                ->modalDescription('Confirm that you can fulfill this order. Stock will be deducted.')
+                ->modalDescription('Confirm that you can fulfill this order. A delivery will be created and rider assigned automatically.')
                 ->form([
                     DateTimePicker::make('expected_delivery')
                         ->label('Expected Delivery Date')
@@ -37,30 +38,34 @@ class ViewOrder extends ViewRecord
                         ->default(now()->addDays(2)),
                 ])
                 ->action(function ($record, array $data) {
-                    $record->update([
-                        'status' => 'confirmed',
-                        'expected_delivery' => $data['expected_delivery'],
-                    ]);
+                    try {
+                        $fulfillmentService = app(OrderFulfillmentService::class);
+                        
+                        $results = $fulfillmentService->handleOrderConfirmation($record, $data);
 
-                    // Deduct stock
-                    foreach ($record->items as $item) {
-                        $supplierMedicine = \App\Models\SupplierMedicine::where('supplier_id', $record->supplier_id)
-                            ->where('medicine_id', $item->medicine_id)
-                            ->first();
-
-                        if ($supplierMedicine) {
-                            $supplierMedicine->decrement('stock_quantity', $item->quantity);
-                            $supplierMedicine->update(['last_updated' => now()]);
+                        $message = 'Order confirmed successfully!';
+                        
+                        if ($results['rider_assigned']) {
+                            $rider = $results['rider'];
+                            $message .= " Rider {$rider['name']} ({$rider['vehicle']}) has been assigned.";
+                        } else {
+                            $message .= ' However, no rider was automatically assigned. Please assign one manually in the Operations panel.';
                         }
-                    }
 
-                    Notification::make()
-                        ->success()
-                        ->title('Order confirmed successfully')
-                        ->body('Stock has been deducted from your inventory.')
-                        ->send();
+                        Notification::make()
+                            ->success()
+                            ->title('Order Confirmed')
+                            ->body($message)
+                            ->send();
+
+                    } catch (\Exception $e) {
+                        Notification::make()
+                            ->danger()
+                            ->title('Error')
+                            ->body('Failed to confirm order: ' . $e->getMessage())
+                            ->send();
+                    }
                 }),
-                // ->after(fn () => redirect()->route('filament.supplier.resources.orders.view', ['record' => $this->getRecord()])),
 
             Action::make('mark_processing')
                 ->label('Start Processing')
@@ -68,31 +73,52 @@ class ViewOrder extends ViewRecord
                 ->color('info')
                 ->visible(fn ($record) => $record->status === 'confirmed')
                 ->requiresConfirmation()
-                ->action(fn ($record) => $record->update(['status' => 'processing']))
-                ->successNotificationTitle('Order marked as processing'),
-                // ->after(fn () => redirect()->route('filament.supplier.resources.orders.view', ['record' => $this->getRecord()])),
+                ->modalHeading('Start Processing Order')
+                ->modalDescription('Mark this order as being processed. If not already done, a delivery will be created and rider assigned.')
+                ->action(function ($record) {
+                    try {
+                        $fulfillmentService = app(OrderFulfillmentService::class);
+                        $fulfillmentService->handleOrderProcessing($record);
+
+                        Notification::make()
+                            ->success()
+                            ->title('Order Processing')
+                            ->body('Order marked as processing.')
+                            ->send();
+
+                    } catch (\Exception $e) {
+                        Notification::make()
+                            ->danger()
+                            ->title('Error')
+                            ->body('Failed to process order: ' . $e->getMessage())
+                            ->send();
+                    }
+                }),
 
             Action::make('mark_shipped')
-                ->label('Mark as Shipped')
+                ->label('Mark as Shipped/Ready for Pickup')
                 ->icon('heroicon-o-truck')
                 ->color('primary')
                 ->visible(fn ($record) => in_array($record->status, ['confirmed', 'processing']))
                 ->requiresConfirmation()
-                ->modalHeading('Mark Order as Shipped')
+                ->modalHeading('Mark Order as Ready for Pickup')
+                ->modalDescription('The order is ready for the rider to pick up.')
                 ->form([
                     TextInput::make('tracking_number')
                         ->label('Tracking Number (Optional)')
                         ->maxLength(255),
                     Textarea::make('shipping_notes')
-                        ->label('Shipping Notes')
+                        ->label('Notes for Rider')
                         ->maxLength(500),
                 ])
                 ->action(function ($record, array $data) {
                     $notes = $record->notes ?? '';
-                    $notes .= "\n\nShipped: " . now()->toDateTimeString();
+                    $notes .= "\n\nReady for pickup: " . now()->toDateTimeString();
+                    
                     if (!empty($data['tracking_number'])) {
                         $notes .= "\nTracking: " . $data['tracking_number'];
                     }
+                    
                     if (!empty($data['shipping_notes'])) {
                         $notes .= "\nNotes: " . $data['shipping_notes'];
                     }
@@ -101,9 +127,18 @@ class ViewOrder extends ViewRecord
                         'status' => 'shipped',
                         'notes' => $notes,
                     ]);
-                })
-                ->successNotificationTitle('Order marked as shipped'),
-                // ->after(fn () => redirect()->route('filament.supplier.resources.orders.view', ['record' => $this->getRecord()])),
+
+                    // Update delivery status if exists
+                    if ($record->delivery) {
+                        $record->delivery->update(['status' => 'picked_up']);
+                    }
+
+                    Notification::make()
+                        ->success()
+                        ->title('Order Ready')
+                        ->body('Order marked as ready for pickup. Rider has been notified.')
+                        ->send();
+                }),
 
             Action::make('cancel')
                 ->label('Cancel Order')
@@ -138,15 +173,36 @@ class ViewOrder extends ViewRecord
                         'status' => 'cancelled',
                         'notes' => ($record->notes ?? '') . "\n\nCancelled: " . now()->toDateTimeString() . "\nReason: " . $data['cancellation_reason'],
                     ]);
-                })
-                ->successNotificationTitle('Order cancelled and stock restored'),
-                // ->after(fn () => redirect()->route('filament.supplier.resources.orders.index')),
+
+                    // Cancel delivery if exists
+                    if ($record->delivery) {
+                        $record->delivery->update(['status' => 'cancelled']);
+                        
+                        // Free up rider
+                        if ($record->delivery->rider) {
+                            $record->delivery->rider->update(['is_available' => true]);
+                        }
+                    }
+
+                    Notification::make()
+                        ->success()
+                        ->title('Order Cancelled')
+                        ->body('Order cancelled and stock restored.')
+                        ->send();
+                }),
+
+            Action::make('view_delivery')
+                ->label('View Delivery')
+                ->icon('heroicon-o-map-pin')
+                ->color('info')
+                ->visible(fn ($record) => $record->delivery !== null),
+                // ->url(fn ($record) => route('filament.operations.resources.deliveries.view', ['record' => $record->delivery]))
+                // ->openUrlInNewTab(),
 
             Action::make('print')
                 ->label('Print Order')
                 ->icon('heroicon-o-printer')
                 ->color('gray')
-                // ->url(fn ($record) => route(name: 'orders.print', $record))
                 ->openUrlInNewTab(),
         ];
     }

@@ -35,8 +35,7 @@ class PrescriptionsTable
 
                 TextColumn::make('patient.full_name')
                     ->label('Patient')
-                    ->searchable(['first_name', 'last_name'])
-                    ->sortable(),
+                    ->searchable(['first_name', 'last_name']),
 
                 TextColumn::make('patient.patient_number')
                     ->label('Patient #')
@@ -122,7 +121,7 @@ class PrescriptionsTable
                     DeleteBulkAction::make()
                         ->visible(fn () => Auth::user()->can('delete_prescriptions')),
                 ]),
-            ])->defaultSort('prescribed_at', 'desc')
+            ])->defaultSort('created_at', 'desc')
             ->modifyQueryUsing(fn (Builder $query) => $query->where('physician_id', Auth::id())
             );
     }

@@ -143,9 +143,10 @@ class OrdersTable
                     ->color('info')
                     ->visible(fn (Order $record) => $record->delivery &&
                         in_array($record->status, ['shipped', 'confirmed', 'processing'])
-                    )->url(fn(Order $record) : string =>  
-                        route('filament.physician.resources.physician.orders.pages.track-delivery', ['deliveryId' => $record->delivery->id])
-                    )->openUrlInNewTab(false)
+            ),
+                    // ->url(fn(Order $record) : string =>  
+                    //     route('filament.physician.resources.physician.orders.pages.track-delivery', ['deliveryId' => $record->delivery->id])
+                    // )->openUrlInNewTab(false)
                    
 
             ])
