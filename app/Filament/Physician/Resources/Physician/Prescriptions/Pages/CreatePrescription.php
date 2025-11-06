@@ -30,6 +30,7 @@ class CreatePrescription extends CreateRecord
     {
         $data['physician_id'] = auth()->id();
         $data['status'] = 'draft';
+        
 
         return $data;
     }

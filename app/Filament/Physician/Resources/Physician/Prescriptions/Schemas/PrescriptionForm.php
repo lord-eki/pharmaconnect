@@ -47,7 +47,7 @@ class PrescriptionForm
                                     )
                                     ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->first_name} {$record->last_name} - {$record->patient_number}")
                                     ->searchable(['first_name', 'last_name', 'patient_number'])
-                                    ->preload(false) // CRITICAL: Don't preload - load on search instead
+                                    ->preload(false) 
                                     ->required()
                                     ->createOptionForm([
                                         Grid::make(2)
@@ -91,37 +91,20 @@ class PrescriptionForm
                                                     ->placeholder('List any existing medical conditions'),
                                             ]),
                                     ])
-                                    ->live(onBlur: true) // CHANGED: Only update on blur, not while typing
-                                    ->afterStateUpdated(function ($state, Set $set) {
-                                        if (!$state) {
-                                            $set('patient_allergies_display', null);
-                                            $set('patient_conditions_display', null);
-                                            return;
-                                        }
+                                    ->live(onBlur: true) 
+                                    ->afterStateUpdated(function ($state) {
                                         
-                                        // Optimized query - only fetch what's needed
+                                        
                                         $patient = Cache::remember(
                                             "patient_info_{$state}",
-                                            3600, // Increased to 1 hour
+                                            3600, 
                                             fn () => Patient::select('id', 'allergies', 'medical_conditions')
                                                 ->find($state)
                                         );
                                             
-                                        if ($patient) {
-                                            $set('patient_allergies_display', $patient->allergies);
-                                            $set('patient_conditions_display', $patient->medical_conditions);
-                                        }
+                                     
                                     }),
-                                
-                                Placeholder::make('patient_allergies_display')
-                                    ->label('Patient Allergies')
-                                    ->content(fn ($state) => $state ?: 'No known allergies')
-                                    ->visible(fn (Get $get) => $get('patient_id')),
-                                
-                                Placeholder::make('patient_conditions_display')
-                                    ->label('Medical Conditions')
-                                    ->content(fn ($state) => $state ?: 'No known conditions')
-                                    ->visible(fn (Get $get) => $get('patient_id')),
+                  
                             ]),
 
                         Tabs\Tab::make('Diagnosis & Details')
@@ -310,7 +293,6 @@ class PrescriptionForm
         
         try {
             return Cache::remember($cacheKey, 600, function () use ($medicineId, $quantity) {
-                // Optimized query with proper indexing
                 $lowestPrice = DB::table('supplier_medicines')
                     ->select('unit_price')
                     ->where('medicine_id', $medicineId)
