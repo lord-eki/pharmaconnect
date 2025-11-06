@@ -109,6 +109,16 @@ class Order extends Model
         });
     }
 
+    public function payables(): HasMany
+    {
+        return $this->hasMany(Payable::class);
+    }
+
+    public function receivables(): HasMany
+    {
+        return $this->hasMany(Receivable::class);
+    }
+
     public function quotation(): BelongsTo
     {
         return $this->belongsTo(Quotation::class);
@@ -369,7 +379,7 @@ class Order extends Model
     // Get commission rate for physician
     protected function getCommissionRate(): float
     {
-        // You can make this dynamic based on:
+        // Make this dynamic based on:
         // - Physician tier/level
         // - Order volume
         // - Medicine category

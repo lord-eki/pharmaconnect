@@ -4,6 +4,10 @@ namespace App\Providers;
 
 use App\Http\Responses\CustomLoginResponse;
 use App\Models\Prescription;
+use App\Services\CommissionService;
+use App\Services\DeliveryTrackingService;
+use App\Services\PaymentService;
+use App\Services\RiderAssignmentService;
 use Illuminate\Database\Eloquent\Model;
 use App\Observers\PrescriptionObserver;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +25,10 @@ class AppServiceProvider extends ServiceProvider
      public function register(): void
     {
         $this->app->bind(LoginResponse::class, CustomLoginResponse::class);
+        $this->app->singleton(RiderAssignmentService::class);
+        $this->app->singleton(DeliveryTrackingService::class);
+        $this->app->singleton(CommissionService::class);
+        $this->app->singleton(PaymentService::class);
     }
 
     /**

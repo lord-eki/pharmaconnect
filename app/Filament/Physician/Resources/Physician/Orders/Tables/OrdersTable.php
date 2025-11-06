@@ -2,7 +2,6 @@
 
 namespace App\Filament\Physician\Resources\Physician\Orders\Tables;
 
-use App\Filament\Physician\Pages\TrackPage;
 use App\Models\Order;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
@@ -142,12 +141,12 @@ class OrdersTable
                     ->label('Track')
                     ->icon('heroicon-o-map-pin')
                     ->color('info')
-                    ->visible(fn (Order $record) => 
+                    ->visible(fn (Order $record) => $record->delivery &&
                         in_array($record->status, ['shipped', 'confirmed', 'processing'])
-                    )
-                    // ->url(fn (Order $record): string => TrackPage::getUrl(['record' => $record->delivery->id])
-                    // )
-                    // ->openUrlInNewTab(false),
+                    )->url(fn(Order $record) : string =>  
+                        route('filament.physician.resources.physician.orders.pages.track-delivery', ['deliveryId' => $record->delivery->id])
+                    )->openUrlInNewTab(false)
+                   
 
             ])
             ->defaultSort('ordered_at', 'desc')

@@ -61,4 +61,24 @@ class Delivery extends Model
     {
         return $this->hasMany(DeliveryTracking::class);
     }
+
+    public static function generateDeliveryNumber(): string
+    {
+        $prefix = 'DEL';
+        $year = date('Y');
+        $month = date('m');
+        $ym = $year.$month;
+
+        $lastDelivery = static::whereYear('created_at', $year)
+            ->whereMonth('created_at', $month)
+            ->orderBy('id', 'desc')
+            ->first();
+
+        $sequence = 1;
+        if ($lastDelivery && preg_match('/(\d{5})$/', $lastDelivery->delivery_number, $matches)) {
+            $sequence = (int) $matches[1] + 1;
+        }
+
+        return sprintf('%s%s-%s', $prefix, $ym, str_pad($sequence, 5, '0', STR_PAD_LEFT));
+    }
 }
