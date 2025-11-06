@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Mail\InsuranceClaimFormMail;
-use App\Notifications\NewOrderNotification;
+use App\Mail\NewOrderNotification;
 use App\Traits\HasAuditLog;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -506,30 +506,70 @@ class Prescription extends Model
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            throw $e; 
+            throw $e;
         }
     }
 
-    protected function notifyInsuranceProvider(InsuranceClaim $claim): void
+    protected function notifyInsuranceProvider(?InsuranceClaim $claim = null): void
     {
         try {
+            // If claim not passed, try to load it
+            if (! $claim) {
+                $claim = $this->insuranceClaim;
+            }
+
+            if (! $claim) {
+                Log::warning('Cannot notify insurance provider - no claim found', [
+                    'prescription_id' => $this->id,
+                ]);
+
+                return;
+            }
+
             $provider = $claim->insuranceProvider;
 
-            if ($provider->email) {
-                Mail::to($provider->email)->send(
-                    new InsuranceClaimFormMail($claim)
-                );
+            if (! $provider) {
+                Log::warning('Cannot notify insurance provider - provider not found', [
+                    'claim_id' => $claim->id,
+                ]);
+
+                return;
             }
+
+            if (! $provider->email) {
+                Log::info('Insurance provider has no email address', [
+                    'claim_id' => $claim->id,
+                    'provider_id' => $provider->id,
+                ]);
+
+                return;
+            }
+
+            // Check if mail class exists
+            if (! class_exists(InsuranceClaimFormMail::class)) {
+                Log::error('InsuranceClaimFormMail class not found', [
+                    'claim_id' => $claim->id,
+                ]);
+
+                return;
+            }
+
+            Mail::to($provider->email)->send(
+                new InsuranceClaimFormMail($claim)
+            );
 
             Log::info('Insurance provider notified', [
                 'claim_id' => $claim->id,
                 'provider_id' => $provider->id,
+                'email' => $provider->email,
             ]);
 
         } catch (\Exception $e) {
             Log::error('Failed to notify insurance provider', [
-                'claim_id' => $claim->id,
+                'claim_id' => $claim->id ?? null,
+                'prescription_id' => $this->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
         }
     }
@@ -537,27 +577,74 @@ class Prescription extends Model
     protected function notifySupplier(Order $order, $supplier): void
     {
         try {
-            if ($supplier->email) {
-                Mail::to($supplier->email)->send(
-                    new \App\Mail\NewOrderNotification($order)
-                );
+            if (! $supplier) {
+                Log::warning('Cannot notify supplier - supplier not found', [
+                    'order_id' => $order->id,
+                ]);
+
+                return;
             }
 
+            // Check if mail class exists
+            if (! class_exists(\App\Mail\NewOrderNotification::class)) {
+                Log::error('NewOrderNotification mail class not found', [
+                    'order_id' => $order->id,
+                ]);
+
+                return;
+            }
+
+            // Send email if available
+            if ($supplier->email) {
+                try {
+                    Mail::to($supplier->email)->send(
+                        new NewOrderNotification($order)
+                    );
+
+                    Log::info('Supplier notified via email', [
+                        'order_id' => $order->id,
+                        'supplier_id' => $supplier->id,
+                        'email' => $supplier->email,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send email to supplier', [
+                        'order_id' => $order->id,
+                        'supplier_id' => $supplier->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Send notification if user exists
             if ($supplier->user) {
-                $supplier->user->notify(new NewOrderNotification($order));
+                try {
+                    $supplier->user->notify(new \App\Notifications\NewOrderNotification($order));
+
+                    Log::info('Supplier notified via notification', [
+                        'order_id' => $order->id,
+                        'supplier_id' => $supplier->id,
+                        'user_id' => $supplier->user->id,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send notification to supplier', [
+                        'order_id' => $order->id,
+                        'supplier_id' => $supplier->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
         } catch (\Exception $e) {
             Log::error('Failed to notify supplier', [
                 'order_id' => $order->id,
-                'supplier_id' => $supplier->id,
+                'supplier_id' => $supplier->id ?? null,
                 'error' => $e->getMessage(),
             ]);
         }
     }
 
     /**
-     * OPTIMIZED: Check drug interactions asynchronously
+     * Check drug interactions asynchronously
      */
     protected function checkDrugInteractions(): void
     {

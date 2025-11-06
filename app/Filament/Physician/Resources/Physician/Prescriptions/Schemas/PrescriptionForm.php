@@ -129,7 +129,6 @@ class PrescriptionForm
 
                         Tabs\Tab::make('Medicines')
                             ->icon('heroicon-o-beaker')
-                            ->badge(fn (Get $get) => count($get('items') ?? []))
                             ->schema([
                                 Repeater::make('items')
                                     ->relationship('items')
