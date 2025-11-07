@@ -3,7 +3,7 @@
 namespace App\Filament\Operation\Resources\Internals\Deliveries\Pages;
 
 
-use App\Filament\Operations\Resources\DeliveryResource;
+use App\Filament\Operation\Resources\Internals\Deliveries\DeliveryResource;
 use App\Models\Rider;
 use App\Services\OrderFulfillmentService;
 use App\Services\DeliveryTrackingService;
@@ -12,13 +12,13 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Infolists\Components\Grid;
-use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Colors\Color;
 
@@ -82,7 +82,7 @@ class ViewDelivery extends ViewRecord
 
                 Section::make('Rider Information')
                     ->schema([
-                        TextEntry::make('rider.full_name')
+                        TextEntry::make('rider.last_name')
                             ->label('Rider Name')
                             ->default('Not Assigned')
                             ->badge()
@@ -118,7 +118,7 @@ class ViewDelivery extends ViewRecord
 
                         TextEntry::make('actual_pickup')
                             ->dateTime('M d, Y H:i A')
-                            ->default('Pending'),
+                            ->default(null),
                     ])
                     ->columns(2),
 
@@ -136,7 +136,7 @@ class ViewDelivery extends ViewRecord
 
                         TextEntry::make('actual_delivery')
                             ->dateTime('M d, Y H:i A')
-                            ->default('Pending'),
+                            ->default(null),
 
                         TextEntry::make('estimated_distance_km')
                             ->label('Distance')
@@ -173,8 +173,8 @@ class ViewDelivery extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make()
-                ->visible(fn ($record) => !in_array($record->status, ['delivered', 'cancelled'])),
+            // EditAction::make()
+            //     ->visible(fn ($record) => !in_array($record->status, ['delivered', 'cancelled'])),
 
             Action::make('assign_rider')
                 ->label('Assign Rider')
@@ -187,7 +187,7 @@ class ViewDelivery extends ViewRecord
                         ->options(
                             Rider::active()
                                 ->available()
-                                ->pluck('full_name', 'id')
+                                ->pluck('last_name', 'id')
                         )
                         ->required()
                         ->searchable()
@@ -202,7 +202,7 @@ class ViewDelivery extends ViewRecord
                             Notification::make()
                                 ->success()
                                 ->title('Rider Assigned')
-                                ->body("Rider {$rider->full_name} has been assigned to this delivery.")
+                                ->body("Rider {$rider->last_name} has been assigned to this delivery.")
                                 ->send();
                         }
                     } catch (\Exception $e) {
@@ -225,7 +225,7 @@ class ViewDelivery extends ViewRecord
                         ->options(
                             Rider::active()
                                 ->available()
-                                ->pluck('full_name', 'id')
+                                ->pluck('last_name', 'id')
                         )
                         ->required()
                         ->searchable(),
@@ -250,7 +250,7 @@ class ViewDelivery extends ViewRecord
                         Notification::make()
                             ->success()
                             ->title('Rider Reassigned')
-                            ->body("New rider {$rider->full_name} has been assigned.")
+                            ->body("New rider {$rider->last_name} has been assigned.")
                             ->send();
                     } catch (\Exception $e) {
                         Notification::make()

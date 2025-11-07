@@ -149,7 +149,7 @@ class PaymentService
                 'order_id' => $order->id,
                 'prescription_id' => $prescription->id,
                 'patient_id' => $patient->id,
-                'insurance_company_id' => $insuranceClaimId ? $prescription->insuranceClaim->insurance_provider_id : null,
+                'insurance_provider_id' => $insuranceClaimId ? $prescription->insuranceClaim->insurance_provider_id : null,
                 'amount' => $insuranceCovered > 0 ? $insuranceCovered : $patientPortion,
                 'payment_source' => $paymentSource,
                 'claim_status' => $insuranceClaimId ? 'submitted' : null,

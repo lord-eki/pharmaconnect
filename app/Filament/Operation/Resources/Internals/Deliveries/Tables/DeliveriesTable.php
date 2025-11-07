@@ -204,9 +204,9 @@ class DeliveriesTable
                 Action::make('view_details')
                     ->label('Details')
                     ->icon('heroicon-o-eye')
-                    ->color('info'),
-                    // ->url(fn ($record) => route('filament.operation.resources.deliveries.view', ['record' => $record->id]))
-                    // ->openUrlInNewTab(false),
+                    ->color('info')
+                    ->url(fn ($record) => route('filament.Operation.resources.internals.deliveries.view', ['record' => $record->id]))
+                    ->openUrlInNewTab(false),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

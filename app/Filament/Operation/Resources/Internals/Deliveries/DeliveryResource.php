@@ -5,6 +5,7 @@ namespace App\Filament\Operation\Resources\Internals\Deliveries;
 use App\Filament\Operation\Resources\Internals\Deliveries\Pages\CreateDelivery;
 use App\Filament\Operation\Resources\Internals\Deliveries\Pages\EditDelivery;
 use App\Filament\Operation\Resources\Internals\Deliveries\Pages\ListDeliveries;
+use App\Filament\Operation\Resources\Internals\Deliveries\Pages\ViewDelivery;
 use App\Filament\Operation\Resources\Internals\Deliveries\Schemas\DeliveryForm;
 use App\Filament\Operation\Resources\Internals\Deliveries\Tables\DeliveriesTable;
 use App\Models\Delivery;
@@ -18,7 +19,7 @@ class DeliveryResource extends Resource
 {
     protected static ?string $model = Delivery::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedMap;
 
     public static function form(Schema $schema): Schema
     {
@@ -42,6 +43,7 @@ class DeliveryResource extends Resource
         return [
             'index' => ListDeliveries::route('/'),
             'create' => CreateDelivery::route('/create'),
+            'view' => ViewDelivery::route('/{record}'),
             'edit' => EditDelivery::route('/{record}/edit'),
         ];
     }

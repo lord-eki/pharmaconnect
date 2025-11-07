@@ -8,7 +8,7 @@ class Receivable extends Model
 {
     protected $fillable = [
         'reference', 'order_id', 'prescription_id', 'patient_id',
-        'insurance_company_id', 'amount', 'payment_source',
+        'insurance_provider_id', 'amount', 'payment_source',
         'claim_status', 'claim_reference', 'claim_submitted_at',
         'received_at',
     ];
