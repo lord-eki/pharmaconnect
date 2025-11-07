@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use App\Services\OrderFulfillmentService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class Order extends Model
@@ -58,8 +58,6 @@ class Order extends Model
 
         static::updated(function ($order) {
             if ($order->isDirty('status')) {
-                $fulfillmentService = app(OrderFulfillmentService::class);
-
                 switch ($order->status) {
                     case 'confirmed':
                         // Check if all prescription orders are confirmed
@@ -67,8 +65,7 @@ class Order extends Model
                         break;
 
                     case 'processing':
-                        // Automatically create delivery and assign rider
-                        $fulfillmentService->handleOrderProcessing($order);
+                        $order->createDelivery();
                         break;
 
                     case 'delivered':
@@ -235,8 +232,8 @@ class Order extends Model
         return true;
     }
 
-    // Create delivery assignment
-    protected function createDelivery(): void
+    // Create delivery assignment 
+    public function createDelivery(): void
     {
         if ($this->delivery) {
             return; // Delivery already exists
@@ -249,10 +246,10 @@ class Order extends Model
             'order_id' => $this->id,
             'pickup_address' => $this->supplier->address,
             'delivery_address' => $patient->address ?? 'Not specified',
-            'delivery_latitude' => null, // Set if you have coordinates
+            'delivery_latitude' => null,
             'delivery_longitude' => null,
             'delivery_fee' => $this->calculateDeliveryFee(),
-            'status' => 'pending',
+            'status' => 'pending', 
             'recipient_name' => $patient->full_name,
             'recipient_phone' => $patient->phone,
         ]);

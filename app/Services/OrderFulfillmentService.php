@@ -67,31 +67,31 @@ class OrderFulfillmentService
             $delivery = $this->riderService->createDeliveryForOrder($order);
             $results['delivery_created'] = true;
 
-            // 3. Automatically assign rider
-            $rider = $this->riderService->assignRider($delivery);
+            // // 3. Automatically assign rider
+            // $rider = $this->riderService->assignRider($delivery);
             
-            if ($rider) {
-                $results['rider_assigned'] = true;
-                $results['rider'] = [
-                    'id' => $rider->id,
-                    'name' => $rider->full_name,
-                    'phone' => $rider->phone,
-                    'vehicle' => $rider->vehicle_type,
-                ];
-            } else {
-                $results['errors'][] = 'No available rider found - manual assignment required';
-            }
+            // if ($rider) {
+            //     $results['rider_assigned'] = true;
+            //     $results['rider'] = [
+            //         'id' => $rider->id,
+            //         'name' => $rider->full_name,
+            //         'phone' => $rider->phone,
+            //         'vehicle' => $rider->vehicle_type,
+            //     ];
+            // } else {
+            //     $results['errors'][] = 'No available rider found - manual assignment required';
+            // }
 
             DB::commit();
 
-            Log::info('Order confirmation processed', [
-                'order_id' => $order->id,
-                'delivery_id' => $delivery->id,
-                'rider_id' => $rider?->id,
-            ]);
+            // Log::info('Order confirmation processed', [
+            //     'order_id' => $order->id,
+            //     'delivery_id' => $delivery->id,
+            //     'rider_id' => $rider?->id,
+            // ]);
 
             // Send notifications
-            $this->sendConfirmationNotifications($order, $delivery, $rider);
+            // $this->sendConfirmationNotifications($order, $delivery, $rider);
 
             return $results;
 
@@ -121,7 +121,7 @@ class OrderFulfillmentService
                 $delivery = $this->riderService->createDeliveryForOrder($order);
                 
                 // Try to assign rider
-                $this->riderService->assignRider($delivery);
+                // $this->riderService->assignRider($delivery);
             }
 
             Log::info('Order marked as processing', ['order_id' => $order->id]);
@@ -370,10 +370,7 @@ class OrderFulfillmentService
                 ]);
 
                 $rider->update(['is_available' => false]);
-            } else {
-                // Automatic assignment
-                $rider = $this->riderService->assignRider($delivery);
-            }
+            } 
 
             DB::commit();
 

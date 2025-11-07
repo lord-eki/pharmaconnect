@@ -59,11 +59,7 @@ class RiderAssignmentService
                 return $rider;
             }
 
-            Log::warning('No available rider found for delivery', [
-                'delivery_id' => $delivery->id,
-                'county' => $deliveryCounty,
-                'city' => $deliveryCity,
-            ]);
+           
 
             return null;
 
@@ -107,8 +103,6 @@ class RiderAssignmentService
             'recipient_phone' => $patient->phone,
         ]);
 
-        // Automatically assign rider
-        $this->assignRider($delivery);
 
         return $delivery;
     }
