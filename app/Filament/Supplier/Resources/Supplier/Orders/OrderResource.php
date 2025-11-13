@@ -28,7 +28,7 @@ class OrderResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        
+
         $supplier = Auth::user()->supplier;
 
         return parent::getEloquentQuery()
@@ -89,7 +89,7 @@ class OrderResource extends Resource
                                         default => 'gray',
                                     }),
 
-                                TextEntry::make('total_amount')
+                                TextEntry::make('supplier_total')
                                     ->label('Total Amount')
                                     ->money('KES')
                                     ->size('lg')
@@ -178,7 +178,7 @@ class OrderResource extends Resource
                                             ->numeric()
                                             ->badge(),
 
-                                        TextEntry::make('unit_price')
+                                        TextEntry::make('supplier_price')
                                             ->label('Unit Price')
                                             ->money('KES'),
                                     ]),
@@ -189,7 +189,8 @@ class OrderResource extends Resource
                                             ->label('Total Price')
                                             ->money('KES')
                                             ->size('lg')
-                                            ->weight('bold'),
+                                            ->weight('bold')
+                                            ->formatStateUsing(fn (string $state , $record): string => "KES ". $record->supplier_price * $record->quantity),
 
                                         TextEntry::make('status')
                                             ->label('Item Status')

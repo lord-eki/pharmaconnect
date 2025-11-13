@@ -52,7 +52,7 @@ class OrdersTable
                     ->searchable(['first_name', 'last_name'])
                     ->wrap(),
 
-                TextColumn::make('total_amount')
+                TextColumn::make('supplier_total')
                     ->label('Total')
                     ->money('KES')
                     ->sortable()

@@ -17,6 +17,8 @@ class Order extends Model
         'supplier_id',
         'prescription_id',
         'total_amount',
+        'markup_total',
+        'supplier_total',
         'status',
         'ordered_at',
         'expected_delivery',

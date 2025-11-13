@@ -20,6 +20,8 @@ class PrescriptionItem extends Model
         'frequency',
         'unit_price',
         'total_price',
+        'markup_amount',
+        'supplier_total',
         'status',
         'notes',
     ];
