@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Mail\InsuranceClaimFormMail;
 use App\Mail\NewOrderNotification;
+use App\Services\PricingService;
 use App\Traits\HasAuditLog;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -299,12 +300,6 @@ class Prescription extends Model
         $this->status = 'processing';
         $this->save();
 
-        // Create insurance claim asynchronously
-        if ($this->insurance_covered) {
-            dispatch(function () {
-                $this->createInsuranceClaim();
-            })->afterResponse();
-        }
     }
 
     /**
@@ -354,30 +349,72 @@ class Prescription extends Model
     /**
      * Create order for supplier with bulk insert
      */
+   
     protected function createOrderForSupplier(Quotation $quotation, int $supplierId, array $groupData): void
     {
+        $pricingService = app(PricingService::class);
+
+        $supplierTotal = 0;
+        $markedUpTotal = 0;
+
+        foreach ($groupData['quotation_items'] as $quotationItem) {
+            $prescriptionItem = $quotationItem->prescriptionItem;
+            $medicine = $prescriptionItem->medicine;
+
+            // Get supplier price from quotation item
+            $supplierPrice = $quotationItem->unit_price;
+
+            // Calculate marked-up price
+            $pricing = $pricingService->calculateFinalPrice(
+                $supplierPrice,
+                $medicine,
+                $quotationItem->quantity
+            );
+
+            $supplierTotal += $pricing['supplier_total'];
+            $markedUpTotal += $pricing['final_total'];
+        }
+
+        $markupTotal = $markedUpTotal - $supplierTotal;
+
         $order = Order::create([
             'order_number' => Order::generateOrderNumber(),
             'quotation_id' => $quotation->id,
             'prescription_id' => $this->id,
             'supplier_id' => $supplierId,
-            'total_amount' => $groupData['total_amount'],
+            'supplier_total' => $supplierTotal,
+            'markup_total' => $markupTotal,
+            'total_amount' => $markedUpTotal,
             'status' => 'pending',
             'ordered_at' => now(),
             'expected_delivery' => now()->addHours(24),
             'notes' => "Auto-generated from prescription {$this->prescription_number}",
         ]);
 
-        // Bulk insert order items
+        // Bulk insert order items with proper pricing
         $orderItems = [];
         foreach ($groupData['quotation_items'] as $quotationItem) {
+            $prescriptionItem = $quotationItem->prescriptionItem;
+            $medicine = $prescriptionItem->medicine;
+
+            // Get supplier price
+            $supplierPrice = $quotationItem->unit_price;
+
+            // Calculate marked-up price
+            $pricing = $pricingService->calculateFinalPrice(
+                $supplierPrice,
+                $medicine,
+                $quotationItem->quantity
+            );
+
             $orderItems[] = [
                 'order_id' => $order->id,
                 'quotation_item_id' => $quotationItem->id,
-                'medicine_id' => $quotationItem->prescriptionItem->medicine_id,
+                'medicine_id' => $prescriptionItem->medicine_id,
                 'quantity' => $quotationItem->quantity,
-                'unit_price' => $quotationItem->unit_price,
-                'total_price' => $quotationItem->total_price,
+                'supplier_price' => $pricing['supplier_price'],
+                'unit_price' => $pricing['final_unit_price'],
+                'total_price' => $pricing['final_total'],
                 'status' => 'pending',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -386,128 +423,108 @@ class Prescription extends Model
 
         OrderItem::insert($orderItems);
 
+        Log::info('Order created with proper markup', [
+            'order_number' => $order->order_number,
+            'supplier_id' => $supplierId,
+            'supplier_total' => $supplierTotal,
+            'markup_total' => $markupTotal,
+            'total_amount' => $markedUpTotal,
+        ]);
+
         // Notify supplier asynchronously
         dispatch(function () use ($order, $groupData) {
             $this->notifySupplier($order, $groupData['supplier']);
         })->afterResponse();
-
-        Log::info('Order created', [
-            'order_number' => $order->order_number,
-            'supplier_id' => $supplierId,
-            'total_amount' => $groupData['total_amount'],
-        ]);
     }
 
     /**
-     * Create insurance claim
+     * Create insurance claim for this prescription
      */
-    public function createInsuranceClaim(): void
+    public function createInsuranceClaim()
     {
-        Log::info('Creating insurance claim', [
+        // CRITICAL: Check if claim already exists first
+        if ($this->insuranceClaim) {
+            Log::warning('Attempted to create duplicate insurance claim', [
+                'prescription_id' => $this->id,
+                'existing_claim_id' => $this->insuranceClaim->id,
+                'existing_claim_number' => $this->insuranceClaim->claim_number,
+            ]);
+
+            return $this->insuranceClaim;
+        }
+
+        // Check if claim exists by prescription_id (in case relationship isn't loaded)
+        $existingClaim = InsuranceClaim::where('prescription_id', $this->id)->first();
+        if ($existingClaim) {
+            Log::warning('Insurance claim exists but relationship not loaded', [
+                'prescription_id' => $this->id,
+                'claim_id' => $existingClaim->id,
+            ]);
+
+            return $existingClaim;
+        }
+
+        // Verify insurance coverage is enabled
+        if (! $this->insurance_covered) {
+            Log::warning('Attempted to create insurance claim for non-insured prescription', [
+                'prescription_id' => $this->id,
+            ]);
+            throw new \Exception('Prescription is not marked for insurance coverage');
+        }
+
+        // Verify patient has insurance information
+        if (! $this->patient->insurance_provider_id || ! $this->patient->insurance_number) {
+            Log::error('Patient missing insurance information', [
+                'prescription_id' => $this->id,
+                'patient_id' => $this->patient_id,
+            ]);
+            throw new \Exception('Patient does not have complete insurance information');
+        }
+
+        // Calculate total from CONFIRMED orders only which have marked-up prices
+        $ordersTotal = $this->orders()
+            ->whereIn('status', ['confirmed', 'delivered'])
+            ->sum('total_amount'); 
+
+        if ($ordersTotal <= 0) {
+            Log::warning('No confirmed orders found for insurance claim', [
+                'prescription_id' => $this->id,
+                'total_orders' => $this->orders()->count(),
+            ]);
+            // Use prescription total as fallback
+            $ordersTotal = $this->total_amount;
+        }
+
+        $claim = InsuranceClaim::create([
             'prescription_id' => $this->id,
-            'insurance_covered' => $this->insurance_covered,
-            'orders_count' => $this->orders->count(),
+            'insurance_provider_id' => $this->patient->insurance_provider_id,
+            'patient_id' => $this->patient_id,
+            'policy_number' => $this->patient->insurance_number,
+            'claimed_amount' => $ordersTotal, 
+            'status' => 'submitted',
+            'submitted_at' => now(),
+            'notes' => 'Auto-generated claim for prescription '.$this->prescription_number.' after order confirmation',
         ]);
 
-        // Check 1: Insurance covered and orders exist
-        if (! $this->insurance_covered) {
-            Log::warning('Insurance claim not created - insurance not covered', [
-                'prescription_id' => $this->id,
-            ]);
+        // Update the prescription with the claim reference
+        $this->update(['insurance_claim_id' => $claim->id]);
 
-            return;
-        }
+        Log::info('Insurance claim created successfully', [
+            'claim_id' => $claim->id,
+            'claim_number' => $claim->claim_number,
+            'prescription_id' => $this->id,
+            'prescription_number' => $this->prescription_number,
+            'claimed_amount' => $ordersTotal,
+            'insurance_provider_id' => $this->patient->insurance_provider_id,
+            'patient_id' => $this->patient_id,
+        ]);
 
-        if ($this->orders->isEmpty()) {
-            Log::warning('Insurance claim not created - no orders', [
-                'prescription_id' => $this->id,
-            ]);
-
-            return;
-        }
-
-        // Check 2: Patient has insurance details
-        $patient = $this->patient;
-        if (! $patient) {
-            Log::error('Insurance claim not created - no patient found', [
-                'prescription_id' => $this->id,
-            ]);
-
-            return;
-        }
-
-        if (! $patient->insurance_provider_id || ! $patient->insurance_number) {
-            Log::warning('Insurance claim not created - patient missing insurance details', [
-                'prescription_id' => $this->id,
-                'patient_id' => $patient->id,
-                'has_provider' => (bool) $patient->insurance_provider_id,
-                'has_number' => (bool) $patient->insurance_number,
-            ]);
-
-            return;
-        }
-
-        // Check 3: Claim doesn't already exist
-        if ($this->insurance_claim_id) {
-            Log::info('Insurance claim not created - claim_id already set', [
-                'prescription_id' => $this->id,
-                'existing_claim_id' => $this->insurance_claim_id,
-            ]);
-
-            return;
-        }
-
-        if ($this->insuranceClaim()->exists()) {
-            Log::info('Insurance claim not created - claim relationship already exists', [
-                'prescription_id' => $this->id,
-            ]);
-
-            return;
-        }
-
-        try {
-            $claimAmount = $this->orders->sum('total_amount');
-
-            Log::info('Creating insurance claim record', [
-                'prescription_id' => $this->id,
-                'patient_id' => $this->patient_id,
-                'insurance_provider_id' => $patient->insurance_provider_id,
-                'claim_amount' => $claimAmount,
-            ]);
-
-            $claim = InsuranceClaim::create([
-                'claim_number' => InsuranceClaim::generateClaimNumber(),
-                'prescription_id' => $this->id,
-                'policy_number' => $patient->insurance_number,
-                'deductible_amount' => 0,
-                'patient_id' => $this->patient_id,
-                'insurance_provider_id' => $patient->insurance_provider_id,
-                'insurance_number' => $patient->insurance_number,
-                'claimed_amount' => $claimAmount,
-                'status' => 'submitted',
-                'notes' => 'Auto-generated claim from prescription '.$this->prescription_number,
-                'submitted_at' => now(),
-            ]);
-
-            Log::info('Insurance claim created successfully', [
-                'claim_id' => $claim->id,
-                'claim_number' => $claim->claim_number,
-                'prescription_id' => $this->id,
-            ]);
-
-            $this->update(['insurance_claim_id' => $claim->id]);
-
+        // Notify insurance provider
+        dispatch(function () use ($claim) {
             $this->notifyInsuranceProvider($claim);
+        })->afterResponse();
 
-        } catch (\Exception $e) {
-            Log::error('Failed to create insurance claim', [
-                'prescription_id' => $this->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            throw $e;
-        }
+        return $claim;
     }
 
     protected function notifyInsuranceProvider(?InsuranceClaim $claim = null): void
@@ -690,7 +707,7 @@ class Prescription extends Model
     }
 
     /**
-     * OPTIMIZED: Update total with lock
+     *  Update total with lock
      */
     public function updateTotalAmount(): void
     {
@@ -705,6 +722,13 @@ class Prescription extends Model
 
             if ($this->total_amount != $total) {
                 $this->updateQuietly(['total_amount' => $total]);
+
+                Log::info('Prescription total updated with marked-up prices', [
+                    'prescription_id' => $this->id,
+                    'prescription_number' => $this->prescription_number,
+                    'total_amount' => $total,
+                    'item_count' => $this->items()->count(),
+                ]);
             }
         } finally {
             $this->isUpdatingTotal = false;

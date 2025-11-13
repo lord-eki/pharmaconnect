@@ -8,6 +8,7 @@ use App\Services\CommissionService;
 use App\Services\DeliveryTrackingService;
 use App\Services\OrderFulfillmentService;
 use App\Services\PaymentService;
+use App\Services\PricingService;
 use App\Services\RiderAssignmentService;
 use Illuminate\Database\Eloquent\Model;
 use App\Observers\PrescriptionObserver;
@@ -31,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(CommissionService::class);
         $this->app->singleton(PaymentService::class);
         $this->app->singleton(OrderFulfillmentService::class);
+        $this->app->singleton(PricingService::class);
     }
 
     /**

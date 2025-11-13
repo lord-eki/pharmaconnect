@@ -57,10 +57,11 @@ class Order extends Model
         });
 
         static::updated(function ($order) {
+            // Only handle status changes
             if ($order->isDirty('status')) {
                 switch ($order->status) {
                     case 'confirmed':
-                        // Check if all prescription orders are confirmed
+                        // Check if all prescription orders are confirmed and create insurance claim
                         static::handlePrescriptionOrdersConfirmed($order);
                         break;
 
@@ -70,7 +71,9 @@ class Order extends Model
 
                     case 'delivered':
                         // Update prescription status
-                        $order->prescription->markFulfilled();
+                        if ($order->prescription) {
+                            $order->prescription->markFulfilled();
+                        }
                         break;
                 }
             }
@@ -101,12 +104,26 @@ class Order extends Model
             ]);
 
             try {
-                $prescription->createInsuranceClaim();
+                // Only create if insurance is covered and claim doesn't exist
+                if ($prescription->insurance_covered && ! $prescription->insuranceClaim) {
+                    $prescription->createInsuranceClaim();
+
+                    Log::info('Insurance claim created after order confirmation', [
+                        'prescription_id' => $prescription->id,
+                        'order_id' => $order->id,
+                    ]);
+                } elseif ($prescription->insuranceClaim) {
+                    Log::info('Insurance claim already exists', [
+                        'prescription_id' => $prescription->id,
+                        'claim_id' => $prescription->insuranceClaim->id,
+                    ]);
+                }
             } catch (\Exception $e) {
                 Log::error('Error creating insurance claim', [
                     'order_id' => $order->id,
                     'prescription_id' => $prescription->id,
                     'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
                 ]);
             }
         }
@@ -232,7 +249,7 @@ class Order extends Model
         return true;
     }
 
-    // Create delivery assignment 
+    // Create delivery assignment
     public function createDelivery(): void
     {
         if ($this->delivery) {
@@ -249,7 +266,7 @@ class Order extends Model
             'delivery_latitude' => null,
             'delivery_longitude' => null,
             'delivery_fee' => $this->calculateDeliveryFee(),
-            'status' => 'pending', 
+            'status' => 'pending',
             'recipient_name' => $patient->full_name,
             'recipient_phone' => $patient->phone,
         ]);

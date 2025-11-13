@@ -4,6 +4,7 @@ namespace App\Filament\Physician\Resources\Physician\Prescriptions\Schemas;
 
 use App\Models\Medicine;
 use App\Models\Patient;
+use App\Services\PricingService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -12,8 +13,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -21,13 +21,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Filament\Schemas\Components\Tabs;
-
-
 
 class PrescriptionForm
 {
- public static function configure(Schema $schema): Schema
+    public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
@@ -47,7 +44,7 @@ class PrescriptionForm
                                     )
                                     ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->first_name} {$record->last_name} - {$record->patient_number}")
                                     ->searchable(['first_name', 'last_name', 'patient_number'])
-                                    ->preload(false) 
+                                    ->preload(false)
                                     ->required()
                                     ->createOptionForm([
                                         Grid::make(2)
@@ -91,20 +88,18 @@ class PrescriptionForm
                                                     ->placeholder('List any existing medical conditions'),
                                             ]),
                                     ])
-                                    ->live(onBlur: true) 
+                                    ->live(onBlur: true)
                                     ->afterStateUpdated(function ($state) {
-                                        
-                                        
+
                                         $patient = Cache::remember(
                                             "patient_info_{$state}",
-                                            3600, 
+                                            3600,
                                             fn () => Patient::select('id', 'allergies', 'medical_conditions')
                                                 ->find($state)
                                         );
-                                            
-                                     
+
                                     }),
-                  
+
                             ]),
 
                         Tabs\Tab::make('Diagnosis & Details')
@@ -114,13 +109,13 @@ class PrescriptionForm
                                     ->label('Diagnosis')
                                     ->rows(3)
                                     ->columnSpanFull(),
-                                
+
                                 Textarea::make('notes')
                                     ->label('Prescription Notes')
                                     ->rows(2)
                                     ->columnSpanFull()
                                     ->placeholder('Additional notes or instructions'),
-                                
+
                                 Toggle::make('insurance_covered')
                                     ->label('Insurance Coverage')
                                     ->helperText('Does this prescription have insurance coverage?')
@@ -139,14 +134,18 @@ class PrescriptionForm
                                             ->searchable()
                                             ->required()
                                             ->columnSpan(2)
-                                            ->live(onBlur: true) // CHANGED: Only trigger on blur
+                                            ->live(onBlur: true)
                                             ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                                                if (!$state) return;
-                                                
+                                                if (! $state) {
+                                                    return;
+                                                }
+
                                                 $quantity = $get('quantity') ?: 1;
                                                 $priceData = self::getMedicinePricing($state, $quantity);
-                                                
-                                                $set('unit_price', $priceData['unit_price']);
+
+                                                // Store supplier price (hidden) and marked-up price (displayed)
+                                                $set('supplier_price', $priceData['supplier_price']);
+                                                $set('unit_price', $priceData['unit_price']); // This is marked-up
                                                 $set('total_price', $priceData['unit_price'] * $quantity);
                                             }),
 
@@ -155,36 +154,48 @@ class PrescriptionForm
                                             ->required()
                                             ->minValue(1)
                                             ->default(1)
-                                            ->live(onBlur: true) // CHANGED: Only trigger on blur
+                                            ->live(onBlur: true)
                                             ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                                                if (!$state || $state <= 0) {
+                                                if (! $state || $state <= 0) {
+                                                    $set('supplier_price', 0);
                                                     $set('unit_price', 0);
                                                     $set('total_price', 0);
+
                                                     return;
                                                 }
-                                                
+
                                                 $medicineId = $get('medicine_id');
-                                                if (!$medicineId) return;
-                                                
+                                                if (! $medicineId) {
+                                                    return;
+                                                }
+
                                                 $priceData = self::getMedicinePricing($medicineId, $state);
-                                                
-                                                $set('unit_price', $priceData['unit_price']);
+
+                                                // Store both prices
+                                                $set('supplier_price', $priceData['supplier_price']);
+                                                $set('unit_price', $priceData['unit_price']); // Marked-up
                                                 $set('total_price', $priceData['unit_price'] * $state);
                                             }),
+
+                                        // Hidden field to store supplier price
+                                        TextInput::make('supplier_price')
+                                            ->numeric()
+                                            ->hidden()
+                                            ->dehydrated(true), 
 
                                         TextInput::make('unit_price')
                                             ->label('Est. Unit Price')
                                             ->numeric()
                                             ->prefix('KES')
                                             ->disabled()
-                                            ->dehydrated(),
+                                            ->dehydrated(true), 
 
                                         TextInput::make('total_price')
                                             ->label('Est. Total')
                                             ->numeric()
                                             ->prefix('KES')
                                             ->disabled()
-                                            ->dehydrated(),
+                                            ->dehydrated(true), 
 
                                         Textarea::make('dosage_instructions')
                                             ->required()
@@ -213,9 +224,8 @@ class PrescriptionForm
                                     ->addActionLabel('Add Medicine')
                                     ->collapsible()
                                     ->cloneable()
-                                    ->reorderable(false) // Disable reordering to improve performance
-                                    ->itemLabel(fn (array $state): ?string => 
-                                        isset($state['medicine_id']) && $state['medicine_id']
+                                    ->reorderable(false)
+                                    ->itemLabel(fn (array $state): ?string => isset($state['medicine_id']) && $state['medicine_id']
                                             ? self::getMedicineName($state['medicine_id'])
                                             : null
                                     ),
@@ -229,17 +239,19 @@ class PrescriptionForm
                                     ->content(function (Get $get) {
                                         $items = $get('items') ?? [];
                                         $total = collect($items)->sum('total_price');
-                                        return 'KES ' . number_format($total, 2);
+
+                                        return 'KES '.number_format($total, 2);
                                     }),
-                                
+
                                 Placeholder::make('medicine_count')
                                     ->label('Total Medicines')
                                     ->content(function (Get $get) {
                                         $items = $get('items') ?? [];
-                                        return count($items) . ' medicine(s)';
+
+                                        return count($items).' medicine(s)';
                                     }),
                             ])
-                            ->visible(fn (Get $get) => !empty($get('items'))),
+                            ->visible(fn (Get $get) => ! empty($get('items'))),
                     ])
                     ->columnSpanFull()
                     ->persistTab()
@@ -262,6 +274,7 @@ class PrescriptionForm
                 ->mapWithKeys(function ($medicine) {
                     $brandInfo = $medicine->brand_name ? " ({$medicine->brand_name})" : '';
                     $label = "{$medicine->generic_name}{$brandInfo} - {$medicine->strength} - {$medicine->dosage_form}";
+
                     return [$medicine->id => $label];
                 })
                 ->toArray();
@@ -279,7 +292,7 @@ class PrescriptionForm
     }
 
     /**
-     * OPTIMIZED: Get cached medicine pricing with batch support
+     * OPTIMIZED: Get cached medicine pricing with markup applied
      */
     protected static function getMedicinePricing(int $medicineId, int $quantity = 1): array
     {
@@ -287,31 +300,53 @@ class PrescriptionForm
             $quantity = 1;
         }
 
-        // Simplified cache key - no quantity rounding needed
-        $cacheKey = "medicine_price_{$medicineId}_v3";
-        
+        $cacheKey = "medicine_price_{$medicineId}_v4";
+
         try {
             return Cache::remember($cacheKey, 600, function () use ($medicineId, $quantity) {
-                $lowestPrice = DB::table('supplier_medicines')
+                // Get lowest supplier price
+                $supplierPrice = DB::table('supplier_medicines')
                     ->select('unit_price')
                     ->where('medicine_id', $medicineId)
                     ->where('is_available', true)
                     ->where('stock_quantity', '>=', $quantity)
                     ->orderBy('unit_price', 'asc')
                     ->value('unit_price');
-                
+
+                if (! $supplierPrice) {
+                    return [
+                        'unit_price' => 0,
+                        'supplier_price' => 0,
+                    ];
+                }
+
+                $medicine = Medicine::find($medicineId);
+                if (! $medicine) {
+                    return [
+                        'unit_price' => $supplierPrice,
+                        'supplier_price' => $supplierPrice,
+                    ];
+                }
+
+                $pricingService = app(PricingService::class);
+                $pricing = $pricingService->calculateFinalPrice($supplierPrice, $medicine, $quantity);
+
                 return [
-                    'unit_price' => $lowestPrice ?? 0,
+                    'unit_price' => $pricing['final_unit_price'],
+                    'supplier_price' => $pricing['supplier_price'],
                 ];
             });
         } catch (\Exception $e) {
             \Log::error('Error fetching medicine pricing', [
                 'medicine_id' => $medicineId,
                 'quantity' => $quantity,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
-            
-            return ['unit_price' => 0];
+
+            return [
+                'unit_price' => 0,
+                'supplier_price' => 0,
+            ];
         }
     }
 }

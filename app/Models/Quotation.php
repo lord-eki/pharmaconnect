@@ -273,37 +273,96 @@ class Quotation extends Model
     }
 
     // Generate order from accepted quotation
-    public function generateOrder(): Order
-    {
-        return DB::transaction(function () {
-            $order = Order::create([
-                'order_number' => Order::generateOrderNumber(),
-                'quotation_id' => $this->id,
-                'supplier_id' => $this->getOptimalSupplier(),
-                'prescription_id' => $this->prescription_id,
-                'total_amount' => $this->total_amount,
-                'status' => 'pending',
-                'ordered_at' => now(),
-            ]);
-
-            // Create order items
-            foreach ($this->items as $quotationItem) {
-                $order->items()->create([
-                    'quotation_item_id' => $quotationItem->id,
-                    'medicine_id' => $quotationItem->prescriptionItem->medicine_id,
-                    'quantity' => $quotationItem->quantity,
-                    'unit_price' => $quotationItem->unit_price,
-                    'total_price' => $quotationItem->total_price,
-                    'status' => 'pending',
-                ]);
+    /**
+ * Generate order from accepted quotation with markup handling
+ */
+public function generateOrder(): Order
+{
+    return DB::transaction(function () {
+        $pricingService = app(\App\Services\PricingService::class);
+        
+        // Calculate supplier total and final total separately
+        $supplierTotal = 0;
+        $finalTotal = 0;
+        $markupTotal = 0;
+        
+        // First pass: calculate totals
+        foreach ($this->items as $item) {
+            $prescriptionItem = $item->prescriptionItem;
+            if (!$prescriptionItem || !$prescriptionItem->medicine) {
+                continue;
             }
 
-            // Update quotation status
-            $this->update(['status' => 'accepted']);
+            $medicine = $prescriptionItem->medicine;
+            
+            // Get the supplier price 
+            $supplierPrice = $item->unit_price;
+            
+            // Calculate pricing with markup
+            $pricing = $pricingService->calculateFinalPrice(
+                $supplierPrice,
+                $medicine,
+                $item->quantity
+            );
+            
+            $supplierTotal += $pricing['supplier_total'];
+            $finalTotal += $pricing['final_total'];
+            $markupTotal += ($pricing['final_total'] - $pricing['supplier_total']);
+        }
+        
+        // Create the order
+        $order = Order::create([
+            'order_number' => Order::generateOrderNumber(),
+            'quotation_id' => $this->id,
+            'supplier_id' => $this->getOptimalSupplier(),
+            'prescription_id' => $this->prescription_id,
+            'supplier_total' => $supplierTotal, 
+            'markup_total' => $markupTotal, 
+            'total_amount' => $finalTotal, 
+            'status' => 'pending',
+            'ordered_at' => now(),
+        ]);
 
-            return $order;
-        });
-    }
+        // Create order items with both prices
+        foreach ($this->items as $quotationItem) {
+            $prescriptionItem = $quotationItem->prescriptionItem;
+            if (!$prescriptionItem || !$prescriptionItem->medicine) {
+                continue;
+            }
+
+            $medicine = $prescriptionItem->medicine;
+            $supplierPrice = $quotationItem->unit_price;
+            
+            $pricing = $pricingService->calculateFinalPrice(
+                $supplierPrice,
+                $medicine,
+                $quotationItem->quantity
+            );
+            
+            $order->items()->create([
+                'quotation_item_id' => $quotationItem->id,
+                'medicine_id' => $prescriptionItem->medicine_id,
+                'quantity' => $quotationItem->quantity,
+                'supplier_price' => $pricing['supplier_price'],
+                'unit_price' => $pricing['final_unit_price'],
+                'total_price' => $pricing['final_total'], 
+                'status' => 'pending',
+            ]);
+        }
+
+        // Update quotation status
+        $this->update(['status' => 'accepted']);
+
+        Log::info('Order generated with markup', [
+            'order_id' => $order->id,
+            'supplier_total' => $supplierTotal,
+            'markup_total' => $markupTotal,
+            'final_total' => $finalTotal,
+        ]);
+
+        return $order;
+    });
+}
 
     // Get optimal supplier based on price and other factors
     protected function getOptimalSupplier(): int
