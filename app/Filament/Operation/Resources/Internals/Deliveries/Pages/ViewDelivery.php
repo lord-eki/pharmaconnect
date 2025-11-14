@@ -261,26 +261,12 @@ class ViewDelivery extends ViewRecord
                     }
                 }),
 
-            Action::make('mark_ready')
-                ->label('Mark Ready for Pickup')
-                ->icon('heroicon-o-check')
-                ->color('info')
-                ->visible(fn ($record) => in_array($record->status, ['pending', 'assigned']))
-                ->requiresConfirmation()
-                ->action(function ($record) {
-                    $record->update(['status' => 'ready_for_pickup']);
-
-                    Notification::make()
-                        ->success()
-                        ->title('Status Updated')
-                        ->body('Delivery marked as ready for pickup.')
-                        ->send();
-                }),
+           
 
             Action::make('mark_picked_up')
                 ->label('Mark Picked Up')
                 ->icon('heroicon-o-truck')
-                ->color('primary')
+                ->color('info')
                 ->visible(fn ($record) => in_array($record->status, ['assigned', 'ready_for_pickup']))
                 ->requiresConfirmation()
                 ->action(function ($record) {

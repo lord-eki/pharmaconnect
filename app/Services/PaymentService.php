@@ -81,7 +81,6 @@ public function createPayableToSupplier(Order $order): ?Payable
             return $existing;
         }
 
-        // Calculate amount owed to supplier (WITHOUT markup)
         // Use supplier_total if available, otherwise fall back to total_amount
         $supplierAmount = $order->supplier_total ?? $order->total_amount;
 
@@ -90,9 +89,9 @@ public function createPayableToSupplier(Order $order): ?Payable
             'order_id' => $order->id,
             'vendor_id' => $order->supplier_id,
             'vendor_type' => 'supplier',
-            'amount' => $supplierAmount, // Supplier gets ONLY their quoted price
-            'payment_method' => 'bank_transfer', // Default
-            'due_date' => now()->addDays(7), // Pay supplier within 7 days
+            'amount' => $supplierAmount, 
+            'payment_method' => 'bank_transfer', 
+            'due_date' => now()->addDays(7), 
         ]);
 
         // Create corresponding transaction

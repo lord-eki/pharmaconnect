@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Deliveries\Tables;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -21,30 +22,22 @@ class DeliveriesTable
                     ->searchable(),
                 TextColumn::make('order.id')
                     ->searchable()->label('Order'),
-                TextColumn::make('rider.id')
+                TextColumn::make('rider.last_name')
                     ->searchable()->label('Rider'),
-                TextColumn::make('pickup_latitude')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('pickup_longitude')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('delivery_latitude')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('delivery_longitude')
-                    ->numeric()
-                    ->sortable(),
+              
                 TextColumn::make('estimated_distance_km')
                     ->numeric()
                     ->sortable()->label('Distance (km)'),
                 TextColumn::make('delivery_fee')
-                    ->numeric()
+                    ->numeric()->money('KES')
                     ->sortable(),
-                TextColumn::make('status'),
-                TextColumn::make('actual_pickup')
-                    ->dateTime()
-                    ->sortable(),
+                BadgeColumn::make('status')->colors([
+                        'success' => 'delivered',
+                        'warning' => 'pending',
+                        'info' => 'picked_up',
+                        'danger' => 'cancelled',
+                        'gray' =>'assigned'
+                    ]),
            
                 TextColumn::make('actual_delivery')
                     ->dateTime()
@@ -62,12 +55,12 @@ class DeliveriesTable
                 //
             ])
             ->recordActions([
-                EditAction::make(),
+                // EditAction::make(),
             ])
             ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
+                // BulkActionGroup::make([
+                //     DeleteBulkAction::make(),
+                // ]),
             ]);
     }
 }

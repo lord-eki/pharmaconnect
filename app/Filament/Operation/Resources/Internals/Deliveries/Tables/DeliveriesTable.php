@@ -58,9 +58,6 @@ class DeliveriesTable
                     ->limit(30)
                     ->searchable(),
 
-                TextColumn::make('scheduled_pickup')
-                    ->dateTime('M d, Y H:i')
-                    ->sortable(),
 
                 TextColumn::make('estimated_delivery')
                     ->dateTime('M d, Y H:i')
