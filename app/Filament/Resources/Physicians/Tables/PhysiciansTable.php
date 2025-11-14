@@ -5,9 +5,11 @@ namespace App\Filament\Resources\Physicians\Tables;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class PhysiciansTable
 {
@@ -44,36 +46,24 @@ class PhysiciansTable
                 TextColumn::make('practice_email')
                     ->searchable(),
                 TextColumn::make('practice_type'),
-                TextColumn::make('verification_status'),
+                BadgeColumn::make('verification_status'),
                 TextColumn::make('verified_by')
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('commission_rate')
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('total_commissions_earned')
-                    ->numeric()
+                TextColumn::make('prescriptions_count')->counts('prescriptions')
+                    ->numeric()->label('Total Prescriptions')
                     ->sortable(),
-                TextColumn::make('total_prescriptions')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('total_fulfilled_prescriptions')
-                    ->numeric()
-                    ->sortable(),
-                IconColumn::make('allow_generic_substitution')
-                    ->boolean(),
-                IconColumn::make('require_patient_consent')
-                    ->boolean(),
+                // TextColumn::make('prescriptions_count')->label('FUlfilled')->counts(['prescriptions' =>  fn(Builder $query) => $query->where('status', 'fulfilled')])
+                //     ->numeric()
+                //     ->sortable(),
+              
                 IconColumn::make('is_active')
                     ->boolean(),
-                IconColumn::make('accepting_prescriptions')
-                    ->boolean(),
-                TextColumn::make('practice_start_time')
-                    ->time()
-                    ->sortable(),
-                TextColumn::make('practice_end_time')
-                    ->time()
-                    ->sortable(),
+             
+                
 
             ])
             ->filters([

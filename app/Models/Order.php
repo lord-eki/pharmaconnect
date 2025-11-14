@@ -207,7 +207,7 @@ class Order extends Model
         return sprintf('%s%s-%s', $prefix, $ym, $sequencePadded);
     }
 
-    // Confirm order (supplier accepts)
+    // Confirm order 
     public function confirm(): bool
     {
         return DB::transaction(function () {
@@ -335,7 +335,7 @@ class Order extends Model
         $deliveryFee = $this->delivery ? $this->delivery->delivery_fee : 0;
         $grandTotal = $totalAmount + $deliveryFee;
 
-        // Insurance portion (if applicable)
+        // Insurance portion 
         $insuranceCovered = 0;
         if ($this->prescription->insurance_covered && $this->prescription->insuranceClaim) {
             $claim = $this->prescription->insuranceClaim;
@@ -356,12 +356,12 @@ class Order extends Model
                 'prescription_id' => $this->prescription_id,
                 'amount' => $patientPortion,
                 'currency' => 'KES',
-                'payment_method' => 'mpesa', // Default - can be changed
+                'payment_method' => 'mpesa', 
                 'status' => 'pending',
             ]);
         }
 
-        // Create payment record for insurance (if applicable)
+        // Create payment record for insurance 
         if ($insuranceCovered > 0) {
             Payment::create([
                 'payment_reference' => Payment::generateReference(),
@@ -380,7 +380,7 @@ class Order extends Model
     {
         $physician = $this->prescription->physician;
 
-        // Get commission rate (default 10% - can be configured)
+        // Get commission rate 
         $commissionRate = $this->getCommissionRate();
 
         $grossAmount = $this->total_amount;
@@ -400,13 +400,27 @@ class Order extends Model
     // Get commission rate for physician
     protected function getCommissionRate(): float
     {
-        // Make this dynamic based on:
-        // - Physician tier/level
-        // - Order volume
-        // - Medicine category
-        // For now, return fixed rate
+        $physician = $this->prescription->physician;
 
-        return 10.0; // 10%
+        if(!$physician)
+        {
+            Log::warning('Physician not found for order commission calculation', [
+                'order_id' => $this->id,
+                'prescription_id' => $this->prescription_id,
+            ]);
+
+        }
+
+        $rate = $physician->commission_rate;
+
+        Log::info('Commission rate retrieved for physician', [
+            'physician_id' => $physician->id ?? null,
+            'commission_rate' => $rate ?? null,
+            'order_id' => $this->id
+        ]);
+
+        return $rate;
+
     }
 
     // Send notifications to stakeholders

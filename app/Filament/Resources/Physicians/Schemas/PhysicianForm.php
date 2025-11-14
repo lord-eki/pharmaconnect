@@ -11,6 +11,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 class PhysicianForm
@@ -61,8 +62,8 @@ class PhysicianForm
                     ->tel()
                     ->default(null)->label('Phone Number'),
                 TextInput::make('practice_email')
-                    ->email()
-                    ->default(null)->label('Email'),
+                    ->email()->label('Email'),
+                    
                 Select::make('practice_type')
                     ->options(['private' => 'Private', 'public' => 'Public', 'ngo' => 'Ngo', 'faith_based' => 'Faith based'])
                     ->default(null),
