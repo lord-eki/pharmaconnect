@@ -27,9 +27,9 @@ class NewOrderNotification extends Notification implements ShouldQueue
     {
         $channels = ['database'];
 
-        if ($notifiable->email) {
-            $channels[] = 'mail';
-        }
+        // if ($notifiable->email) {
+        //     $channels[] = 'mail';
+        // }
 
         // Add SMS channel if available
         // if ($notifiable->phone) {

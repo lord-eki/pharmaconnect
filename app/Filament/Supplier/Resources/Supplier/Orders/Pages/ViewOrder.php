@@ -20,7 +20,7 @@ class ViewOrder extends ViewRecord
     {
         return [
             EditAction::make()
-                ->visible(fn ($record) => !in_array($record->status, ['delivered', 'cancelled'])),
+                ->visible(fn ($record) => ! in_array($record->status, ['delivered', 'cancelled'])),
 
             Action::make('confirm')
                 ->label('Confirm Order')
@@ -40,11 +40,11 @@ class ViewOrder extends ViewRecord
                 ->action(function ($record, array $data) {
                     try {
                         $fulfillmentService = app(OrderFulfillmentService::class);
-                        
+
                         $results = $fulfillmentService->handleOrderConfirmation($record, $data);
 
                         $message = 'Order confirmed successfully!';
-                        
+
                         if ($results['rider_assigned']) {
                             $rider = $results['rider'];
                             $message .= " Rider {$rider['name']} ({$rider['vehicle']}) has been assigned.";
@@ -62,7 +62,7 @@ class ViewOrder extends ViewRecord
                         Notification::make()
                             ->danger()
                             ->title('Error')
-                            ->body('Failed to confirm order: ' . $e->getMessage())
+                            ->body('Failed to confirm order: '.$e->getMessage())
                             ->send();
                     }
                 }),
@@ -90,7 +90,7 @@ class ViewOrder extends ViewRecord
                         Notification::make()
                             ->danger()
                             ->title('Error')
-                            ->body('Failed to process order: ' . $e->getMessage())
+                            ->body('Failed to process order: '.$e->getMessage())
                             ->send();
                     }
                 }),
@@ -99,8 +99,7 @@ class ViewOrder extends ViewRecord
                 ->label('Mark as Shipped/Ready for Pickup')
                 ->icon('heroicon-o-truck')
                 ->color('primary')
-                ->visible(fn ($record) => in_array($record->delivery->status, ['assigned']))
-                ->requiresConfirmation()
+                ->visible(fn ($record) => $record->delivery && in_array($record->delivery->status, ['assigned']))->requiresConfirmation()
                 ->modalHeading('Mark Order as Ready for Pickup')
                 ->modalDescription('The order is ready for the rider to pick up.')
                 ->form([
@@ -113,14 +112,14 @@ class ViewOrder extends ViewRecord
                 ])
                 ->action(function ($record, array $data) {
                     $notes = $record->notes ?? '';
-                    $notes .= "\n\nReady for pickup: " . now()->toDateTimeString();
-                    
-                    if (!empty($data['tracking_number'])) {
-                        $notes .= "\nTracking: " . $data['tracking_number'];
+                    $notes .= "\n\nReady for pickup: ".now()->toDateTimeString();
+
+                    if (! empty($data['tracking_number'])) {
+                        $notes .= "\nTracking: ".$data['tracking_number'];
                     }
-                    
-                    if (!empty($data['shipping_notes'])) {
-                        $notes .= "\nNotes: " . $data['shipping_notes'];
+
+                    if (! empty($data['shipping_notes'])) {
+                        $notes .= "\nNotes: ".$data['shipping_notes'];
                     }
 
                     $record->update([
@@ -144,7 +143,7 @@ class ViewOrder extends ViewRecord
                 ->label('Cancel Order')
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
-                ->visible(fn ($record) => !in_array($record->status, ['delivered', 'cancelled']))
+                ->visible(fn ($record) => ! in_array($record->status, ['delivered', 'cancelled']))
                 ->requiresConfirmation()
                 ->modalHeading('Cancel Order')
                 ->modalDescription('Are you sure you want to cancel this order? Stock will be restored.')
@@ -171,13 +170,13 @@ class ViewOrder extends ViewRecord
 
                     $record->update([
                         'status' => 'cancelled',
-                        'notes' => ($record->notes ?? '') . "\n\nCancelled: " . now()->toDateTimeString() . "\nReason: " . $data['cancellation_reason'],
+                        'notes' => ($record->notes ?? '')."\n\nCancelled: ".now()->toDateTimeString()."\nReason: ".$data['cancellation_reason'],
                     ]);
 
                     // Cancel delivery if exists
                     if ($record->delivery) {
                         $record->delivery->update(['status' => 'cancelled']);
-                        
+
                         // Free up rider
                         if ($record->delivery->rider) {
                             $record->delivery->rider->update(['is_available' => true]);
@@ -196,8 +195,8 @@ class ViewOrder extends ViewRecord
                 ->icon('heroicon-o-map-pin')
                 ->color('info')
                 ->visible(fn ($record) => $record->delivery !== null),
-                // ->url(fn ($record) => route('filament.operations.resources.deliveries.view', ['record' => $record->delivery]))
-                // ->openUrlInNewTab(),
+            // ->url(fn ($record) => route('filament.operations.resources.deliveries.view', ['record' => $record->delivery]))
+            // ->openUrlInNewTab(),
 
             Action::make('print')
                 ->label('Print Order')
