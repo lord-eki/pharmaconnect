@@ -2,6 +2,7 @@
 
 namespace App\Filament\Physician\Resources\Physician\Prescriptions\Schemas;
 
+use App\Models\InsuranceProvider;
 use App\Models\Medicine;
 use App\Models\Patient;
 use App\Services\PricingService;
@@ -76,9 +77,9 @@ class PrescriptionForm
                                                     ->maxLength(255),
                                                 Textarea::make('address')
                                                     ->columnSpanFull(),
+                                                Select::make('insurance_provider')
+                                                    ->options(InsuranceProvider::query()->pluck('company_name', 'id')),
                                                 TextInput::make('insurance_number')
-                                                    ->maxLength(255),
-                                                TextInput::make('insurance_provider')
                                                     ->maxLength(255),
                                                 Textarea::make('allergies')
                                                     ->columnSpanFull()
@@ -181,21 +182,21 @@ class PrescriptionForm
                                         TextInput::make('supplier_price')
                                             ->numeric()
                                             ->hidden()
-                                            ->dehydrated(true), 
+                                            ->dehydrated(true),
 
                                         TextInput::make('unit_price')
                                             ->label('Est. Unit Price')
                                             ->numeric()
                                             ->prefix('KES')
                                             ->disabled()
-                                            ->dehydrated(true), 
+                                            ->dehydrated(true),
 
                                         TextInput::make('total_price')
                                             ->label('Est. Total')
                                             ->numeric()
                                             ->prefix('KES')
                                             ->disabled()
-                                            ->dehydrated(true), 
+                                            ->dehydrated(true),
 
                                         Textarea::make('dosage_instructions')
                                             ->required()

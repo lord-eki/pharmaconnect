@@ -44,7 +44,6 @@ class Prescription extends Model
         'total_amount' => 'decimal:2',
     ];
 
-    // REMOVED eager loading to prevent N+1
     protected $with = [];
 
     protected static function boot()
@@ -142,7 +141,7 @@ class Prescription extends Model
     }
 
     /**
-     * OPTIMIZED: Submit with better error handling and performance
+     * Submit with  error handling and performance
      */
     public function submit(): bool
     {
@@ -442,7 +441,7 @@ class Prescription extends Model
      */
     public function createInsuranceClaim()
     {
-        // CRITICAL: Check if claim already exists first
+        //  Check if claim already exists first
         if ($this->insuranceClaim) {
             Log::warning('Attempted to create duplicate insurance claim', [
                 'prescription_id' => $this->id,

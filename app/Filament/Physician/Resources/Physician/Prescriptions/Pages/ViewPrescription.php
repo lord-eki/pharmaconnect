@@ -65,7 +65,7 @@ class ViewPrescription extends ViewRecord
                         ->required()
                         ->maxLength(500),
                 ])
-                ->visible(fn () => in_array($this->record->status, ['draft', 'submitted', 'processing']))
+                ->visible(fn () => in_array($this->record->status, ['draft']))
                 ->action(function (array $data) {
                     try {
                         $this->record->cancel($data['reason']);

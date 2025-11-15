@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\CommissionService;
+use App\Services\PaymentService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -93,7 +95,8 @@ class Order extends Model
             return;
         }
 
-        $prescription->load('orders');
+        // Reload prescription with patient insurance info
+        $prescription->load(['orders', 'patient.insuranceProvider']);
 
         // Check if all orders are confirmed or delivered
         $allConfirmed = $prescription->orders()
@@ -101,31 +104,78 @@ class Order extends Model
             ->doesntExist();
 
         if ($allConfirmed) {
-            Log::info('All orders confirmed, creating insurance claim', [
+            Log::info('All orders confirmed for prescription', [
                 'prescription_id' => $prescription->id,
+                'prescription_number' => $prescription->prescription_number,
+                'insurance_covered' => $prescription->insurance_covered,
             ]);
 
-            try {
-                // Only create if insurance is covered and claim doesn't exist
-                if ($prescription->insurance_covered && ! $prescription->insuranceClaim) {
-                    $prescription->createInsuranceClaim();
+            // Create insurance claim if needed
+            if ($prescription->insurance_covered) {
+                try {
+                    // Check if patient has insurance setup
+                    $patient = $prescription->patient;
 
-                    Log::info('Insurance claim created after order confirmation', [
-                        'prescription_id' => $prescription->id,
+                    if (! $patient->insurance_provider_id) {
+                        Log::error('Cannot create insurance claim - patient has no insurance provider', [
+                            'prescription_id' => $prescription->id,
+                            'patient_id' => $patient->id,
+                        ]);
+
+                        return;
+                    }
+
+                    if (! $patient->insurance_number) {
+                        Log::error('Cannot create insurance claim - patient has no insurance number', [
+                            'prescription_id' => $prescription->id,
+                            'patient_id' => $patient->id,
+                        ]);
+
+                        return;
+                    }
+
+                    // Check if claim already exists
+                    if ($prescription->insuranceClaim) {
+                        Log::info('Insurance claim already exists', [
+                            'prescription_id' => $prescription->id,
+                            'claim_id' => $prescription->insuranceClaim->id,
+                            'claim_number' => $prescription->insuranceClaim->claim_number,
+                        ]);
+
+                        // Verify claim has provider_id, fix if missing
+                        if (! $prescription->insuranceClaim->insurance_provider_id) {
+                            $prescription->insuranceClaim->update([
+                                'insurance_provider_id' => $patient->insurance_provider_id,
+                            ]);
+
+                            Log::info('Fixed missing insurance_provider_id on existing claim', [
+                                'claim_id' => $prescription->insuranceClaim->id,
+                                'provider_id' => $patient->insurance_provider_id,
+                            ]);
+                        }
+                    } else {
+                        // Create new insurance claim
+                        $claim = $prescription->createInsuranceClaim();
+
+                        Log::info('Insurance claim created after all orders confirmed', [
+                            'prescription_id' => $prescription->id,
+                            'claim_id' => $claim->id,
+                            'claim_number' => $claim->claim_number,
+                            'insurance_provider_id' => $claim->insurance_provider_id,
+                            'claimed_amount' => $claim->claimed_amount,
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Error creating/updating insurance claim', [
                         'order_id' => $order->id,
-                    ]);
-                } elseif ($prescription->insuranceClaim) {
-                    Log::info('Insurance claim already exists', [
                         'prescription_id' => $prescription->id,
-                        'claim_id' => $prescription->insuranceClaim->id,
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
                     ]);
                 }
-            } catch (\Exception $e) {
-                Log::error('Error creating insurance claim', [
-                    'order_id' => $order->id,
+            } else {
+                Log::info('Prescription not marked for insurance coverage', [
                     'prescription_id' => $prescription->id,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
                 ]);
             }
         }
@@ -207,7 +257,7 @@ class Order extends Model
         return sprintf('%s%s-%s', $prefix, $ym, $sequencePadded);
     }
 
-    // Confirm order 
+    // Confirm order
     public function confirm(): bool
     {
         return DB::transaction(function () {
@@ -308,11 +358,49 @@ class Order extends Model
                 ]);
             }
 
-            // Process payments
-            $this->processPayments();
+            // Ensure insurance claim exists before processing payments
+            $prescription = $this->prescription;
+            if ($prescription->insurance_covered && ! $prescription->insuranceClaim) {
+                try {
+                    Log::info('Creating insurance claim during delivery', [
+                        'order_id' => $this->id,
+                        'prescription_id' => $prescription->id,
+                    ]);
+
+                    $prescription->createInsuranceClaim();
+
+                    // Reload prescription to get the claim
+                    $prescription->load('insuranceClaim');
+                } catch (\Exception $e) {
+                    Log::error('Failed to create insurance claim during delivery', [
+                        'order_id' => $this->id,
+                        'prescription_id' => $prescription->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Process payments (receivables/payables)
+            $paymentService = app(PaymentService::class);
+            try {
+                $paymentService->processOrderPayments($this);
+            } catch (\Exception $e) {
+                Log::error('Failed to process order payments', [
+                    'order_id' => $this->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             // Calculate and create commission
-            $this->calculateCommission();
+            $commissionService = app(CommissionService::class);
+            try {
+                $commissionService->calculateCommissionForOrder($this);
+            } catch (\Exception $e) {
+                Log::error('Failed to calculate commission', [
+                    'order_id' => $this->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             // Update prescription status
             $this->prescription->markFulfilled();
@@ -335,7 +423,7 @@ class Order extends Model
         $deliveryFee = $this->delivery ? $this->delivery->delivery_fee : 0;
         $grandTotal = $totalAmount + $deliveryFee;
 
-        // Insurance portion 
+        // Insurance portion
         $insuranceCovered = 0;
         if ($this->prescription->insurance_covered && $this->prescription->insuranceClaim) {
             $claim = $this->prescription->insuranceClaim;
@@ -356,12 +444,12 @@ class Order extends Model
                 'prescription_id' => $this->prescription_id,
                 'amount' => $patientPortion,
                 'currency' => 'KES',
-                'payment_method' => 'mpesa', 
+                'payment_method' => 'mpesa',
                 'status' => 'pending',
             ]);
         }
 
-        // Create payment record for insurance 
+        // Create payment record for insurance
         if ($insuranceCovered > 0) {
             Payment::create([
                 'payment_reference' => Payment::generateReference(),
@@ -373,54 +461,6 @@ class Order extends Model
                 'status' => 'processing',
             ]);
         }
-    }
-
-    // Calculate and create physician commission
-    protected function calculateCommission(): void
-    {
-        $physician = $this->prescription->physician;
-
-        // Get commission rate 
-        $commissionRate = $this->getCommissionRate();
-
-        $grossAmount = $this->total_amount;
-        $commissionAmount = $grossAmount * ($commissionRate / 100);
-
-        Commission::create([
-            'physician_id' => $physician->id,
-            'prescription_id' => $this->prescription_id,
-            'order_id' => $this->id,
-            'commission_rate' => $commissionRate,
-            'gross_amount' => $grossAmount,
-            'commission_amount' => $commissionAmount,
-            'status' => 'pending',
-        ]);
-    }
-
-    // Get commission rate for physician
-    protected function getCommissionRate(): float
-    {
-        $physician = $this->prescription->physician;
-
-        if(!$physician)
-        {
-            Log::warning('Physician not found for order commission calculation', [
-                'order_id' => $this->id,
-                'prescription_id' => $this->prescription_id,
-            ]);
-
-        }
-
-        $rate = $physician->commission_rate;
-
-        Log::info('Commission rate retrieved for physician', [
-            'physician_id' => $physician->id ?? null,
-            'commission_rate' => $rate ?? null,
-            'order_id' => $this->id
-        ]);
-
-        return $rate;
-
     }
 
     // Send notifications to stakeholders

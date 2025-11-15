@@ -67,20 +67,7 @@ class OrderFulfillmentService
             $delivery = $this->riderService->createDeliveryForOrder($order);
             $results['delivery_created'] = true;
 
-            // // 3. Automatically assign rider
-            // $rider = $this->riderService->assignRider($delivery);
-            
-            // if ($rider) {
-            //     $results['rider_assigned'] = true;
-            //     $results['rider'] = [
-            //         'id' => $rider->id,
-            //         'name' => $rider->full_name,
-            //         'phone' => $rider->phone,
-            //         'vehicle' => $rider->vehicle_type,
-            //     ];
-            // } else {
-            //     $results['errors'][] = 'No available rider found - manual assignment required';
-            // }
+          
 
             DB::commit();
 

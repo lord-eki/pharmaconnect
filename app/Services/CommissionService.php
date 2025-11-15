@@ -28,14 +28,15 @@ class CommissionService
                     'order_id' => $order->id,
                     'commission_id' => $order->commission->id,
                 ]);
+
                 return $order->commission;
             }
 
             $physician = $order->prescription->physician;
-            
+
             // Get commission rate
             $commissionRate = $this->getCommissionRate($physician, $order);
-            
+
             // Calculate amounts
             $grossAmount = $order->total_amount;
             $commissionAmount = $grossAmount * ($commissionRate / 100);
@@ -72,30 +73,32 @@ class CommissionService
 
     /**
      * Get commission rate for physician
-     * Can be dynamic based on various factors
      */
     protected function getCommissionRate(User $physician, Order $order): float
     {
-        // Default rate
-        $defaultRate = 10.0; // 10%
+        // Access the physician profile from the User model
+        $phys = $physician->physician;
 
-        // Check for custom rate in system settings or physician profile
-        if (isset($physician->profile->preferences['commission_rate'])) {
-            return (float) $physician->profile->preferences['commission_rate'];
+        if (! $phys) {
+            Log::warning('Physician profile not found for commission calculation', [
+                'order_id' => $order->id,
+                'user_id' => $physician->id,
+                'prescription_id' => $order->prescription_id,
+            ]);
+
+            // Return default rate
+            return 5.00;
         }
 
-        // Tiered rates based on monthly volume
-        $monthlyVolume = $this->getMonthlyVolume($physician);
+        $rate = $phys->commission_rate ?? 5.00;
 
-        if ($monthlyVolume >= 1000000) { // KES 1M+
-            return 15.0; // 15% for high performers
-        } elseif ($monthlyVolume >= 500000) { // KES 500K+
-            return 12.5; // 12.5%
-        } elseif ($monthlyVolume >= 100000) { // KES 100K+
-            return 11.0; // 11%
-        }
+        Log::info('Commission rate retrieved for physician', [
+            'physician_id' => $phys->id,
+            'commission_rate' => $rate,
+            'order_id' => $order->id,
+        ]);
 
-        return $defaultRate;
+        return $rate;
     }
 
     /**
@@ -104,8 +107,8 @@ class CommissionService
     protected function getMonthlyVolume(User $physician): float
     {
         return Order::whereHas('prescription', function ($query) use ($physician) {
-                $query->where('physician_id', $physician->id);
-            })
+            $query->where('physician_id', $physician->id);
+        })
             ->where('status', 'delivered')
             ->whereYear('created_at', now()->year)
             ->whereMonth('created_at', now()->month)
@@ -224,9 +227,10 @@ class CommissionService
             foreach ($commissionIds as $commissionId) {
                 $commission = Commission::find($commissionId);
 
-                if (!$commission) {
+                if (! $commission) {
                     $results['failed']++;
                     $results['errors'][] = "Commission {$commissionId} not found";
+
                     continue;
                 }
 
@@ -241,7 +245,7 @@ class CommissionService
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Error in batch commission approval', [
                 'error' => $e->getMessage(),
             ]);

@@ -74,7 +74,7 @@ class ViewOrder extends ViewRecord
                 ->visible(fn ($record) => $record->status === 'confirmed')
                 ->requiresConfirmation()
                 ->modalHeading('Start Processing Order')
-                ->modalDescription('Mark this order as being processed. If not already done, a delivery will be created and rider assigned.')
+                ->modalDescription('Mark this order as being processed. If not already done, a delivery will be created.')
                 ->action(function ($record) {
                     try {
                         $fulfillmentService = app(OrderFulfillmentService::class);
@@ -99,7 +99,7 @@ class ViewOrder extends ViewRecord
                 ->label('Mark as Shipped/Ready for Pickup')
                 ->icon('heroicon-o-truck')
                 ->color('primary')
-                ->visible(fn ($record) => in_array($record->status, ['confirmed', 'processing']))
+                ->visible(fn ($record) => in_array($record->delivery->status, ['assigned']))
                 ->requiresConfirmation()
                 ->modalHeading('Mark Order as Ready for Pickup')
                 ->modalDescription('The order is ready for the rider to pick up.')

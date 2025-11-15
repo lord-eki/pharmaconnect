@@ -6,7 +6,6 @@ use App\Models\Order;
 use App\Models\Payable;
 use App\Models\Receivable;
 use App\Models\Transaction;
-use App\Models\InsuranceClaim;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -51,7 +50,7 @@ class PaymentService
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Error processing order payments', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
@@ -62,152 +61,187 @@ class PaymentService
     }
 
     /**
-     * Create payable to supplier 
+     * Create payable to supplier
      */
+    public function createPayableToSupplier(Order $order): ?Payable
+    {
+        try {
+            // Check if payable already exists
+            $existing = Payable::where('order_id', $order->id)
+                ->where('vendor_id', $order->supplier_id)
+                ->first();
 
-public function createPayableToSupplier(Order $order): ?Payable
-{
-    try {
-        // Check if payable already exists
-        $existing = Payable::where('order_id', $order->id)
-            ->where('vendor_id', $order->supplier_id)
-            ->first();
+            if ($existing) {
+                Log::info('Payable already exists for order', [
+                    'payable_id' => $existing->id,
+                    'order_id' => $order->id,
+                ]);
 
-        if ($existing) {
-            Log::info('Payable already exists for order', [
-                'payable_id' => $existing->id,
-                'order_id' => $order->id,
-            ]);
-            return $existing;
-        }
-
-        // Use supplier_total if available, otherwise fall back to total_amount
-        $supplierAmount = $order->supplier_total ?? $order->total_amount;
-
-        $payable = Payable::create([
-            'reference' => $this->generateReference('PAY'),
-            'order_id' => $order->id,
-            'vendor_id' => $order->supplier_id,
-            'vendor_type' => 'supplier',
-            'amount' => $supplierAmount, 
-            'payment_method' => 'bank_transfer', 
-            'due_date' => now()->addDays(7), 
-        ]);
-
-        // Create corresponding transaction
-        $this->createTransaction($payable, 'payable', 'pending');
-
-        Log::info('Payable created for supplier', [
-            'payable_id' => $payable->id,
-            'order_id' => $order->id,
-            'supplier_id' => $order->supplier_id,
-            'supplier_amount' => $supplierAmount,
-            'markup_hidden' => $order->markup_total ?? 0,
-            'total_with_markup' => $order->total_amount,
-        ]);
-
-        return $payable;
-
-    } catch (\Exception $e) {
-        Log::error('Error creating payable', [
-            'order_id' => $order->id,
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]);
-
-        return null;
-    }
-}
-   /**
- * Create receivable from patient/insurance
- */
-public function createReceivableForOrder(Order $order): ?Receivable
-{
-    try {
-        $prescription = $order->prescription;
-        $patient = $prescription->patient;
-
-        // Calculate amounts (using marked-up prices)
-        $totalAmount = $order->total_amount; // This includes markup
-        $deliveryFee = $order->delivery ? $order->delivery->delivery_fee : 0;
-        $grandTotal = $totalAmount + $deliveryFee;
-
-        // Check if insurance is involved
-        $insuranceCovered = 0;
-        $insuranceClaimId = null;
-        $paymentSource = 'patient';
-
-        if ($prescription->insurance_covered && $prescription->insuranceClaim) {
-            $claim = $prescription->insuranceClaim;
-            
-            if ($claim->status === 'approved') {
-                $insuranceCovered = $claim->approved_amount; // Based on marked-up price
-                $insuranceClaimId = $claim->id;
-                $paymentSource = 'insurance';
+                return $existing;
             }
+
+            // Use supplier_total if available, otherwise fall back to total_amount
+            $supplierAmount = $order->supplier_total ?? $order->total_amount;
+
+            $payable = Payable::create([
+                'reference' => $this->generateReference('PAY'),
+                'order_id' => $order->id,
+                'vendor_id' => $order->supplier_id,
+                'vendor_type' => 'supplier',
+                'amount' => $supplierAmount,
+                'payment_method' => 'bank_transfer',
+                'due_date' => now()->addDays(7),
+            ]);
+
+            // Create corresponding transaction
+            $this->createTransaction($payable, 'payable', 'pending');
+
+            Log::info('Payable created for supplier', [
+                'payable_id' => $payable->id,
+                'order_id' => $order->id,
+                'supplier_id' => $order->supplier_id,
+                'supplier_amount' => $supplierAmount,
+                'markup_hidden' => $order->markup_total ?? 0,
+                'total_with_markup' => $order->total_amount,
+            ]);
+
+            return $payable;
+
+        } catch (\Exception $e) {
+            Log::error('Error creating payable', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return null;
         }
+    }
 
-        // Patient portion (what patient owes)
-        $patientPortion = $grandTotal - $insuranceCovered;
+    /**
+     * Create receivable from patient/insurance
+     */
+    public function createReceivableForOrder(Order $order): ?Receivable
+    {
+        try {
+            $prescription = $order->prescription;
+            $patient = $prescription->patient;
 
-        // Create primary receivable (insurance or patient)
-        $receivable = Receivable::create([
-            'reference' => $this->generateReference('REC'),
-            'order_id' => $order->id,
-            'prescription_id' => $prescription->id,
-            'patient_id' => $patient->id,
-            'insurance_provider_id' => $insuranceClaimId ? $prescription->insuranceClaim->insurance_provider_id : null,
-            'amount' => $insuranceCovered > 0 ? $insuranceCovered : $patientPortion, // Marked-up price
-            'payment_source' => $paymentSource,
-            'claim_status' => $insuranceClaimId ? 'submitted' : null,
-            'claim_reference' => $insuranceClaimId ? $prescription->insuranceClaim->claim_number : null,
-            'claim_submitted_at' => $insuranceClaimId ? now() : null,
-        ]);
+            // Check if receivable already exists
+            $existingReceivable = Receivable::where('order_id', $order->id)
+                ->where('payment_source', 'insurance')
+                ->orWhere('payment_source', 'patient')
+                ->first();
 
-        // Create corresponding transaction
-        $this->createTransaction($receivable, 'receivable', 'pending');
+            if ($existingReceivable) {
+                Log::info('Receivable already exists for order', [
+                    'receivable_id' => $existingReceivable->id,
+                    'order_id' => $order->id,
+                ]);
 
-        Log::info('Receivable created for order', [
-            'receivable_id' => $receivable->id,
-            'order_id' => $order->id,
-            'amount' => $receivable->amount,
-            'payment_source' => $paymentSource,
-            'includes_markup' => true,
-            'markup_amount' => $order->markup_total ?? 0,
-        ]);
+                return $existingReceivable;
+            }
 
-        // If there's both insurance and patient portion, create separate receivable for patient
-        if ($insuranceCovered > 0 && $patientPortion > 0) {
-            $patientReceivable = Receivable::create([
+            // Calculate amounts
+            $totalAmount = $order->total_amount;
+            $deliveryFee = $order->delivery ? $order->delivery->delivery_fee : 0;
+            $grandTotal = $totalAmount + $deliveryFee;
+
+            // Check if insurance is involved
+            $insuranceCovered = 0;
+            $insuranceClaimId = null;
+            $insuranceProviderId = null;
+            $paymentSource = 'patient';
+
+            if ($prescription->insurance_covered && $prescription->insuranceClaim) {
+                $claim = $prescription->insuranceClaim;
+
+                Log::info('Checking insurance claim for receivable', [
+                    'claim_id' => $claim->id,
+                    'claim_status' => $claim->status,
+                    'insurance_provider_id' => $claim->insurance_provider_id ?? 'NULL',
+                ]);
+
+                if ($claim->status === 'approved') {
+                    $insuranceCovered = $claim->approved_amount;
+                    $insuranceClaimId = $claim->id;
+                    $insuranceProviderId = $claim->insurance_provider_id;
+                    $paymentSource = 'insurance';
+                }
+            }
+
+            // Patient portion
+            $patientPortion = $grandTotal - $insuranceCovered;
+
+            // Build receivable data conditionally
+            $receivableData = [
                 'reference' => $this->generateReference('REC'),
                 'order_id' => $order->id,
                 'prescription_id' => $prescription->id,
                 'patient_id' => $patient->id,
-                'amount' => $patientPortion, // Patient's share of marked-up price
-                'payment_source' => 'patient',
-            ]);
+                'amount' => $insuranceCovered > 0 ? $insuranceCovered : $patientPortion,
+                'payment_source' => $paymentSource,
+            ];
 
-            $this->createTransaction($patientReceivable, 'receivable', 'pending');
+            // Only add insurance fields if they have values
+            if ($insuranceProviderId) {
+                $receivableData['insurance_provider_id'] = $insuranceProviderId;
+            }
 
-            Log::info('Additional patient receivable created', [
-                'receivable_id' => $patientReceivable->id,
+            if ($insuranceClaimId) {
+                $receivableData['claim_status'] = 'submitted';
+                $receivableData['claim_reference'] = $prescription->insuranceClaim->claim_number;
+                $receivableData['claim_submitted_at'] = now();
+            }
+
+            // Create primary receivable
+            $receivable = Receivable::create($receivableData);
+
+            // Create corresponding transaction
+            $this->createTransaction($receivable, 'receivable', 'pending');
+
+            Log::info('Receivable created for order', [
+                'receivable_id' => $receivable->id,
                 'order_id' => $order->id,
-                'patient_portion' => $patientPortion,
+                'amount' => $receivable->amount,
+                'payment_source' => $paymentSource,
+                'insurance_provider_id' => $insuranceProviderId ?? 'NULL',
             ]);
+
+            // If there's both insurance and patient portion, create separate receivable for patient
+            if ($insuranceCovered > 0 && $patientPortion > 0) {
+                $patientReceivableData = [
+                    'reference' => $this->generateReference('REC'),
+                    'order_id' => $order->id,
+                    'prescription_id' => $prescription->id,
+                    'patient_id' => $patient->id,
+                    'amount' => $patientPortion,
+                    'payment_source' => 'patient',
+                ];
+
+                $patientReceivable = Receivable::create($patientReceivableData);
+
+                $this->createTransaction($patientReceivable, 'receivable', 'pending');
+
+                Log::info('Additional patient receivable created', [
+                    'receivable_id' => $patientReceivable->id,
+                    'order_id' => $order->id,
+                    'patient_portion' => $patientPortion,
+                ]);
+            }
+
+            return $receivable;
+
+        } catch (\Exception $e) {
+            Log::error('Error creating receivable', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return null;
         }
-
-        return $receivable;
-
-    } catch (\Exception $e) {
-        Log::error('Error creating receivable', [
-            'order_id' => $order->id,
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]);
-
-        return null;
     }
-}
 
     /**
      * Mark payable as paid
@@ -243,7 +277,7 @@ public function createReceivableForOrder(Order $order): ?Receivable
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Error marking payable as paid', [
                 'payable_id' => $payable->id,
                 'error' => $e->getMessage(),
@@ -299,7 +333,7 @@ public function createReceivableForOrder(Order $order): ?Receivable
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Error marking receivable as received', [
                 'receivable_id' => $receivable->id,
                 'error' => $e->getMessage(),
@@ -330,7 +364,7 @@ public function createReceivableForOrder(Order $order): ?Receivable
      */
     protected function generateReference(string $prefix): string
     {
-        return $prefix . '-' . date('Ymd') . '-' . strtoupper(Str::random(8));
+        return $prefix.'-'.date('Ymd').'-'.strtoupper(Str::random(8));
     }
 
     /**
@@ -379,7 +413,7 @@ public function createReceivableForOrder(Order $order): ?Receivable
     }
 
     /**
-     * Get outstanding payables 
+     * Get outstanding payables
      */
     public function getOutstandingPayables(): array
     {
@@ -403,7 +437,7 @@ public function createReceivableForOrder(Order $order): ?Receivable
     }
 
     /**
-     * Get outstanding receivables 
+     * Get outstanding receivables
      */
     public function getOutstandingReceivables(): array
     {
