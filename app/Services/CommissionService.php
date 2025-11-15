@@ -38,7 +38,8 @@ class CommissionService
             $commissionRate = $this->getCommissionRate($physician, $order);
 
             // Calculate amounts
-            $grossAmount = $order->total_amount;
+            $grossAmount = $order->supplier_total ?? $order->total_amount;
+            
             $commissionAmount = $grossAmount * ($commissionRate / 100);
 
             // Create commission record
@@ -76,7 +77,6 @@ class CommissionService
      */
     protected function getCommissionRate(User $physician, Order $order): float
     {
-        // Access the physician profile from the User model
         $phys = $physician->physician;
 
         if (! $phys) {
