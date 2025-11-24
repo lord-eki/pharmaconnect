@@ -58,7 +58,7 @@ class ReceivablesTable
                     ])
                     ->formatStateUsing(fn (string $state): string => ucfirst($state)),
 
-                TextColumn::make('insuranceCompany.name')
+                TextColumn::make('insuranceProvider.company_name')
                     ->label('Insurance')
                     ->searchable()
                     ->sortable()

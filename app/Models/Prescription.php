@@ -611,7 +611,7 @@ class Prescription extends Model
             }
 
             // Send email if available
-            if ($supplier->email) {
+            if ($supplier->user->email) {
                 try {
                     Mail::to($supplier->email)->send(
                         new NewOrderNotification($order)
