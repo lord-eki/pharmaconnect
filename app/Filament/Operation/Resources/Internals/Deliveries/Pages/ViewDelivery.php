@@ -2,21 +2,22 @@
 
 namespace App\Filament\Operation\Resources\Internals\Deliveries\Pages;
 
-
 use App\Filament\Operation\Resources\Internals\Deliveries\DeliveryResource;
 use App\Models\Rider;
-use App\Services\OrderFulfillmentService;
+use App\Notifications\CommissionEarnedNotification;
+use App\Notifications\DeliveryAssignedNotification;
+use App\Notifications\DeliveryStatusUpdatedNotification;
+use App\Notifications\RiderReassignedNotification;
 use App\Services\DeliveryTrackingService;
+use App\Services\OrderFulfillmentService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\TextEntry;
-use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
-
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -159,8 +160,9 @@ class ViewDelivery extends ViewRecord
                             ->state(function ($record) {
                                 $service = app(DeliveryTrackingService::class);
                                 $location = $service->getCurrentLocation($record);
-                                return $location ? 
-                                    "Lat: {$location['lat']}, Lng: {$location['lng']} ({$location['time_ago']})" : 
+
+                                return $location ?
+                                    "Lat: {$location['lat']}, Lng: {$location['lng']} ({$location['time_ago']})" :
                                     'No tracking data';
                             })
                             ->columnSpanFull(),
@@ -180,7 +182,7 @@ class ViewDelivery extends ViewRecord
                 ->label('Assign Rider')
                 ->icon('heroicon-o-user-plus')
                 ->color('success')
-                ->visible(fn ($record) => $record->status === 'pending' && !$record->rider_id)
+                ->visible(fn ($record) => $record->status === 'pending' && ! $record->rider_id)
                 ->form([
                     Select::make('rider_id')
                         ->label('Select Rider')
@@ -199,6 +201,7 @@ class ViewDelivery extends ViewRecord
                         $rider = $fulfillmentService->reassignRider($record, $data['rider_id']);
 
                         if ($rider) {
+                            $rider->user->notify(new DeliveryAssignedNotification($record));
                             Notification::make()
                                 ->success()
                                 ->title('Rider Assigned')
@@ -218,7 +221,7 @@ class ViewDelivery extends ViewRecord
                 ->label('Reassign Rider')
                 ->icon('heroicon-o-arrow-path')
                 ->color('warning')
-                ->visible(fn ($record) => $record->rider_id && !in_array($record->status, ['delivered', 'cancelled']))
+                ->visible(fn ($record) => $record->rider_id && ! in_array($record->status, ['delivered', 'cancelled']))
                 ->form([
                     Select::make('rider_id')
                         ->label('Select New Rider')
@@ -237,14 +240,22 @@ class ViewDelivery extends ViewRecord
                 ])
                 ->action(function ($record, array $data) {
                     try {
+                        $oldRider = $record->rider;
+
                         $fulfillmentService = app(OrderFulfillmentService::class);
                         $rider = $fulfillmentService->reassignRider($record, $data['rider_id']);
 
+                        if ($oldRider) {
+                            $oldRider->user->notify(new DeliveryStatusUpdatedNotification($record, 'assigned', 'reassigned'));
+                        }
+
+                        $rider->user->notify(new RiderReassignedNotification($record, $data['reason']));
+
                         // Log the reassignment
                         $record->update([
-                            'delivery_notes' => ($record->delivery_notes ?? '') . 
-                                "\n\nRider reassigned: " . now()->toDateTimeString() . 
-                                "\nReason: " . $data['reason']
+                            'delivery_notes' => ($record->delivery_notes ?? '').
+                                "\n\nRider reassigned: ".now()->toDateTimeString().
+                                "\nReason: ".$data['reason'],
                         ]);
 
                         Notification::make()
@@ -260,8 +271,6 @@ class ViewDelivery extends ViewRecord
                             ->send();
                     }
                 }),
-
-           
 
             Action::make('mark_picked_up')
                 ->label('Mark Picked Up')
@@ -324,19 +333,36 @@ class ViewDelivery extends ViewRecord
                         $fulfillmentService = app(OrderFulfillmentService::class);
                         $results = $fulfillmentService->handleDeliveryCompletion($record, $data);
 
+                        if ($record->rider) {
+                            $record->rider->user->notify(new DeliveryStatusUpdatedNotification(
+                                $record,
+                                $record->status,
+                                'delivered'
+                            ));
+                        }
+
+                        // Notify physician if commission created
+                        if ($results['commission_created']) {
+                            $commission = $results['commission'];
+                            $physician = $record->order->prescription->physician;
+                            $physician->user->notify(new CommissionEarnedNotification(
+                                $commission
+                            ));
+                        }
+
                         $message = 'Delivery completed successfully!';
-                        
+
                         if ($results['payments_processed']) {
                             $message .= ' Payments processed.';
                         }
-                        
+
                         if ($results['commission_created']) {
                             $commission = $results['commission'];
                             $message .= " Commission of KES {$commission['amount']} created for physician.";
                         }
 
-                        if (!empty($results['errors'])) {
-                            $message .= ' However, some errors occurred: ' . implode(', ', $results['errors']);
+                        if (! empty($results['errors'])) {
+                            $message .= ' However, some errors occurred: '.implode(', ', $results['errors']);
                         }
 
                         Notification::make()
@@ -348,7 +374,7 @@ class ViewDelivery extends ViewRecord
                         Notification::make()
                             ->danger()
                             ->title('Error')
-                            ->body('Failed to complete delivery: ' . $e->getMessage())
+                            ->body('Failed to complete delivery: '.$e->getMessage())
                             ->send();
                     }
                 }),
