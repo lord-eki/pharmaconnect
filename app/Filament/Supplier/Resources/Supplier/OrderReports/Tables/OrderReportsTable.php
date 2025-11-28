@@ -213,7 +213,6 @@ class OrderReportsTable
     protected static function exportToCSV($livewire)
     {
         $supplier = Auth::user()->supplier;
-        $query = static::getEloquentQuery();
 
         // Apply table filters
         $query = $livewire->getFilteredTableQuery();
@@ -272,7 +271,6 @@ class OrderReportsTable
     protected static function exportToPDF($livewire)
     {
         $supplier = Auth::user()->supplier;
-        $query = static::getEloquentQuery();
 
         // Apply table filters
         $query = $livewire->getFilteredTableQuery();

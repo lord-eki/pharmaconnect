@@ -10,14 +10,12 @@ class RolesAndPermissionsSeeder extends Seeder
 {
     public function run(): void
     {
-        // Create roles
-        $roles = ['Admin', 'Supplier', 'Insurer', 'Operation', 'Physician'];
-        
+        $roles = ['Admin', 'Supplier', 'Insurer', 'Operation', 'Physician', 'Rider'];
+
         foreach ($roles as $role) {
-            Role::create(['name' => $role]);
+            Role::firstOrCreate(['name' => $role]);
         }
 
-        // Create permissions (examples - adjust based on your needs)
         $permissions = [
             'view_users',
             'create_users', 
@@ -30,7 +28,7 @@ class RolesAndPermissionsSeeder extends Seeder
         ];
 
         foreach ($permissions as $permission) {
-            Permission::create(['name' => $permission]);
+            Permission::firstOrCreate(['name' => $permission]);
         }
 
         $adminRole = Role::findByName('Admin');
@@ -38,6 +36,7 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $supplierRole = Role::findByName('Supplier');
         $supplierRole->givePermissionTo(['view_users', 'manage_suppliers']);
-
     }
+
+    
 }

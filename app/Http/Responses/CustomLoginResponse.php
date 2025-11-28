@@ -32,6 +32,8 @@ class CustomLoginResponse implements LoginResponse
             return '/operation';
         } elseif ($user->hasRole('Physician')) {
             return '/physician';
+        } elseif ($user->hasRole('Rider')) {
+            return '/rider';
         }
 
         return '/'; // fallback

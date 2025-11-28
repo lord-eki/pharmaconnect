@@ -11,6 +11,7 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Widgets\AccountWidget;
+use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -18,24 +19,25 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
-class InsurerPanelProvider extends PanelProvider
+class RiderPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
         return $panel
-            ->id('Insurer')
-            ->path('insurer')
+            ->id('rider')
+            ->path('rider')->login()
             ->colors([
-                'primary' => Color::Indigo,
-            ])->login()
-            ->discoverResources(in: app_path('Filament/Insurer/Resources'), for: 'App\Filament\Insurer\Resources')
-            ->discoverPages(in: app_path('Filament/Insurer/Pages'), for: 'App\Filament\Insurer\Pages')
+                'primary' => Color::Amber,
+            ])
+            ->discoverResources(in: app_path('Filament/Rider/Resources'), for: 'App\Filament\Rider\Resources')
+            ->discoverPages(in: app_path('Filament/Rider/Pages'), for: 'App\Filament\Rider\Pages')
             ->pages([
                 Dashboard::class,
             ])
-            ->discoverWidgets(in: app_path('Filament/Insurer/Widgets'), for: 'App\Filament\Insurer\Widgets')
+            ->discoverWidgets(in: app_path('Filament/Rider/Widgets'), for: 'App\Filament\Rider\Widgets')
             ->widgets([
-                // AccountWidget::class,
+                AccountWidget::class,
+                FilamentInfoWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -47,12 +49,11 @@ class InsurerPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
-            ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
-            ->spa()->font('Lato')->databaseNotifications()->sidebarWidth('230px')
-            ->favicon(asset('images/favicon.png'))
-
+            ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')->spa()
+            ->sidebarWidth('17rem')
+            ->font('Lato')->databaseNotifications();
     }
 }
