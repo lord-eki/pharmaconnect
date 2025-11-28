@@ -43,7 +43,7 @@ class InsurerDashboardWidget extends StatsOverviewWidget
                 ->description('Requires review')
                 ->descriptionIcon('heroicon-o-clock')
                 ->color('warning')
-                ->url(route('filament.insurer.resources.claim-verification.index', [
+                ->url(route('filament.Insurer.resources.insurance.claim-verifications.index', [
                     'tableFilters' => ['status' => ['values' => ['submitted', 'under_review']]],
                 ])),
 
@@ -52,19 +52,19 @@ class InsurerDashboardWidget extends StatsOverviewWidget
                 ->descriptionIcon('heroicon-o-currency-dollar')
                 ->color('info')
                 ->chart([7, 4, 8, 12, 15, 10, 9]) // Sample trend
-                ->url(route('filament.insurer.resources.reports.index')),
+                ->url(route('filament.Insurer.resources.insurance.insurer-reports.index')),
 
             Stat::make('This Month Approved', 'KES '.number_format($totalApproved, 2))
                 ->description('Total approved')
                 ->descriptionIcon('heroicon-o-check-circle')
                 ->color('success')
-                ->url(route('filament.insurer.resources.reports.index')),
+                ->url(route('filament.Insurer.resources.insurance.insurer-reports.index')),
 
             Stat::make('Active Orders', $activeOrders)
                 ->description('In transit')
                 ->descriptionIcon('heroicon-o-truck')
                 ->color('primary')
-                ->url(route('filament.insurer.resources.insurer-orders.index', [
+                ->url(route('filament.Insurer.resources.insurance.insurer-orders.index', [
                     'tableFilters' => ['pending_delivery' => true],
                 ])),
 
@@ -77,7 +77,7 @@ class InsurerDashboardWidget extends StatsOverviewWidget
                 ->description('View medicine prices')
                 ->descriptionIcon('heroicon-o-currency-dollar')
                 ->color('info')
-                ->url(route('filament.insurer.resources.price-catalogue.index')),
+                ->url(route('filament.Insurer.resources.insurance.pricing-catalogues.index')),
         ];
     }
 
