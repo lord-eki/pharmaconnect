@@ -112,10 +112,10 @@ class ClaimVerificationsTable
                     ->label('Pending Review'),
             ])
             ->recordActions([
-                ViewAction::make(),
+                // ViewAction::make(),
 
-                EditAction::make()
-                    ->visible(fn ($record) => $record->canBeApproved() || $record->canBeRejected()),
+                // EditAction::make()
+                //     ->visible(fn ($record) => $record->canBeApproved() || $record->canBeRejected()),
 
                 Action::make('approve')
                     ->icon('heroicon-o-check-circle')

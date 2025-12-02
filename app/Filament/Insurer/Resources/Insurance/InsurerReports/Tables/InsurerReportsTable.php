@@ -256,7 +256,10 @@ class InsurerReportsTable
     {
         $insuranceProvider = auth()->user()->insuranceProvider;
 
-        $claims = static::getEloquentQuery()
+        // Build the query directly using the InsuranceClaim model
+        $claims = InsuranceClaim::query()
+            ->where('insurance_provider_id', $insuranceProvider->id ?? 0)
+            ->with(['prescription.orders', 'patient'])
             ->whereMonth('submitted_at', $month)
             ->whereYear('submitted_at', $year)
             ->get();

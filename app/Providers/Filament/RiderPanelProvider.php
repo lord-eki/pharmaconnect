@@ -24,11 +24,11 @@ class RiderPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
-            ->id('rider')
+            ->id('Rider')
             ->path('rider')->login()
             ->colors([
                 'primary' => Color::Amber,
-            ])
+            ])->login()
             ->discoverResources(in: app_path('Filament/Rider/Resources'), for: 'App\Filament\Rider\Resources')
             ->discoverPages(in: app_path('Filament/Rider/Pages'), for: 'App\Filament\Rider\Pages')
             ->pages([
@@ -36,8 +36,7 @@ class RiderPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Rider/Widgets'), for: 'App\Filament\Rider\Widgets')
             ->widgets([
-                AccountWidget::class,
-                FilamentInfoWidget::class,
+                // AccountWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

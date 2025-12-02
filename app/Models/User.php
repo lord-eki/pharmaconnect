@@ -102,6 +102,8 @@ class User extends Authenticatable implements FilamentUser, HasEmailAuthenticati
                 return $this->hasRole('Operation');
             case 'Physician':
                 return $this->hasRole('Physician');
+            case 'Rider':
+                return $this->hasRole('Rider');
             default:
                 return false;
         }

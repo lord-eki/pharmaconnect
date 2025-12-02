@@ -21,7 +21,7 @@ class ClaimsAnalytics extends Page
     protected static string|UnitEnum|null $navigationGroup = 'Reports';
 
 
-    public function getStats(): array
+     public function getStats(): array
     {
         $providerId = auth()->user()->insuranceProvider->id ?? 0;
 
@@ -38,25 +38,34 @@ class ClaimsAnalytics extends Page
         $approvalRate = $totalClaims > 0 ? round(($approvedClaims / $totalClaims) * 100, 1) : 0;
 
         return [
-            Stat::make('Total Claims This Month', $totalClaims)
-                ->description('Submitted claims')
-                ->descriptionIcon('heroicon-o-document-text')
-                ->color('primary'),
-
-            Stat::make('Total Claimed Amount', 'KES ' . number_format($totalClaimed, 2))
-                ->description('This month')
-                ->descriptionIcon('heroicon-o-currency-dollar')
-                ->color('warning'),
-
-            Stat::make('Total Approved Amount', 'KES ' . number_format($totalApproved, 2))
-                ->description('This month')
-                ->descriptionIcon('heroicon-o-check-circle')
-                ->color('success'),
-
-            Stat::make('Approval Rate', $approvalRate . '%')
-                ->description('Claims approved')
-                ->descriptionIcon('heroicon-o-chart-bar')
-                ->color('info'),
+            [
+                'label' => 'Total Claims This Month',
+                'value' => number_format($totalClaims),
+                'description' => 'Submitted claims',
+                'icon' => 'heroicon-o-document-text',
+                'color' => 'info',
+            ],
+            [
+                'label' => 'Total Claimed Amount',
+                'value' => 'KES ' . number_format($totalClaimed, 2),
+                'description' => 'This month',
+                'icon' => 'heroicon-o-currency-dollar',
+                'color' => 'warning',
+            ],
+            [
+                'label' => 'Total Approved Amount',
+                'value' => 'KES ' . number_format($totalApproved, 2),
+                'description' => 'This month',
+                'icon' => 'heroicon-o-check-circle',
+                'color' => 'success',
+            ],
+            [
+                'label' => 'Approval Rate',
+                'value' => $approvalRate . '%',
+                'description' => 'Claims approved',
+                'icon' => 'heroicon-o-chart-bar',
+                'color' => 'primary',
+            ],
         ];
     }
 
@@ -129,14 +138,5 @@ class ClaimsAnalytics extends Page
             ->limit(10)
             ->get()
             ->toArray();
-    }
-
-    public function getAverageClaimAmount(): float
-    {
-        $providerId = auth()->user()->insuranceProvider->id ?? 0;
-
-        return InsuranceClaim::where('insurance_provider_id', $providerId)
-            ->whereMonth('submitted_at', now()->month)
-            ->avg('claimed_amount') ?? 0;
     }
 }

@@ -8,6 +8,7 @@ use App\Models\User;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 
 class CreateRider extends CreateRecord
 {
@@ -16,12 +17,16 @@ class CreateRider extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         return DB::transaction((function () use ($data) {
+
+
             $user = User::create([
                 'name' => $data['first_name'].' '.$data['last_name'],
                 'email' => $data['email'],
                 'phone' => $data['phone'],
                 'password' => Hash::make('pharmaconnect_rider'),
             ]);
+
+          
 
             $user->assignRole('Rider');
 

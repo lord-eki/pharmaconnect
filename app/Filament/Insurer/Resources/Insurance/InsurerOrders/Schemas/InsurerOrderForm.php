@@ -8,6 +8,7 @@ use App\Services\PricingService;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -26,7 +27,7 @@ class InsurerOrderForm
                             
                         Select::make('patient_id')
                             ->label('Patient')
-                            ->relationship('prescription.patient', 'full_name')
+                            ->relationship('prescription.patient', 'last_name')
                             ->searchable()
                             ->preload()
                             ->required()
@@ -165,9 +166,9 @@ class InsurerOrderForm
                     ->columns(3)
                     ->visible(fn ($record) => $record !== null),
 
-                Forms\Components\Section::make('Linked Claim')
+                Section::make('Linked Claim')
                     ->schema([
-                        Forms\Components\Placeholder::make('claim_info')
+                        Placeholder::make('claim_info')
                             ->label('Insurance Claim')
                             ->content(function ($record) {
                                 if (!$record || !$record->prescription->insuranceClaim) {
@@ -186,9 +187,9 @@ class InsurerOrderForm
                     ->visible(fn ($record) => $record !== null)
                     ->collapsed(),
 
-                Forms\Components\Section::make('Notes')
+                Section::make('Notes')
                     ->schema([
-                        Forms\Components\Textarea::make('notes')
+                        Textarea::make('notes')
                             ->rows(3),
                     ])
                     ->collapsed(),

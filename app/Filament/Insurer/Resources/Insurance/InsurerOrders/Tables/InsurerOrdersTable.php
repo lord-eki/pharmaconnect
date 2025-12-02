@@ -95,11 +95,11 @@ class InsurerOrdersTable
                 Action::make('track')
                     ->icon('heroicon-o-map-pin')
                     ->color('info')
-                    ->visible(fn ($record) => in_array($record->status, ['shipped', 'processing']))
-                    ->url(fn ($record) => $record->delivery ? 
-                        route('filament.insurer.resources.deliveries.view', $record->delivery) : 
-                        null
-                    ),
+                    ->visible(fn ($record) => in_array($record->status, ['shipped', 'processing'])),
+                    // ->url(fn ($record) => $record->delivery ? 
+                    //     route('filament.insurer.resources.deliveries.view', $record->delivery) : 
+                    //     null
+                    // ),
             ])
             ->toolbarActions([
               
