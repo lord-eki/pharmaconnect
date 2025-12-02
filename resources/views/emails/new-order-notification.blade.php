@@ -69,7 +69,7 @@
         </table>
 
         <!-- Patient -->
-        <h3 style="font-size:18px; color:#111827; margin-top:30px; font-weight:bold;">
+        {{-- <h3 style="font-size:18px; color:#111827; margin-top:30px; font-weight:bold;">
             Patient Information
         </h3>
 
@@ -91,11 +91,11 @@
             <tr style="background:#f9fafb;">
                 <td style="padding:10px; font-weight:bold; color:#374151;">Allergies</td>
                 <td style="padding:10px; color:#374151;">{{ $patient->allergies ?? 'None' }}</td>
-            </tr>
-        </table>
+            </tr> --}}
+        {{-- </table> --}}
 
         <!-- Physician -->
-        <h3 style="font-size:18px; color:#111827; margin-top:30px; font-weight:bold;">
+        {{-- <h3 style="font-size:18px; color:#111827; margin-top:30px; font-weight:bold;">
             Prescribing Physician
         </h3>
 
@@ -114,7 +114,7 @@
                 <td style="padding:10px; font-weight:bold; color:#374151;">Phone</td>
                 <td style="padding:10px; color:#374151;">{{ $physician->phone }}</td>
             </tr>
-        </table>
+        </table> --}}
 
         <!-- Button -->
         <div style="text-align:center; margin-top:30px;">

@@ -124,13 +124,13 @@ class PaymentService
                 return $existing;
             }
 
-            // Use supplier_total if available, otherwise fall back to total_amount
+            
             $supplierAmount = $order->supplier_total ?? $order->total_amount;
 
             $payable = Payable::create([
                 'reference' => $this->generateReference('PAY'),
                 'order_id' => $order->id,
-                'vendor_id' => $vendorUserId, // Use supplier's user_id, not supplier_id
+                'vendor_id' => $vendorUserId, 
                 'vendor_type' => 'supplier',
                 'amount' => $supplierAmount, 
                 'payment_method' => 'bank_transfer', 

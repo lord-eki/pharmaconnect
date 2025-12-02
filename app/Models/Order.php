@@ -439,7 +439,7 @@ class Order extends Model
         if ($patientPortion > 0) {
             Payment::create([
                 'payment_reference' => Payment::generateReference(),
-                'payer_id' => $patient->physician_id, // Physician handles payment collection
+                'payer_id' => $patient->physician_id, 
                 'order_id' => $this->id,
                 'prescription_id' => $this->prescription_id,
                 'amount' => $patientPortion,
