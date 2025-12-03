@@ -95,9 +95,7 @@ class PayablesTable
             ])
             ->recordActions([
                 ActionGroup::make([
-                    ViewAction::make(),
-                    EditAction::make(),
-                    
+                   
                     Action::make('mark_paid')
                         ->label('Mark as Paid')
                         ->icon('heroicon-o-check-circle')

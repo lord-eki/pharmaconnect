@@ -41,7 +41,7 @@ class ReceivablesTable
                     ->sortable(),
                     // ->url(fn ($record) => $record->prescription_id ? route('filament.admin.resources.prescriptions.view', $record->prescription_id) : null),
 
-                TextColumn::make('patient.name')
+                TextColumn::make('patient.last_name')
                     ->label('Patient')
                     ->searchable()
                     ->sortable(),
@@ -62,8 +62,7 @@ class ReceivablesTable
                     ->label('Insurance')
                     ->searchable()
                     ->sortable()
-                    ->default('N/A')
-                    ->toggleable(),
+                    ->default('N/A'),
 
                 TextColumn::make('amount')
                     ->label('Amount')
@@ -71,23 +70,7 @@ class ReceivablesTable
                     ->sortable()
                     ->weight('bold'),
 
-                BadgeColumn::make('claim_status')
-                    ->label('Status')
-                    ->colors([
-                        'secondary' => 'draft',
-                        'warning' => 'submitted',
-                        'success' => 'approved',
-                        'danger' => 'rejected',
-                        'primary' => 'paid',
-                    ])
-                    ->icons([
-                        'heroicon-o-pencil' => 'draft',
-                        'heroicon-o-paper-airplane' => 'submitted',
-                        'heroicon-o-check-badge' => 'approved',
-                        'heroicon-o-x-circle' => 'rejected',
-                        'heroicon-o-currency-dollar' => 'paid',
-                    ])
-                    ->formatStateUsing(fn (?string $state): string => $state ? ucfirst($state) : 'Pending'),
+        
 
                 IconColumn::make('received_at')
                     ->label('Received')
@@ -99,7 +82,6 @@ class ReceivablesTable
                     ->label('Created')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('payment_source')
@@ -137,8 +119,6 @@ class ReceivablesTable
             ])
             ->recordActions([
                 ActionGroup::make([
-                    ViewAction::make(),
-                    EditAction::make(),
                     
                     Action::make('submit_claim')
                         ->label('Submit to Insurance')
@@ -173,7 +153,7 @@ class ReceivablesTable
                             Notification::make()
                                 ->success()
                                 ->title('Claim Submitted')
-                                ->body("Claim {$data['claim_reference']} submitted to {$record->insuranceCompany->name}")
+                                ->body("Claim {$data['claim_reference']} submitted to {$record->insuranceProvider->company_name}")
                                 ->send();
                         }),
 
@@ -239,7 +219,7 @@ class ReceivablesTable
                             Notification::make()
                                 ->success()
                                 ->title('Payment Recorded')
-                                ->body("KES " . number_format($record->amount, 2) . " received from " . ($record->payment_source === 'insurance' ? $record->insuranceCompany->name : $record->patient->name))
+                                ->body("KES " . number_format($record->amount, 2) . " received from " . ($record->payment_source === 'insurance' ? $record->insuranceProvider->company_name : $record->patient->last_name))
                                 ->send();
                         }),
 
