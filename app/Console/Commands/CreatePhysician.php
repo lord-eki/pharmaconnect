@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Validator;
 
 class CreatePhysician extends Command
 {
-    /**
+     /**
      * The name and signature of the console command.
      *
      * @var string
@@ -28,39 +28,28 @@ class CreatePhysician extends Command
      */
     public function handle()
     {
-        $name = $this->ask('Name');
-        $email = $this->ask('Email');
-        $password = $this->secret('Password');
+        $email = 'phhysician@pharmaconnect.com';
+        $password = 'password';
 
-        $validator = Validator::make([
-            'name' => $name,
-            'email' => $email,
-            'password' => $password,
-        ], [
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email',
-            'password' => 'required|string|min:8',  
-        ]);
-
-        if($validator->fails()) {
-            $this->error('User creation failed');
-            foreach($validator->errors()->all() as $error) {
-                $this->error($error);
-            }
+        // Check if user already exists
+        if (User::where('email', $email)->exists()) {
+            $this->error('Physician user already exists with email: ' . $email);
             return 1;
         }
 
-         $user = User::create([
-            'name' =>$name,
+        $user = User::create([
+            'name' => 'Physician User',
             'email' => $email,
             'password' => Hash::make($password),
-    ]);
+            'email_verified_at' => now(),
+        ]);
 
-    $user->assignRole('Physician');
-    $this->info('Physician user created successfully.');
-    $this->info('Email: ' . $email);
-    $this->info('Password: ' . $password);
+        $user->assignRole('Physician');
+        
+        $this->info('Physician user created successfully!');
+        $this->info('Email: ' . $email);
+        $this->info('Password: ' . $password);
+        
+        return 0;
     }
-
-   
 }

@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
 
 class CreateAdmin extends Command
 {
@@ -28,39 +27,28 @@ class CreateAdmin extends Command
      */
     public function handle()
     {
-        $name = $this->ask('Name');
-        $email = $this->ask('Email');
-        $password = $this->secret('Password');
+        $email = 'admin@pharmaconnect.com';
+        $password = 'password';
 
-        $validator = Validator::make([
-            'name' => $name,
-            'email' => $email,
-            'password' => $password,
-        ], [
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email',
-            'password' => 'required|string|min:8',  
-        ]);
-
-        if($validator->fails()) {
-            $this->error('User creation failed');
-            foreach($validator->errors()->all() as $error) {
-                $this->error($error);
-            }
+        // Check if user already exists
+        if (User::where('email', $email)->exists()) {
+            $this->error('Admin user already exists with email: ' . $email);
             return 1;
         }
 
-         $user = User::create([
-            'name' =>$name,
+        $user = User::create([
+            'name' => 'Admin User',
             'email' => $email,
             'password' => Hash::make($password),
-    ]);
+            'email_verified_at' => now(),
+        ]);
 
-    $user->assignRole('Admin');
-    $this->info('Admin user created successfully.');
-    $this->info('Email: ' . $email);
-    $this->info('Password: ' . $password);
+        $user->assignRole('Admin');
+        
+        $this->info('Admin user created successfully!');
+        $this->info('Email: ' . $email);
+        $this->info('Password: ' . $password);
+        
+        return 0;
     }
-
-   
 }

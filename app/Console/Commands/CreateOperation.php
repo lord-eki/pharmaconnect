@@ -21,46 +21,36 @@ class CreateOperation extends Command
      *
      * @var string
      */
-    protected $description = 'Create a new Internal Operations user';
+    protected $description = 'Create a new Operation user';
 
     /**
      * Execute the console command.
      */
     public function handle()
     {
-        $name = $this->ask('Name');
-        $email = $this->ask('Email');
-        $password = $this->secret('Password');
+        $email = 'operation@pharmaconnect.com';
+        $password = 'password';
 
-        $validator = Validator::make([
-            'name' => $name,
-            'email' => $email,
-            'password' => $password,
-        ], [
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email',
-            'password' => 'required|string|min:8',  
-        ]);
-
-        if($validator->fails()) {
-            $this->error('User creation failed');
-            foreach($validator->errors()->all() as $error) {
-                $this->error($error);
-            }
+        // Check if user already exists
+        if (User::where('email', $email)->exists()) {
+            $this->error('Operation user already exists with email: ' . $email);
             return 1;
         }
 
-         $user = User::create([
-            'name' =>$name,
+        $user = User::create([
+            'name' => 'Operation User',
             'email' => $email,
             'password' => Hash::make($password),
-    ]);
+            'email_verified_at' => now(),
+        ]);
 
-    $user->assignRole('Operation');
-    $this->info('Operation user created successfully.');
-    $this->info('Email: ' . $email);
-    $this->info('Password: ' . $password);
+        $user->assignRole('Operation');
+        
+        $this->info('Operation user created successfully!');
+        $this->info('Email: ' . $email);
+        $this->info('Password: ' . $password);
+        
+        return 0;
     }
-
    
 }
