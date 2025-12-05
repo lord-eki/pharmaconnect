@@ -122,42 +122,6 @@ class OrderResource extends Resource
                             ]),
                     ]),
 
-                Section::make('Customer Information')
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
-                                TextEntry::make('prescription.prescription_number')
-                                    ->label('Prescription Number')
-                                    ->badge()
-                                    ->color('info'),
-
-                                TextEntry::make('prescription.physician.name')
-                                    ->label('Prescribing Physician')
-                                    ->icon('heroicon-o-user'),
-
-                                TextEntry::make('prescription.patient.first_name')
-                                    ->label('Patient')
-                                    ->formatStateUsing(fn ($record) => $record->prescription->patient
-                                            ? "{$record->prescription->patient->first_name} {$record->prescription->patient->last_name}"
-                                            : 'N/A'
-                                    )
-                                    ->icon('heroicon-o-identification'),
-                            ]),
-
-                        Grid::make(2)
-                            ->schema([
-                                TextEntry::make('prescription.patient.phone')
-                                    ->label('Contact Phone')
-                                    ->icon('heroicon-o-phone'),
-
-                                TextEntry::make('prescription.patient.address')
-                                    ->label('Delivery Address')
-                                    ->icon('heroicon-o-map-pin')
-                                    ->columnSpan(1),
-                            ]),
-                    ])
-                    ->collapsible(),
-
                 Section::make('Order Items')
                     ->schema([
                         RepeatableEntry::make('items')
@@ -208,15 +172,7 @@ class OrderResource extends Resource
                             ->contained(false),
                     ]),
 
-                Section::make('Additional Information')
-                    ->schema([
-                        TextEntry::make('notes')
-                            ->label('Order Notes')
-                            ->placeholder('No notes')
-                            ->columnSpanFull(),
-                    ])
-                    ->collapsible()
-                    ->collapsed(),
+             
             ]);
     }
 
