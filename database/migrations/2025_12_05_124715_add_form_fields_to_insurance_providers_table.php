@@ -12,7 +12,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('insurance_providers', function (Blueprint $table) {
-            $table->dropColumn(['form_header', 'form_footer', 'required_fields','logo_path','form_template']);
             $table->json('template')->nullable();
             $table->string('logo')->nullable();
             $table->text('header')->nullable();

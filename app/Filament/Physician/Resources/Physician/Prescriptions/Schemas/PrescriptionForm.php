@@ -197,15 +197,8 @@ class PrescriptionForm
                                             ->prefix('KES')
                                             ->disabled()
                                             ->dehydrated(true),
-
-                                        Textarea::make('dosage_instructions')
-                                            ->required()
-                                            ->placeholder('e.g., Take 1 tablet twice daily after meals')
-                                            ->rows(2)
-                                            ->columnSpanFull(),
-
-                                        TextInput::make('frequency')
-                                            ->placeholder('e.g., Twice daily, Every 8 hours')
+                                        TextInput::make('frequency')->label('Dosage')
+                                            ->placeholder('e.g., 2x2')
                                             ->maxLength(255),
 
                                         TextInput::make('duration_days')
@@ -214,11 +207,12 @@ class PrescriptionForm
                                             ->minValue(1)
                                             ->suffix('days'),
 
-                                        Textarea::make('notes')
-                                            ->label('Medicine Notes')
+                                        Textarea::make('dosage_instructions')
+                                            ->required()
+                                            ->placeholder('e.g., Take 1 tablet twice daily after meals')
                                             ->rows(2)
-                                            ->columnSpanFull()
-                                            ->placeholder('Special instructions for this medicine'),
+                                            ->columnSpanFull(),
+
                                     ])
                                     ->columns(3)
                                     ->defaultItems(1)
