@@ -73,12 +73,11 @@ class DocumentForm
                             ->previewable()
                             ->columnSpanFull()
                             ->afterStateUpdated(function ($state, Set $set) {
-                                if ($state) {
-                                    $file = $state;
-                                    $set('file_name', $file->getClientOriginalName());
-                                    $set('mime_type', $file->getMimeType());
-                                    $set('file_size', $file->getSize());
-                                    $set('file_hash', hash_file('sha256', $file->getRealPath()));
+                                if ($state && is_object($state) && method_exists($state, 'getClientOriginalName')) {
+                                    $set('file_name', $state->getClientOriginalName());
+                                    $set('mime_type', $state->getMimeType());
+                                    $set('file_size', $state->getSize());
+                                    $set('file_hash', hash_file('sha256', $state->getRealPath()));
                                 }
                             }),
 
@@ -178,7 +177,7 @@ class DocumentForm
                             ->columnSpanFull(),
                     ])
                     ->visibleOn('edit'),
-            
+
             ]);
     }
 }

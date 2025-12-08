@@ -10,7 +10,7 @@ class CreateInventory extends CreateRecord
 {
     protected static string $resource = InventoryResource::class;
 
-    protected static bool $canCreateAnother = false;
+    protected static bool $canCreateAnother = true;
 
      protected function mutateFormDataBeforeCreate(array $data): array
     {

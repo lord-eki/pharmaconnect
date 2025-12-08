@@ -64,7 +64,7 @@ class ViewClaimForm extends ViewRecord
                 })
                 ->visible(fn () => 
                     $this->record->status === 'submitted' && 
-                    in_array(auth()->user()->role->name, ['admin', 'operations', 'insurer'])
+                    auth()->user()->hasAnyRole( ['admin', 'operations', 'insurer'])
                 ),
 
             Action::make('reject')
@@ -82,7 +82,7 @@ class ViewClaimForm extends ViewRecord
                 })
                 ->visible(fn () => 
                     $this->record->status === 'submitted' && 
-                    in_array(auth()->user()->role->name, ['admin', 'operations', 'insurer'])
+                auth()->user()->hasAnyRole( ['admin', 'operations', 'insurer'])
                 ),
         ];
     }

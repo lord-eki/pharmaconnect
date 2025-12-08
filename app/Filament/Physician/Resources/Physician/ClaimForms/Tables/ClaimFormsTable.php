@@ -156,7 +156,7 @@ class ClaimFormsTable
                     })
                     ->visible(fn (ClaimForm $record) => 
                         $record->status === 'submitted' && 
-                        in_array(auth()->user()->role->name, ['Admin', 'Operation', 'Insurer'])
+                        auth()->user()->hasAnyRole(['Admin', 'Operation', 'Insurer'])
                     ),
 
                 Action::make('reject')
@@ -174,7 +174,7 @@ class ClaimFormsTable
                     })
                     ->visible(fn (ClaimForm $record) => 
                         $record->status === 'submitted' && 
-                        in_array(auth()->user()->role->name, ['Admin', 'Operation', 'Insurer'])
+                        auth()->user()->hasAnyRole( ['Admin', 'Operation', 'Insurer'])
                     ),
 
                 Action::make('viewDocument')

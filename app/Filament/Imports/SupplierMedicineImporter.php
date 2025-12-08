@@ -18,12 +18,12 @@ class SupplierMedicineImporter extends Importer
             ImportColumn::make('medicine')
                 ->label('Medicine (Generic Name)')
                 ->requiredMapping()
-                ->relationship(resolveUsing: function (string $state): ?int {
+                ->relationship(resolveUsing: function (string $state): ?Medicine {
                     $medicine = Medicine::where('generic_name', 'LIKE', "%{$state}%")
                         ->orWhere('brand_name', 'LIKE', "%{$state}%")
                         ->first();
 
-                    return $medicine?->id;
+                    return $medicine;
                 })
                 ->rules(['required']),
 
@@ -46,7 +46,7 @@ class SupplierMedicineImporter extends Importer
 
             ImportColumn::make('expiry_date')
                 ->label('Expiry Date')
-                ->rules(['date', 'after:today']),
+                ->rules(['date', 'after:today', 'nullable']),
 
             ImportColumn::make('batch_number')
                 ->label('Batch Number')
@@ -93,15 +93,15 @@ class SupplierMedicineImporter extends Importer
         $this->record->supplier_id = auth()->user()->supplier->id ?? null;
         $this->record->last_updated = now();
 
-        if (!isset($this->data['stock_quantity']) || $this->data['stock_quantity'] === null) {
+        if (! isset($this->data['stock_quantity']) || $this->data['stock_quantity'] === null) {
             $this->record->stock_quantity = 0;
         }
 
-        if(!isset($this->data['is_available']) || $this->data['is_available'] === null) {
+        if (! isset($this->data['is_available']) || $this->data['is_available'] === null) {
             $this->record->is_available = true;
         }
 
-        if(!isset($this->data['minimum_order_quantity']) || $this->data['minimum_order_quantity'] === null) {
+        if (! isset($this->data['minimum_order_quantity']) || $this->data['minimum_order_quantity'] === null) {
             $this->record->minimum_order_quantity = 1;
         }
     }
