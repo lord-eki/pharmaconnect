@@ -175,8 +175,7 @@ class ViewDelivery extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            // EditAction::make()
-            //     ->visible(fn ($record) => !in_array($record->status, ['delivered', 'cancelled'])),
+
 
             Action::make('assign_rider')
                 ->label('Assign Rider')

@@ -3,16 +3,16 @@
 namespace App\Filament\Rider\Resources\Deliveries\Tables;
 
 use App\Models\Delivery;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\DateTimePicker;
-use Filament\Notifications\Notification;
+use App\Notifications\DeliveryAssignedNotification;
+use App\Notifications\DeliveryStatusUpdatedNotification;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
-use Filament\Tables\Actions\BulkActionGroup;
-use Filament\Tables\Actions\DeleteBulkAction;
-use Filament\Tables\Columns\TextColumn;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\BadgeColumn;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Log;
@@ -28,13 +28,13 @@ class DeliveriesTable
                     ->sortable()
                     ->copyable()
                     ->label('Delivery #'),
-                    
+
                 TextColumn::make('order.order_number')
                     ->searchable()
                     ->sortable()
                     ->label('Order #'),
-                    // ->url(fn ($record) => route('filament.rider.resources.orders.view', $record->order_id)),
-                    
+                // ->url(fn ($record) => route('filament.rider.resources.orders.view', $record->order_id)),
+
                 BadgeColumn::make('status')
                     ->colors([
                         'warning' => 'pending',
@@ -50,42 +50,42 @@ class DeliveriesTable
                         'heroicon-o-check-circle' => 'delivered',
                         'heroicon-o-x-circle' => 'cancelled',
                     ]),
-                    
+
                 TextColumn::make('recipient_name')
                     ->searchable()
                     ->label('Recipient'),
-                    
+
                 TextColumn::make('recipient_phone')
                     ->searchable()
                     ->copyable()
                     ->label('Phone'),
-                    
+
                 TextColumn::make('delivery_address')
                     ->searchable()
                     ->limit(40)
                     ->tooltip(fn ($record) => $record->delivery_address)
                     ->label('Delivery Address'),
-                    
+
                 TextColumn::make('delivery_fee')
                     ->money('KES')
                     ->sortable()
                     ->label('Fee'),
-                    
+
                 TextColumn::make('estimated_distance_km')
                     ->numeric(2)
                     ->suffix(' km')
                     ->sortable()
                     ->label('Distance'),
-                    
+
                 TextColumn::make('actual_delivery')
                     ->dateTime('M j, Y g:i A')
                     ->sortable()
                     ->label('Delivered At')
                     ->placeholder('Not yet delivered'),
-                    
+
                 TextColumn::make('created_at')
                     ->dateTime('M j, Y g:i A')
-                    ->sortable()
+                    ->sortable(),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -122,6 +122,8 @@ class DeliveriesTable
                                     ->body('You have successfully accepted this delivery.')
                                     ->send();
 
+                                auth()->user()->notify(new DeliveryAssignedNotification($record));
+
                                 Log::info('Delivery accepted by rider', [
                                     'delivery_id' => $record->id,
                                     'rider_id' => auth()->id(),
@@ -130,7 +132,7 @@ class DeliveriesTable
                                 Notification::make()
                                     ->danger()
                                     ->title('Error')
-                                    ->body('Failed to accept delivery: ' . $e->getMessage())
+                                    ->body('Failed to accept delivery: '.$e->getMessage())
                                     ->send();
 
                                 Log::error('Failed to accept delivery', [
@@ -162,13 +164,15 @@ class DeliveriesTable
                                 $record->update([
                                     'status' => 'picked_up',
                                     'actual_pickup' => $data['actual_pickup'],
-                                    'delivery_notes' => $record->delivery_notes 
-                                        ? $record->delivery_notes . "\n\nPickup: " . ($data['pickup_notes'] ?? 'Picked up successfully')
-                                        : "Pickup: " . ($data['pickup_notes'] ?? 'Picked up successfully'),
+                                    'delivery_notes' => $record->delivery_notes
+                                        ? $record->delivery_notes."\n\nPickup: ".($data['pickup_notes'] ?? 'Picked up successfully')
+                                        : 'Pickup: '.($data['pickup_notes'] ?? 'Picked up successfully'),
                                 ]);
 
                                 // Update order status
                                 $record->order->update(['status' => 'shipped']);
+
+                                auth()->user()->notify(new DeliveryStatusUpdatedNotification($record, 'assigned', 'picked_up'));
 
                                 Notification::make()
                                     ->success()
@@ -184,7 +188,7 @@ class DeliveriesTable
                                 Notification::make()
                                     ->danger()
                                     ->title('Error')
-                                    ->body('Failed to update delivery: ' . $e->getMessage())
+                                    ->body('Failed to update delivery: '.$e->getMessage())
                                     ->send();
                             }
                         }),
@@ -236,6 +240,9 @@ class DeliveriesTable
                                     ->body('The delivery has been marked as delivered successfully.')
                                     ->send();
 
+                                auth()->user()->notify(new DeliveryStatusUpdatedNotification($record, $record->getOriginal('status'),
+                                    'delivered'));
+
                                 Log::info('Delivery completed by rider', [
                                     'delivery_id' => $record->id,
                                     'order_id' => $record->order_id,
@@ -245,7 +252,7 @@ class DeliveriesTable
                                 Notification::make()
                                     ->danger()
                                     ->title('Error')
-                                    ->body('Failed to complete delivery: ' . $e->getMessage())
+                                    ->body('Failed to complete delivery: '.$e->getMessage())
                                     ->send();
 
                                 Log::error('Failed to complete delivery', [
@@ -275,11 +282,11 @@ class DeliveriesTable
                         ->action(function (Delivery $record, array $data) {
                             try {
                                 $record->update([
-                                    'status' => 'pending', 
+                                    'status' => 'pending',
                                     'rider_id' => null,
-                                    'delivery_notes' => $record->delivery_notes 
-                                        ? $record->delivery_notes . "\n\nDeclined by Rider: " . $data['cancellation_reason']
-                                        : "Declined by Rider: " . $data['cancellation_reason'],
+                                    'delivery_notes' => $record->delivery_notes
+                                        ? $record->delivery_notes."\n\nDeclined by Rider: ".$data['cancellation_reason']
+                                        : 'Declined by Rider: '.$data['cancellation_reason'],
                                 ]);
 
                                 Notification::make()
@@ -287,6 +294,12 @@ class DeliveriesTable
                                     ->title('Delivery Declined')
                                     ->body('The delivery has been declined and will be reassigned.')
                                     ->send();
+
+                                auth()->user()->notify(new DeliveryStatusUpdatedNotification(
+                                    $record,
+                                    'assigned',
+                                    'pending'
+                                ));
 
                                 Log::info('Delivery declined by rider', [
                                     'delivery_id' => $record->id,
@@ -297,7 +310,7 @@ class DeliveriesTable
                                 Notification::make()
                                     ->danger()
                                     ->title('Error')
-                                    ->body('Failed to decline delivery: ' . $e->getMessage())
+                                    ->body('Failed to decline delivery: '.$e->getMessage())
                                     ->send();
                             }
                         }),
@@ -323,13 +336,13 @@ class DeliveriesTable
                         ])
                         ->action(function (Delivery $record, array $data) {
                             try {
-                                $issueNote = "\n\n[ISSUE REPORTED] " . now()->format('Y-m-d H:i:s') . "\n" . $data['issue_description'];
+                                $issueNote = "\n\n[ISSUE REPORTED] ".now()->format('Y-m-d H:i:s')."\n".$data['issue_description'];
                                 if (isset($data['issue_photo'])) {
-                                    $issueNote .= "\nPhoto: " . $data['issue_photo'];
+                                    $issueNote .= "\nPhoto: ".$data['issue_photo'];
                                 }
 
                                 $record->update([
-                                    'delivery_notes' => $record->delivery_notes . $issueNote,
+                                    'delivery_notes' => $record->delivery_notes.$issueNote,
                                 ]);
 
                                 // TODO::Notify operations team
@@ -349,7 +362,7 @@ class DeliveriesTable
                                 Notification::make()
                                     ->danger()
                                     ->title('Error')
-                                    ->body('Failed to report issue: ' . $e->getMessage())
+                                    ->body('Failed to report issue: '.$e->getMessage())
                                     ->send();
                             }
                         }),
@@ -365,13 +378,13 @@ class DeliveriesTable
                         ]))
                         ->modalFooterActions([]),
                 ])
-                ->label('Actions')
-                ->icon('heroicon-o-ellipsis-vertical')
-                ->size('sm')
-                ->button(),
+                    ->label('Actions')
+                    ->icon('heroicon-o-ellipsis-vertical')
+                    ->size('sm')
+                    ->button(),
             ])
             ->bulkActions([
-             
+
             ])
             ->emptyStateHeading('No Deliveries Assigned')
             ->emptyStateDescription('You don\'t have any deliveries assigned yet.')
