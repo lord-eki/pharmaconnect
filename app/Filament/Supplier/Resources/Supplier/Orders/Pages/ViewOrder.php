@@ -26,7 +26,7 @@ class ViewOrder extends ViewRecord
                 ->visible(fn ($record) => $record->status === 'pending')
                 ->requiresConfirmation()
                 ->modalHeading('Confirm Order')
-                ->modalDescription('Confirm that you can fulfill this order. A delivery will be created.')
+                ->modalDescription('Confirm that you can fulfill this order. Operations will then process and assign a rider.')
                 ->form([
                     DateTimePicker::make('expected_delivery')
                         ->label('Expected Delivery Date')
@@ -38,22 +38,30 @@ class ViewOrder extends ViewRecord
                     try {
                         $fulfillmentService = app(OrderFulfillmentService::class);
 
-                        $results = $fulfillmentService->handleOrderConfirmation($record, $data);
+                        // Only confirm the order, don't assign rider yet
+                        $record->update([
+                            'status' => 'confirmed',
+                            'expected_delivery' => $data['expected_delivery'],
+                        ]);
 
-                        $message = 'Order confirmed successfully!';
+                        // Update stock quantities
+                        foreach ($record->items as $item) {
+                            $supplierMedicine = $item->medicine->supplierMedicines()
+                                ->where('supplier_id', $record->supplier_id)
+                                ->first();
 
-                        if ($results['rider_assigned']) {
-                            $rider = $results['rider'];
-                            $message .= " Rider {$rider['name']} ({$rider['vehicle']}) has been assigned.";
-                        } else {
-                            $message .= '';
+                            if ($supplierMedicine) {
+                                $supplierMedicine->decrement('stock_quantity', $item->quantity);
+                            }
                         }
 
                         Notification::make()
                             ->success()
                             ->title('Order Confirmed')
-                            ->body($message)
+                            ->body('Order confirmed successfully. Operations team will process the delivery.')
                             ->send();
+
+                        // TODO: Notify operations team about confirmed order
 
                     } catch (\Exception $e) {
                         Notification::make()
@@ -64,48 +72,22 @@ class ViewOrder extends ViewRecord
                     }
                 }),
 
-            Action::make('mark_processing')
-                ->label('Start Processing')
-                ->icon('heroicon-o-arrow-path')
-                ->color('info')
-                ->visible(fn ($record) => $record->status === 'confirmed')
-                ->requiresConfirmation()
-                ->modalHeading('Start Processing Order')
-                ->modalDescription('Mark this order as being processed. If not already done, a delivery will be created.')
-                ->action(function ($record) {
-                    try {
-                        $fulfillmentService = app(OrderFulfillmentService::class);
-                        $fulfillmentService->handleOrderProcessing($record);
-
-                        Notification::make()
-                            ->success()
-                            ->title('Order Processing')
-                            ->body('Order marked as processing.')
-                            ->send();
-
-                    } catch (\Exception $e) {
-                        Notification::make()
-                            ->danger()
-                            ->title('Error')
-                            ->body('Failed to process order: '.$e->getMessage())
-                            ->send();
-                    }
-                }),
-
-            Action::make('mark_shipped')
-                ->label('Mark as Shipped/Ready for Pickup')
-                ->icon('heroicon-o-truck')
+            Action::make('mark_ready')
+                ->label('Mark Ready for Pickup')
+                ->icon('heroicon-o-check-badge')
                 ->color('primary')
-                ->visible(fn ($record) => $record->delivery && in_array($record->delivery->status, ['assigned']))->requiresConfirmation()
+                ->visible(fn ($record) => $record->status === 'processing' && $record->delivery)
+                ->requiresConfirmation()
                 ->modalHeading('Mark Order as Ready for Pickup')
-                ->modalDescription('The order is ready for the rider to pick up.')
+                ->modalDescription('The order is packed and ready for the rider to pick up.')
                 ->form([
                     TextInput::make('tracking_number')
                         ->label('Tracking Number (Optional)')
                         ->maxLength(255),
                     Textarea::make('shipping_notes')
                         ->label('Notes for Rider')
-                        ->maxLength(500),
+                        ->maxLength(500)
+                        ->placeholder('Any special handling instructions...'),
                 ])
                 ->action(function ($record, array $data) {
                     $notes = $record->notes ?? '';
@@ -120,13 +102,26 @@ class ViewOrder extends ViewRecord
                     }
 
                     $record->update([
-                        'status' => 'shipped',
                         'notes' => $notes,
                     ]);
 
-                    // Update delivery status if exists
+                    // Update delivery status
                     if ($record->delivery) {
-                        $record->delivery->update(['status' => 'picked_up']);
+                        $record->delivery->update([
+                            'status' => 'ready_for_pickup',
+                            'delivery_notes' => $data['shipping_notes'] ?? null,
+                        ]);
+
+                        // Notify rider
+                        if ($record->delivery->rider) {
+                            $record->delivery->rider->user->notify(
+                                new \App\Notifications\DeliveryStatusUpdatedNotification(
+                                    $record->delivery,
+                                    'assigned',
+                                    'ready_for_pickup'
+                                )
+                            );
+                        }
                     }
 
                     Notification::make()
