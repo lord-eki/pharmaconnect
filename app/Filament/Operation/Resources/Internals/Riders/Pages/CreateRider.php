@@ -23,7 +23,7 @@ class CreateRider extends CreateRecord
                 'name' => $data['first_name'].' '.$data['last_name'],
                 'email' => $data['email'],
                 'phone' => $data['phone'],
-                'password' => Hash::make('pharmaconnect_rider'),
+                'password' => Hash::make($data['password']),
             ]);
 
           

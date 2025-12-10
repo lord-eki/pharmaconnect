@@ -34,7 +34,7 @@ class RiderForm
                                             ->visible(fn ($context) => $context === 'edit')
                                             ->columnSpan(2),
 
-                                        Grid::make(2)
+                                        Grid::make(3)
                                             ->schema([
                                                 TextInput::make('first_name')
                                                     ->required()
@@ -45,6 +45,7 @@ class RiderForm
                                                     ->required()
                                                     ->maxLength(255)
                                                     ->prefixIcon('heroicon-o-user'),
+                                                TextInput::make('password')->required()->prefixIcon('heroicon-o-lock-closed')->password()->minLength(8)->maxLength(255)->dehydrated(fn ($context) => $context === 'create')->visible(fn ($context) => $context === 'create'),
                                             ]),
 
                                         Grid::make(2)
