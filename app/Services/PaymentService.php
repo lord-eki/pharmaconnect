@@ -68,7 +68,6 @@ class PaymentService
     protected function createPayableToSupplier(Order $order): ?Payable
     {
         try {
-            // Create payable record FIRST
             $payable = Payable::create([
                 'reference' => $this->generatePayableReference(),
                 'order_id' => $order->id,
@@ -79,7 +78,7 @@ class PaymentService
             ]);
 
             // Then create transaction with the payable ID
-            $this->createTransaction($payable, 'payable', $order->supplier_total);
+            $this->createTransaction($payable, 'payable', $order->status);
 
             Log::info('Payable created successfully', [
                 'payable_id' => $payable->id,
@@ -117,7 +116,7 @@ class PaymentService
             ]);
 
             // Then create transaction with the receivable ID
-            $this->createTransaction($receivable, 'receivable', $order->total_amount);
+            $this->createTransaction($receivable, 'receivable', $order->status);
 
             Log::info('Receivable created successfully', [
                 'receivable_id' => $receivable->id,

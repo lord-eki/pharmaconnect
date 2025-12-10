@@ -19,9 +19,6 @@ class ViewOrder extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make()
-                ->visible(fn ($record) => ! in_array($record->status, ['delivered', 'cancelled'])),
-
             Action::make('confirm')
                 ->label('Confirm Order')
                 ->icon('heroicon-o-check-circle')
@@ -29,7 +26,7 @@ class ViewOrder extends ViewRecord
                 ->visible(fn ($record) => $record->status === 'pending')
                 ->requiresConfirmation()
                 ->modalHeading('Confirm Order')
-                ->modalDescription('Confirm that you can fulfill this order. A delivery will be created and rider assigned automatically.')
+                ->modalDescription('Confirm that you can fulfill this order. A delivery will be created.')
                 ->form([
                     DateTimePicker::make('expected_delivery')
                         ->label('Expected Delivery Date')
@@ -49,7 +46,7 @@ class ViewOrder extends ViewRecord
                             $rider = $results['rider'];
                             $message .= " Rider {$rider['name']} ({$rider['vehicle']}) has been assigned.";
                         } else {
-                            $message .= ' However, no rider was automatically assigned. Please assign one manually in the Operations panel.';
+                            $message .= '';
                         }
 
                         Notification::make()
@@ -189,14 +186,6 @@ class ViewOrder extends ViewRecord
                         ->body('Order cancelled and stock restored.')
                         ->send();
                 }),
-
-            Action::make('view_delivery')
-                ->label('View Delivery')
-                ->icon('heroicon-o-map-pin')
-                ->color('info')
-                ->visible(fn ($record) => $record->delivery !== null),
-            // ->url(fn ($record) => route('filament.operations.resources.deliveries.view', ['record' => $record->delivery]))
-            // ->openUrlInNewTab(),
 
             Action::make('print')
                 ->label('Print Order')

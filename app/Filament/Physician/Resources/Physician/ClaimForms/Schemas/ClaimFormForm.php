@@ -111,7 +111,7 @@ class ClaimFormForm
                             ->required()
                             ->rows(3)
                             ->maxLength(1000)
-                            ->helperText('Primary diagnosis and ICD-10 code if applicable'),
+                            ->helperText('Primary diagnosis'),
 
                         Textarea::make('treatment_notes')
                             ->label('Treatment Notes')
