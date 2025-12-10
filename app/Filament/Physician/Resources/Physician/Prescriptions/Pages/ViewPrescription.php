@@ -31,7 +31,7 @@ class ViewPrescription extends ViewRecord
                 ->color('success')
                 ->requiresConfirmation()
                 ->modalHeading('Submit Prescription')
-                ->modalDescription('Are you sure you want to submit this prescription? Once submitted, it will be processed for quotations.')
+                ->modalDescription('Are you sure you want to submit this prescription? Once submitted, it will be processed for order.')
                 ->visible(fn () => $this->record->status === 'draft')
                 ->action(function () {
                     try {

@@ -348,7 +348,6 @@ class Prescription extends Model
     /**
      * Create order for supplier with bulk insert
      */
-   
     protected function createOrderForSupplier(Quotation $quotation, int $supplierId, array $groupData): void
     {
         $pricingService = app(PricingService::class);
@@ -439,97 +438,98 @@ class Prescription extends Model
     /**
      * Create insurance claim for this prescription
      */
-  public function createInsuranceClaim()
-{
-    // Verify insurance coverage is enabled
-    if (!$this->insurance_covered) {
-        Log::warning('Attempted to create insurance claim for non-insured prescription', [
-            'prescription_id' => $this->id,
-        ]);
-        throw new \Exception('Prescription is not marked for insurance coverage');
-    }
+    public function createInsuranceClaim()
+    {
+        // Verify insurance coverage is enabled
+        if (! $this->insurance_covered) {
+            Log::warning('Attempted to create insurance claim for non-insured prescription', [
+                'prescription_id' => $this->id,
+            ]);
+            throw new \Exception('Prescription is not marked for insurance coverage');
+        }
 
-    if (!$this->relationLoaded('patient')) {
-        $this->load('patient');
-    }
+        if (! $this->relationLoaded('patient')) {
+            $this->load('patient');
+        }
 
-    if (!$this->patient->insurance_provider_id || !$this->patient->insurance_number) {
-        Log::error('Patient missing insurance information', [
+        if (! $this->patient->insurance_provider_id || ! $this->patient->insurance_number) {
+            Log::error('Patient missing insurance information', [
+                'prescription_id' => $this->id,
+                'patient_id' => $this->patient_id,
+                'has_provider' => ! empty($this->patient->insurance_provider_id),
+                'has_number' => ! empty($this->patient->insurance_number),
+            ]);
+            throw new \Exception('Patient does not have complete insurance information');
+        }
+
+        // Check if claim already exists
+        if ($this->insuranceClaim) {
+            Log::warning('Attempted to create duplicate insurance claim', [
+                'prescription_id' => $this->id,
+                'existing_claim_id' => $this->insuranceClaim->id,
+                'existing_claim_number' => $this->insuranceClaim->claim_number,
+            ]);
+
+            return $this->insuranceClaim;
+        }
+
+        $existingClaim = InsuranceClaim::where('prescription_id', $this->id)->first();
+        if ($existingClaim) {
+            Log::warning('Insurance claim exists but relationship not loaded', [
+                'prescription_id' => $this->id,
+                'claim_id' => $existingClaim->id,
+            ]);
+
+            return $existingClaim;
+        }
+
+        $ordersTotal = $this->orders()
+            ->whereIn('status', ['confirmed', 'delivered'])
+            ->sum('total_amount');
+
+        if ($ordersTotal <= 0) {
+            Log::warning('No confirmed orders found for insurance claim', [
+                'prescription_id' => $this->id,
+                'total_orders' => $this->orders()->count(),
+            ]);
+            $ordersTotal = $this->total_amount;
+        }
+
+        // Create the claim
+        $claim = InsuranceClaim::create([
             'prescription_id' => $this->id,
+            'insurance_provider_id' => $this->patient->insurance_provider_id,
             'patient_id' => $this->patient_id,
-            'has_provider' => !empty($this->patient->insurance_provider_id),
-            'has_number' => !empty($this->patient->insurance_number),
+            'policy_number' => $this->patient->insurance_number,
+            'claimed_amount' => $ordersTotal,
+            'status' => 'submitted',
+            'submitted_at' => now(),
+            'notes' => 'Auto-generated claim for prescription '.$this->prescription_number.' after order confirmation',
         ]);
-        throw new \Exception('Patient does not have complete insurance information');
-    }
 
-    // Check if claim already exists
-    if ($this->insuranceClaim) {
-        Log::warning('Attempted to create duplicate insurance claim', [
+        $this->update(['insurance_claim_id' => $claim->id]);
+
+        Log::info('Insurance claim created successfully', [
+            'claim_id' => $claim->id,
+            'claim_number' => $claim->claim_number,
             'prescription_id' => $this->id,
-            'existing_claim_id' => $this->insuranceClaim->id,
-            'existing_claim_number' => $this->insuranceClaim->claim_number,
+            'prescription_number' => $this->prescription_number,
+            'claimed_amount' => $ordersTotal,
+            'insurance_provider_id' => $this->patient->insurance_provider_id,
+            'patient_id' => $this->patient_id,
         ]);
-        return $this->insuranceClaim;
+
+        // Notify insurance provider asynchronously
+        dispatch(function () use ($claim) {
+            $this->notifyInsuranceProvider($claim);
+        })->afterResponse();
+
+        return $claim;
     }
-
-    $existingClaim = InsuranceClaim::where('prescription_id', $this->id)->first();
-    if ($existingClaim) {
-        Log::warning('Insurance claim exists but relationship not loaded', [
-            'prescription_id' => $this->id,
-            'claim_id' => $existingClaim->id,
-        ]);
-        return $existingClaim;
-    }
-
-    $ordersTotal = $this->orders()
-        ->whereIn('status', ['confirmed', 'delivered'])
-        ->sum('total_amount'); 
-
-    if ($ordersTotal <= 0) {
-        Log::warning('No confirmed orders found for insurance claim', [
-            'prescription_id' => $this->id,
-            'total_orders' => $this->orders()->count(),
-        ]);
-        $ordersTotal = $this->total_amount;
-    }
-
-    // Create the claim
-    $claim = InsuranceClaim::create([
-        'prescription_id' => $this->id,
-        'insurance_provider_id' => $this->patient->insurance_provider_id,
-        'patient_id' => $this->patient_id,
-        'policy_number' => $this->patient->insurance_number,
-        'claimed_amount' => $ordersTotal, 
-        'status' => 'submitted',
-        'submitted_at' => now(),
-        'notes' => 'Auto-generated claim for prescription ' . $this->prescription_number . ' after order confirmation',
-    ]);
-
-    $this->update(['insurance_claim_id' => $claim->id]);
-
-    Log::info('Insurance claim created successfully', [
-        'claim_id' => $claim->id,
-        'claim_number' => $claim->claim_number,
-        'prescription_id' => $this->id,
-        'prescription_number' => $this->prescription_number,
-        'claimed_amount' => $ordersTotal,
-        'insurance_provider_id' => $this->patient->insurance_provider_id,
-        'patient_id' => $this->patient_id,
-    ]);
-
-    // Notify insurance provider asynchronously
-    dispatch(function () use ($claim) {
-        $this->notifyInsuranceProvider($claim);
-    })->afterResponse();
-
-    return $claim;
-}
 
     protected function notifyInsuranceProvider(?InsuranceClaim $claim = null): void
     {
         try {
-            // If claim not passed, try to load it
             if (! $claim) {
                 $claim = $this->insuranceClaim;
             }
@@ -561,7 +561,6 @@ class Prescription extends Model
                 return;
             }
 
-            // Check if mail class exists
             if (! class_exists(InsuranceClaimFormMail::class)) {
                 Log::error('InsuranceClaimFormMail class not found', [
                     'claim_id' => $claim->id,
@@ -570,11 +569,12 @@ class Prescription extends Model
                 return;
             }
 
-            Mail::to($provider->email)->send(
+            // Queue email instead of sending immediately
+            Mail::to($provider->email)->queue(
                 new InsuranceClaimFormMail($claim)
             );
 
-            Log::info('Insurance provider notified', [
+            Log::info('Insurance provider email queued', [
                 'claim_id' => $claim->id,
                 'provider_id' => $provider->id,
                 'email' => $provider->email,
@@ -601,8 +601,7 @@ class Prescription extends Model
                 return;
             }
 
-            // Check if mail class exists
-            if (! class_exists(\App\Mail\NewOrderNotification::class)) {
+            if (! class_exists(NewOrderNotification::class)) {
                 Log::error('NewOrderNotification mail class not found', [
                     'order_id' => $order->id,
                 ]);
@@ -610,20 +609,19 @@ class Prescription extends Model
                 return;
             }
 
-            // Send email if available
-            if ($supplier->user->email) {
+            if ($supplier->user && $supplier->user->email) {
                 try {
-                    Mail::to($supplier->email)->send(
+                    Mail::to($supplier->user->email)->queue(
                         new NewOrderNotification($order)
                     );
 
-                    Log::info('Supplier notified via email', [
+                    Log::info('Supplier email queued', [
                         'order_id' => $order->id,
                         'supplier_id' => $supplier->id,
-                        'email' => $supplier->email,
+                        'email' => $supplier->user->email,
                     ]);
                 } catch (\Exception $e) {
-                    Log::error('Failed to send email to supplier', [
+                    Log::error('Failed to queue email to supplier', [
                         'order_id' => $order->id,
                         'supplier_id' => $supplier->id,
                         'error' => $e->getMessage(),

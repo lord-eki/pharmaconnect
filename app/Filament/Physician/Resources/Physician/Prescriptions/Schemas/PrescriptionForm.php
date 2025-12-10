@@ -90,15 +90,22 @@ class PrescriptionForm
                                             ]),
                                     ])
                                     ->live(onBlur: true)
-                                    ->afterStateUpdated(function ($state) {
-
+                                    ->afterStateUpdated(function ($state, Set $set) {
                                         $patient = Cache::remember(
                                             "patient_info_{$state}",
                                             3600,
-                                            fn () => Patient::select('id', 'allergies', 'medical_conditions')
+                                            fn () => Patient::select('id', 'allergies', 'medical_conditions', 'insurance_provider_id', 'insurance_number')
                                                 ->find($state)
                                         );
 
+                                        if ($patient) {
+                                            $hasInsurance = ! empty($patient->insurance_number) && ! empty($patient->insurance_provider_id);
+                                            $set('patient_has_insurance', $hasInsurance);
+
+                                            if ($hasInsurance) {
+                                                $set('insurance_covered', true);
+                                            }
+                                        }
                                     }),
 
                             ]),
@@ -116,11 +123,11 @@ class PrescriptionForm
                                     ->rows(2)
                                     ->columnSpanFull()
                                     ->placeholder('Additional notes or instructions'),
-
                                 Toggle::make('insurance_covered')
                                     ->label('Insurance Coverage')
                                     ->helperText('Does this prescription have insurance coverage?')
-                                    ->default(false),
+                                    ->default(false)
+                                    ->visible(fn (Get $get) => $get('patient_has_insurance') === true),
                             ]),
 
                         Tabs\Tab::make('Medicines')
@@ -144,7 +151,6 @@ class PrescriptionForm
                                                 $quantity = $get('quantity') ?: 1;
                                                 $priceData = self::getMedicinePricing($state, $quantity);
 
-                                                // Store supplier price (hidden) and marked-up price (displayed)
                                                 $set('supplier_price', $priceData['supplier_price']);
                                                 $set('unit_price', $priceData['unit_price']); // This is marked-up
                                                 $set('total_price', $priceData['unit_price'] * $quantity);
