@@ -54,24 +54,8 @@ class Order extends Model
             }
         });
 
-        // Add created event to automatically create delivery
-        static::created(function ($order) {
-            // Create delivery record immediately when order is created
-            try {
-                $order->createDelivery();
-                
-                Log::info('Order created with delivery', [
-                    'order_id' => $order->id,
-                    'order_number' => $order->order_number,
-                    'delivery_created' => $order->delivery ? true : false,
-                ]);
-            } catch (\Exception $e) {
-                Log::error('Failed to create delivery for order', [
-                    'order_id' => $order->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        });
+        // REMOVED: Automatic delivery creation on order creation
+        // Delivery will only be created when order is confirmed
 
         static::saved(function ($order) {
             if ($order->status === 'delivered' && $order->prescription) {
@@ -87,11 +71,12 @@ class Order extends Model
                         // Check if all prescription orders are confirmed and create insurance claim
                         static::handlePrescriptionOrdersConfirmed($order);
                         
-                        // Ensure delivery exists when order is confirmed
+                        // Create delivery when order is confirmed
                         if (!$order->delivery) {
                             $order->createDelivery();
                             Log::info('Delivery created during order confirmation', [
                                 'order_id' => $order->id,
+                                'order_number' => $order->order_number,
                             ]);
                         }
                         break;
@@ -100,7 +85,7 @@ class Order extends Model
                         // Ensure delivery exists when processing starts
                         if (!$order->delivery) {
                             $order->createDelivery();
-                            Log::info('Delivery created during order processing', [
+                            Log::warning('Delivery created during processing - should have been created at confirmation', [
                                 'order_id' => $order->id,
                             ]);
                         }
@@ -308,9 +293,13 @@ class Order extends Model
                 }
             }
 
-            // Ensure delivery exists
+            // Create delivery when order is confirmed
             if (!$this->delivery) {
                 $this->createDelivery();
+                Log::info('Delivery created during order confirmation', [
+                    'order_id' => $this->id,
+                    'order_number' => $this->order_number,
+                ]);
             }
 
             // Notify physician and operations
@@ -330,9 +319,13 @@ class Order extends Model
         $this->status = 'shipped';
         $this->save();
 
-        // Create delivery record if not exists
+        // Delivery should already exist from confirmation
+        // This is a safety check
         if (!$this->delivery) {
             $this->createDelivery();
+            Log::warning('Delivery created during shipping - should have existed from confirmation', [
+                'order_id' => $this->id,
+            ]);
         }
 
         // Notify stakeholders

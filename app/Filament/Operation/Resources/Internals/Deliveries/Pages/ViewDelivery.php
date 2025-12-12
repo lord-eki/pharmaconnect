@@ -11,7 +11,6 @@ use App\Notifications\RiderReassignedNotification;
 use App\Services\DeliveryTrackingService;
 use App\Services\OrderFulfillmentService;
 use Filament\Actions\Action;
-use Filament\Actions\EditAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -22,6 +21,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Colors\Color;
+use Illuminate\Support\Facades\Log;
 
 class ViewDelivery extends ViewRecord
 {
@@ -212,7 +212,7 @@ class ViewDelivery extends ViewRecord
                 ->label('Assign Rider')
                 ->icon('heroicon-o-user-plus')
                 ->color('success')
-                ->visible(fn ($record) => $record->order->status === 'processing' && $record->status === 'pending' && !$record->rider_id)
+                ->visible(fn ($record) => $record->order->status === 'processing' && $record->status === 'pending' && ! $record->rider_id)
                 ->form([
                     Select::make('rider_id')
                         ->label('Select Rider')
@@ -395,9 +395,16 @@ class ViewDelivery extends ViewRecord
                         if ($results['commission_created']) {
                             $commission = $results['commission'];
                             $physician = $record->order->prescription->physician;
-                            $physician->user->notify(new CommissionEarnedNotification(
-                                $commission
-                            ));
+
+                            if ($physician && $physician->user) {
+                                $physician->user->notify(new CommissionEarnedNotification($commission));
+                            } else {
+                                Log::warning('Cannot notify physician - no user relationship', [
+                                    'physician_id' => $physician?->id,
+                                    'commission_id' => $commission->id ?? null,
+                                ]);
+                            }
+
                         }
 
                         $message = 'Delivery completed successfully! Rider notified via email.';

@@ -104,7 +104,13 @@ class PaymentService
             $prescription = $order->prescription;
             $patient = $prescription->patient;
 
-            // Create receivable record FIRST
+            $paymentSource = 'patient'; 
+
+            if ($prescription->insurance_covered && $patient->insurance_provider_id) {
+                $paymentSource = 'insurance';
+            }
+
+            // Create receivable record
             $receivable = Receivable::create([
                 'reference' => $this->generateReceivableReference(),
                 'order_id' => $order->id,
@@ -112,10 +118,10 @@ class PaymentService
                 'patient_id' => $patient->id,
                 'insurance_provider_id' => $patient->insurance_provider_id,
                 'amount' => $order->total_amount,
-                'payment_source' => $prescription->insurance_covered ? 'mixed' : 'patient',
+                'payment_source' => $paymentSource,
             ]);
 
-            // Then create transaction with the receivable ID
+            //  create transaction with the receivable ID
             $this->createTransaction($receivable, 'receivable', 'pending');
 
             Log::info('Receivable created successfully', [
