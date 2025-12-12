@@ -54,6 +54,25 @@ class Order extends Model
             }
         });
 
+        // Add created event to automatically create delivery
+        static::created(function ($order) {
+            // Create delivery record immediately when order is created
+            try {
+                $order->createDelivery();
+                
+                Log::info('Order created with delivery', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'delivery_created' => $order->delivery ? true : false,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to create delivery for order', [
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
+
         static::saved(function ($order) {
             if ($order->status === 'delivered' && $order->prescription) {
                 $order->prescription->markFulfilled();
@@ -67,10 +86,24 @@ class Order extends Model
                     case 'confirmed':
                         // Check if all prescription orders are confirmed and create insurance claim
                         static::handlePrescriptionOrdersConfirmed($order);
+                        
+                        // Ensure delivery exists when order is confirmed
+                        if (!$order->delivery) {
+                            $order->createDelivery();
+                            Log::info('Delivery created during order confirmation', [
+                                'order_id' => $order->id,
+                            ]);
+                        }
                         break;
 
                     case 'processing':
-                        $order->createDelivery();
+                        // Ensure delivery exists when processing starts
+                        if (!$order->delivery) {
+                            $order->createDelivery();
+                            Log::info('Delivery created during order processing', [
+                                'order_id' => $order->id,
+                            ]);
+                        }
                         break;
 
                     case 'delivered':
@@ -275,6 +308,11 @@ class Order extends Model
                 }
             }
 
+            // Ensure delivery exists
+            if (!$this->delivery) {
+                $this->createDelivery();
+            }
+
             // Notify physician and operations
             $this->notifyStakeholders('confirmed');
 
@@ -292,8 +330,10 @@ class Order extends Model
         $this->status = 'shipped';
         $this->save();
 
-        // Create delivery record
-        $this->createDelivery();
+        // Create delivery record if not exists
+        if (!$this->delivery) {
+            $this->createDelivery();
+        }
 
         // Notify stakeholders
         $this->notifyStakeholders('shipped');
@@ -305,22 +345,37 @@ class Order extends Model
     public function createDelivery(): void
     {
         if ($this->delivery) {
+            Log::info('Delivery already exists for order', [
+                'order_id' => $this->id,
+                'delivery_id' => $this->delivery->id,
+            ]);
             return; // Delivery already exists
         }
 
         $patient = $this->prescription->patient;
+        $supplier = $this->supplier;
 
-        Delivery::create([
+        $delivery = Delivery::create([
             'delivery_number' => Delivery::generateDeliveryNumber(),
             'order_id' => $this->id,
-            'pickup_address' => $this->supplier->address,
-            'delivery_address' => $patient->address ?? 'Not specified',
+            'pickup_address' => $supplier->address ?? 'Supplier address not set',
+            'delivery_address' => $patient->address ?? "{$patient->city}, {$patient->county}",
             'delivery_latitude' => null,
             'delivery_longitude' => null,
+            'estimated_distance_km' => $this->estimateDistance(),
             'delivery_fee' => $this->calculateDeliveryFee(),
             'status' => 'pending',
             'recipient_name' => $patient->full_name,
             'recipient_phone' => $patient->phone,
+            'scheduled_pickup' => now()->addHours(2), // Default 2 hours from now
+            'estimated_delivery' => now()->addHours(4), // Default 4 hours from now
+        ]);
+
+        Log::info('Delivery created for order', [
+            'order_id' => $this->id,
+            'delivery_id' => $delivery->id,
+            'delivery_number' => $delivery->delivery_number,
+            'status' => 'pending',
         ]);
     }
 
@@ -328,7 +383,6 @@ class Order extends Model
     protected function calculateDeliveryFee(): float
     {
         // Based on county/city or actual distance calculation
-
         $patient = $this->prescription->patient;
         $supplier = $this->supplier;
 
@@ -341,92 +395,106 @@ class Order extends Model
         return 500.00;
     }
 
-    // Mark as delivered
- public function markDelivered(array $deliveryData = []): bool
-{
-    return DB::transaction(function () use ($deliveryData) {
-        $this->status = 'delivered';
-        $this->delivered_at = now();
-        $this->save();
+    // Estimate distance
+    protected function estimateDistance(): float
+    {
+        $patient = $this->prescription->patient;
+        $supplier = $this->supplier;
 
-        // Update delivery record
-        if ($this->delivery) {
-            $this->delivery->update([
-                'status' => 'delivered',
-                'actual_delivery' => now(),
-                'proof_of_delivery' => $deliveryData['proof'] ?? null,
-            ]);
+        // Simple estimation
+        if ($patient->county === $supplier->county) {
+            return 10.0; // 10km within same county
         }
 
-        $prescription = $this->prescription;
+        return 50.0; // 50km different counties
+    }
 
-        // Only attempt insurance claim if insurance is covered AND patient has complete info
-        if ($prescription->insurance_covered && !$prescription->insuranceClaim) {
-            $patient = $prescription->patient;
+    // Mark as delivered
+    public function markDelivered(array $deliveryData = []): bool
+    {
+        return DB::transaction(function () use ($deliveryData) {
+            $this->status = 'delivered';
+            $this->delivered_at = now();
+            $this->save();
 
-            // Validate patient has complete insurance information
-            if ($patient->insurance_provider_id && $patient->insurance_number) {
-                try {
-                    Log::info('Creating insurance claim during delivery', [
-                        'order_id' => $this->id,
-                        'prescription_id' => $prescription->id,
-                    ]);
-
-                    $prescription->createInsuranceClaim();
-                    $prescription->load('insuranceClaim');
-
-                } catch (\Exception $e) {
-                    Log::error('Failed to create insurance claim during delivery', [
-                        'order_id' => $this->id,
-                        'prescription_id' => $prescription->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Don't throw - continue with delivery completion
-                }
-            } else {
-                Log::info('Skipping insurance claim - patient has incomplete insurance info', [
-                    'order_id' => $this->id,
-                    'prescription_id' => $prescription->id,
-                    'patient_id' => $patient->id,
-                    'has_provider' => !empty($patient->insurance_provider_id),
-                    'has_number' => !empty($patient->insurance_number),
+            // Update delivery record
+            if ($this->delivery) {
+                $this->delivery->update([
+                    'status' => 'delivered',
+                    'actual_delivery' => now(),
+                    'proof_of_delivery' => $deliveryData['proof'] ?? null,
                 ]);
             }
-        }
 
-        // Process payments (receivables/payables)
-        $paymentService = app(PaymentService::class);
-        try {
-            $paymentService->processOrderPayments($this);
-        } catch (\Exception $e) {
-            Log::error('Failed to process order payments', [
-                'order_id' => $this->id,
-                'error' => $e->getMessage(),
-            ]);
-            // Don't throw - log and continue
-        }
+            $prescription = $this->prescription;
 
-        // Calculate and create commission
-        $commissionService = app(CommissionService::class);
-        try {
-            $commissionService->calculateCommissionForOrder($this);
-        } catch (\Exception $e) {
-            Log::error('Failed to calculate commission', [
-                'order_id' => $this->id,
-                'error' => $e->getMessage(),
-            ]);
-            // Don't throw - log and continue
-        }
+            // Only attempt insurance claim if insurance is covered AND patient has complete info
+            if ($prescription->insurance_covered && !$prescription->insuranceClaim) {
+                $patient = $prescription->patient;
 
-        // Update prescription status
-        $this->prescription->markFulfilled();
+                // Validate patient has complete insurance information
+                if ($patient->insurance_provider_id && $patient->insurance_number) {
+                    try {
+                        Log::info('Creating insurance claim during delivery', [
+                            'order_id' => $this->id,
+                            'prescription_id' => $prescription->id,
+                        ]);
 
-        // Notify stakeholders
-        $this->notifyStakeholders('delivered');
+                        $prescription->createInsuranceClaim();
+                        $prescription->load('insuranceClaim');
 
-        return true;
-    });
-}
+                    } catch (\Exception $e) {
+                        Log::error('Failed to create insurance claim during delivery', [
+                            'order_id' => $this->id,
+                            'prescription_id' => $prescription->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                        // Don't throw - continue with delivery completion
+                    }
+                } else {
+                    Log::info('Skipping insurance claim - patient has incomplete insurance info', [
+                        'order_id' => $this->id,
+                        'prescription_id' => $prescription->id,
+                        'patient_id' => $patient->id,
+                        'has_provider' => !empty($patient->insurance_provider_id),
+                        'has_number' => !empty($patient->insurance_number),
+                    ]);
+                }
+            }
+
+            // Process payments (receivables/payables)
+            $paymentService = app(PaymentService::class);
+            try {
+                $paymentService->processOrderPayments($this);
+            } catch (\Exception $e) {
+                Log::error('Failed to process order payments', [
+                    'order_id' => $this->id,
+                    'error' => $e->getMessage(),
+                ]);
+                // Don't throw - log and continue
+            }
+
+            // Calculate and create commission
+            $commissionService = app(CommissionService::class);
+            try {
+                $commissionService->calculateCommissionForOrder($this);
+            } catch (\Exception $e) {
+                Log::error('Failed to calculate commission', [
+                    'order_id' => $this->id,
+                    'error' => $e->getMessage(),
+                ]);
+                // Don't throw - log and continue
+            }
+
+            // Update prescription status
+            $this->prescription->markFulfilled();
+
+            // Notify stakeholders
+            $this->notifyStakeholders('delivered');
+
+            return true;
+        });
+    }
 
     // Process payments for the order
     protected function processPayments(): void

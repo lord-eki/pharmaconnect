@@ -92,7 +92,7 @@ class RiderAssignmentService
             'order_id' => $order->id,
             'pickup_address' => $supplier->address,
             'delivery_address' => $patient->address ?? "{$patient->city}, {$patient->county}",
-            'pickup_latitude' => null, // Can be enhanced with geocoding
+            'pickup_latitude' => null, 
             'pickup_longitude' => null,
             'delivery_latitude' => null,
             'delivery_longitude' => null,

@@ -198,7 +198,7 @@ class DeliveriesTable
                         ->icon('heroicon-o-check-circle')
                         ->color('success')
                         ->label('Mark Delivered')
-                        ->visible(fn (Delivery $record) => in_array($record->status, ['assigned', 'picked_up']))
+                        ->visible(fn (Delivery $record) => in_array($record->status, ['assigned', 'picked_up','in_transit']))
                         ->form([
                             DateTimePicker::make('actual_delivery')
                                 ->label('Delivery Time')

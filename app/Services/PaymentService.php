@@ -78,7 +78,7 @@ class PaymentService
             ]);
 
             // Then create transaction with the payable ID
-            $this->createTransaction($payable, 'payable', $order->status);
+            $this->createTransaction($payable, 'payable', 'pending');
 
             Log::info('Payable created successfully', [
                 'payable_id' => $payable->id,
@@ -116,7 +116,7 @@ class PaymentService
             ]);
 
             // Then create transaction with the receivable ID
-            $this->createTransaction($receivable, 'receivable', $order->status);
+            $this->createTransaction($receivable, 'receivable', 'pending');
 
             Log::info('Receivable created successfully', [
                 'receivable_id' => $receivable->id,
