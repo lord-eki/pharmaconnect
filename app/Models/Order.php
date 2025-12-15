@@ -25,6 +25,7 @@ class Order extends Model
         'ordered_at',
         'expected_delivery',
         'delivered_at',
+        'sent_to_supplier_at', 
         'notes',
     ];
 
@@ -33,6 +34,7 @@ class Order extends Model
         'ordered_at' => 'datetime',
         'expected_delivery' => 'datetime',
         'delivered_at' => 'datetime',
+        'sent_to_supplier_at' => 'datetime', 
     ];
 
     protected static function boot()
@@ -52,10 +54,11 @@ class Order extends Model
             if (! $order->expected_delivery) {
                 $order->expected_delivery = now()->addHours(24);
             }
+            
+            if (! $order->status) {
+                $order->status = 'pending_review';
+            }
         });
-
-        // REMOVED: Automatic delivery creation on order creation
-        // Delivery will only be created when order is confirmed
 
         static::saved(function ($order) {
             if ($order->status === 'delivered' && $order->prescription) {
@@ -67,6 +70,14 @@ class Order extends Model
             // Only handle status changes
             if ($order->isDirty('status')) {
                 switch ($order->status) {
+                    case 'sent_to_supplier':
+                        if (!$order->sent_to_supplier_at) {
+                            $order->updateQuietly(['sent_to_supplier_at' => now()]);
+                        }
+                        // Notify supplier
+                        $order->notifyStakeholders('sent_to_supplier');
+                        break;
+                        
                     case 'confirmed':
                         // Check if all prescription orders are confirmed and create insurance claim
                         static::handlePrescriptionOrdersConfirmed($order);
@@ -100,6 +111,35 @@ class Order extends Model
                 }
             }
         });
+    }
+
+    /**
+     * Send order to supplier for processing
+     */
+    public function sendToSupplier(?string $notes = null): bool
+    {
+        if ($this->status !== 'pending_review') {
+            throw new \Exception('Order must be in pending_review status to send to supplier');
+        }
+
+        $this->status = 'sent_to_supplier';
+        $this->sent_to_supplier_at = now();
+        
+        if ($notes) {
+            $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . "Sent to supplier: " . $notes;
+        }
+        
+        $saved = $this->save();
+        
+        if ($saved) {
+            Log::info('Order sent to supplier', [
+                'order_id' => $this->id,
+                'order_number' => $this->order_number,
+                'supplier_id' => $this->supplier_id,
+            ]);
+        }
+        
+        return $saved;
     }
 
     /**
@@ -275,9 +315,14 @@ class Order extends Model
         return sprintf('%s%s-%s', $prefix, $ym, $sequencePadded);
     }
 
-    // Confirm order
+    // Confirm order 
     public function confirm(): bool
     {
+        //  Must be sent to supplier first
+        if (!in_array($this->status, ['sent_to_supplier', 'pending'])) {
+            throw new \Exception('Order must be sent to supplier before confirmation');
+        }
+
         return DB::transaction(function () {
             $this->status = 'confirmed';
             $this->save();
@@ -319,8 +364,6 @@ class Order extends Model
         $this->status = 'shipped';
         $this->save();
 
-        // Delivery should already exist from confirmation
-        // This is a safety check
         if (!$this->delivery) {
             $this->createDelivery();
             Log::warning('Delivery created during shipping - should have existed from confirmation', [
@@ -342,7 +385,7 @@ class Order extends Model
                 'order_id' => $this->id,
                 'delivery_id' => $this->delivery->id,
             ]);
-            return; // Delivery already exists
+            return;
         }
 
         $patient = $this->prescription->patient;
@@ -360,8 +403,8 @@ class Order extends Model
             'status' => 'pending',
             'recipient_name' => $patient->full_name,
             'recipient_phone' => $patient->phone,
-            'scheduled_pickup' => now()->addHours(2), // Default 2 hours from now
-            'estimated_delivery' => now()->addHours(4), // Default 4 hours from now
+            'scheduled_pickup' => now()->addHours(2),
+            'estimated_delivery' => now()->addHours(4),
         ]);
 
         Log::info('Delivery created for order', [
@@ -375,12 +418,9 @@ class Order extends Model
     // Calculate delivery fee based on distance/location
     protected function calculateDeliveryFee(): float
     {
-        // Based on county/city or actual distance calculation
         $patient = $this->prescription->patient;
         $supplier = $this->supplier;
 
-        // Same county = KES 200
-        // Different county = KES 500
         if ($patient->county === $supplier->county) {
             return 200.00;
         }
@@ -394,12 +434,11 @@ class Order extends Model
         $patient = $this->prescription->patient;
         $supplier = $this->supplier;
 
-        // Simple estimation
         if ($patient->county === $supplier->county) {
-            return 10.0; // 10km within same county
+            return 10.0;
         }
 
-        return 50.0; // 50km different counties
+        return 50.0;
     }
 
     // Mark as delivered
@@ -425,7 +464,6 @@ class Order extends Model
             if ($prescription->insurance_covered && !$prescription->insuranceClaim) {
                 $patient = $prescription->patient;
 
-                // Validate patient has complete insurance information
                 if ($patient->insurance_provider_id && $patient->insurance_number) {
                     try {
                         Log::info('Creating insurance claim during delivery', [
@@ -442,7 +480,6 @@ class Order extends Model
                             'prescription_id' => $prescription->id,
                             'error' => $e->getMessage(),
                         ]);
-                        // Don't throw - continue with delivery completion
                     }
                 } else {
                     Log::info('Skipping insurance claim - patient has incomplete insurance info', [
@@ -455,7 +492,7 @@ class Order extends Model
                 }
             }
 
-            // Process payments (receivables/payables)
+            // Process payments
             $paymentService = app(PaymentService::class);
             try {
                 $paymentService->processOrderPayments($this);
@@ -464,10 +501,9 @@ class Order extends Model
                     'order_id' => $this->id,
                     'error' => $e->getMessage(),
                 ]);
-                // Don't throw - log and continue
             }
 
-            // Calculate and create commission
+            // Calculate commission
             $commissionService = app(CommissionService::class);
             try {
                 $commissionService->calculateCommissionForOrder($this);
@@ -476,7 +512,6 @@ class Order extends Model
                     'order_id' => $this->id,
                     'error' => $e->getMessage(),
                 ]);
-                // Don't throw - log and continue
             }
 
             // Update prescription status
@@ -489,71 +524,33 @@ class Order extends Model
         });
     }
 
-    // Process payments for the order
-    protected function processPayments(): void
-    {
-        $patient = $this->prescription->patient;
-        $physician = $this->prescription->physician;
-
-        // Calculate amounts
-        $totalAmount = $this->total_amount;
-        $deliveryFee = $this->delivery ? $this->delivery->delivery_fee : 0;
-        $grandTotal = $totalAmount + $deliveryFee;
-
-        // Insurance portion
-        $insuranceCovered = 0;
-        if ($this->prescription->insurance_covered && $this->prescription->insuranceClaim) {
-            $claim = $this->prescription->insuranceClaim;
-            if ($claim->status === 'approved') {
-                $insuranceCovered = $claim->approved_amount;
-            }
-        }
-
-        // Patient portion
-        $patientPortion = $grandTotal - $insuranceCovered;
-
-        // Create payment record for patient
-        if ($patientPortion > 0) {
-            Payment::create([
-                'payment_reference' => Payment::generateReference(),
-                'payer_id' => $patient->physician_id,
-                'order_id' => $this->id,
-                'prescription_id' => $this->prescription_id,
-                'amount' => $patientPortion,
-                'currency' => 'KES',
-                'payment_method' => 'mpesa',
-                'status' => 'pending',
-            ]);
-        }
-
-        // Create payment record for insurance
-        if ($insuranceCovered > 0) {
-            Payment::create([
-                'payment_reference' => Payment::generateReference(),
-                'order_id' => $this->id,
-                'prescription_id' => $this->prescription_id,
-                'amount' => $insuranceCovered,
-                'currency' => 'KES',
-                'payment_method' => 'insurance',
-                'status' => 'processing',
-            ]);
-        }
-    }
-
     // Send notifications to stakeholders
     protected function notifyStakeholders(string $event): void
     {
-        // Implement notification logic
-        // - Email to physician
-        // - SMS to patient
-        // - System notification to operations
-        // - Update to supplier
+        if ($event === 'sent_to_supplier') {
+            // Send notification to supplier
+            if ($this->supplier && $this->supplier->user) {
+                try {
+                    $this->supplier->user->notify(new \App\Notifications\NewOrderNotification($this));
+                    Log::info('Supplier notified of new order', [
+                        'order_id' => $this->id,
+                        'supplier_id' => $this->supplier_id,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to notify supplier', [
+                        'order_id' => $this->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+        
     }
 
     // Cancel order
     public function cancel(string $reason): bool
     {
-        if (! in_array($this->status, ['pending', 'confirmed'])) {
+        if (! in_array($this->status, ['pending_review', 'sent_to_supplier', 'confirmed'])) {
             throw new \Exception('Cannot cancel order in current status');
         }
 
@@ -588,6 +585,16 @@ class Order extends Model
     }
 
     // Scopes
+    public function scopePendingReview($query)
+    {
+        return $query->where('status', 'pending_review');
+    }
+    
+    public function scopeSentToSupplier($query)
+    {
+        return $query->where('status', 'sent_to_supplier');
+    }
+
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
@@ -600,7 +607,8 @@ class Order extends Model
 
     public function scopeForSupplier($query, $supplierId)
     {
-        return $query->where('supplier_id', $supplierId);
+        return $query->where('supplier_id', $supplierId)
+            ->whereIn('status', ['sent_to_supplier', 'confirmed', 'processing', 'shipped', 'delivered']);
     }
 
     // Accessors
@@ -616,6 +624,8 @@ class Order extends Model
     public function getStatusColorAttribute(): string
     {
         return match ($this->status) {
+            'pending_review' => 'warning',
+            'sent_to_supplier' => 'info',
             'pending' => 'warning',
             'confirmed' => 'info',
             'processing' => 'info',
@@ -623,6 +633,21 @@ class Order extends Model
             'delivered' => 'success',
             'cancelled' => 'danger',
             default => 'gray',
+        };
+    }
+    
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'pending_review' => 'Pending Review',
+            'sent_to_supplier' => 'Sent to Supplier',
+            'pending' => 'Pending',
+            'confirmed' => 'Confirmed',
+            'processing' => 'Processing',
+            'shipped' => 'Shipped',
+            'delivered' => 'Delivered',
+            'cancelled' => 'Cancelled',
+            default => 'Unknown',
         };
     }
 }

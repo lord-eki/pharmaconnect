@@ -32,7 +32,7 @@ class OrderResource extends Resource
         $supplier = Auth::user()->supplier;
 
         return parent::getEloquentQuery()
-            ->where('supplier_id', $supplier->id)
+            ->where('supplier_id', $supplier->id)->whereIn('status', ['sent_to_supplier', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'])
             ->with(['quotation.prescription.patient', 'quotation.prescription.physician', 'items']);
     }
 

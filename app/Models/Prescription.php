@@ -348,7 +348,7 @@ class Prescription extends Model
     /**
      * Create order for supplier with bulk insert
      */
-    protected function createOrderForSupplier(Quotation $quotation, int $supplierId, array $groupData): void
+   protected function createOrderForSupplier(Quotation $quotation, int $supplierId, array $groupData): void
     {
         $pricingService = app(PricingService::class);
 
@@ -383,7 +383,7 @@ class Prescription extends Model
             'supplier_total' => $supplierTotal,
             'markup_total' => $markupTotal,
             'total_amount' => $markedUpTotal,
-            'status' => 'pending',
+            'status' => 'pending_review', // NEW: Start in pending_review status
             'ordered_at' => now(),
             'expected_delivery' => now()->addHours(24),
             'notes' => "Auto-generated from prescription {$this->prescription_number}",
@@ -421,17 +421,19 @@ class Prescription extends Model
 
         OrderItem::insert($orderItems);
 
-        Log::info('Order created with proper markup', [
+        Log::info('Order created and pending internal review', [
             'order_number' => $order->order_number,
             'supplier_id' => $supplierId,
             'supplier_total' => $supplierTotal,
             'markup_total' => $markupTotal,
             'total_amount' => $markedUpTotal,
+            'status' => 'pending_review',
         ]);
 
-        // Notify supplier asynchronously
-        dispatch(function () use ($order, $groupData) {
-            $this->notifySupplier($order, $groupData['supplier']);
+        
+        //Notify internal operations team instead
+        dispatch(function () use ($order) {
+            $this->notifyOperations($order);
         })->afterResponse();
     }
 
@@ -569,7 +571,7 @@ class Prescription extends Model
                 return;
             }
 
-            // Queue email instead of sending immediately
+            // Queue email 
             Mail::to($provider->email)->queue(
                 new InsuranceClaimFormMail($claim)
             );
@@ -590,7 +592,7 @@ class Prescription extends Model
         }
     }
 
-    protected function notifySupplier(Order $order, $supplier): void
+     protected function notifySupplier(Order $order, $supplier): void
     {
         try {
             if (! $supplier) {
@@ -632,7 +634,7 @@ class Prescription extends Model
             // Send notification if user exists
             if ($supplier->user) {
                 try {
-                    $supplier->user->notify(new \App\Notifications\NewOrderNotification($order));
+                    $supplier->user->notify(new NewOrderNotification($order));
 
                     Log::info('Supplier notified via notification', [
                         'order_id' => $order->id,

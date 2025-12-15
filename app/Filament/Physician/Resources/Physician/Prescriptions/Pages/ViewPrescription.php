@@ -86,12 +86,12 @@ class ViewPrescription extends ViewRecord
                     }
                 }),
 
-            Action::make('print')
-                ->label('Print')
-                ->icon('heroicon-o-printer')
-                ->color('gray')
-                // ->url(fn () => route('prescriptions.print', $this->record))
-                ->openUrlInNewTab(),
+            // Action::make('print')
+            //     ->label('Print')
+            //     ->icon('heroicon-o-printer')
+            //     ->color('gray')
+            //     // ->url(fn () => route('prescriptions.print', $this->record))
+            //     ->openUrlInNewTab(),
         ];
     }
 

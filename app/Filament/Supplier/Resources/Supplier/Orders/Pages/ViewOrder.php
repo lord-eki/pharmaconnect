@@ -23,7 +23,7 @@ class ViewOrder extends ViewRecord
                 ->label('Confirm Order')
                 ->icon('heroicon-o-check-circle')
                 ->color('success')
-                ->visible(fn ($record) => $record->status === 'pending')
+                ->visible(fn ($record) => $record->status === 'pending' || $record->status === 'sent_to_supplier')
                 ->requiresConfirmation()
                 ->modalHeading('Confirm Order')
                 ->modalDescription('Confirm that you can fulfill this order. Operations will then process and assign a rider.')
