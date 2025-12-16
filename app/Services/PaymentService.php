@@ -16,6 +16,7 @@ class PaymentService
 {
     /**
      * Process all payments when order is delivered
+  
      */
     public function processOrderPayments(Order $order): array
     {
@@ -23,29 +24,39 @@ class PaymentService
             DB::beginTransaction();
 
             $results = [
-                'payables' => [],
-                'receivables' => [],
+                'receivable' => null,
+                'payables' => [
+                    'supplier' => null,
+                    'commission' => null,
+                ],
                 'errors' => [],
             ];
 
-            // 1. Create payable to supplier
-            $payable = $this->createPayableToSupplier($order);
-            if ($payable) {
-                $results['payables'][] = $payable;
-            }
-
-            // 2. Create receivable from patient/insurance
+            // 1. Create receivable from patient/insurance
             $receivable = $this->createReceivableForOrder($order);
             if ($receivable) {
-                $results['receivables'][] = $receivable;
+                $results['receivable'] = $receivable;
+            }
+
+            // 2. Create payable to supplier
+            $supplierPayable = $this->createPayableToSupplier($order);
+            if ($supplierPayable) {
+                $results['payables']['supplier'] = $supplierPayable;
+            }
+
+            // 3. Create payable for physician commission
+            $commissionPayable = $this->createCommissionPayable($order);
+            if ($commissionPayable) {
+                $results['payables']['commission'] = $commissionPayable;
             }
 
             DB::commit();
 
             Log::info('Order payments processed', [
                 'order_id' => $order->id,
-                'payables' => count($results['payables']),
-                'receivables' => count($results['receivables']),
+                'receivable_amount' => $receivable?->amount,
+                'supplier_payable_amount' => $supplierPayable?->amount,
+                'commission_payable_amount' => $commissionPayable?->amount,
             ]);
 
             return $results;
@@ -56,6 +67,7 @@ class PaymentService
             Log::error('Error processing order payments', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             throw $e;
@@ -63,41 +75,9 @@ class PaymentService
     }
 
     /**
-     * Create payable to supplier
+     * Create receivable from patient/insurance
+     * 
      */
-    protected function createPayableToSupplier(Order $order): ?Payable
-    {
-        try {
-            $payable = Payable::create([
-                'reference' => $this->generatePayableReference(),
-                'order_id' => $order->id,
-                'vendor_id' => $order->supplier->user_id,
-                'vendor_type' => 'supplier',
-                'amount' => $order->supplier_total,
-                'due_date' => now()->addDays(30),
-            ]);
-
-            // Then create transaction with the payable ID
-            $this->createTransaction($payable, 'payable', 'pending');
-
-            Log::info('Payable created successfully', [
-                'payable_id' => $payable->id,
-                'order_id' => $order->id,
-                'amount' => $order->supplier_total,
-            ]);
-
-            return $payable;
-
-        } catch (\Exception $e) {
-            Log::error('Error creating payable', [
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            throw $e;
-        }
-    }
-
     protected function createReceivableForOrder(Order $order): ?Receivable
     {
         try {
@@ -106,8 +86,15 @@ class PaymentService
 
             $paymentSource = 'patient'; 
 
+            // Determine if insurance will pay
             if ($prescription->insurance_covered && $patient->insurance_provider_id) {
                 $paymentSource = 'insurance';
+            }
+
+            // Total amount includes
+            $totalAmount = $order->total_amount;
+            if ($order->delivery) {
+                $totalAmount += $order->delivery->delivery_fee;
             }
 
             // Create receivable record
@@ -116,18 +103,19 @@ class PaymentService
                 'order_id' => $order->id,
                 'prescription_id' => $prescription->id,
                 'patient_id' => $patient->id,
-                'insurance_provider_id' => $patient->insurance_provider_id,
-                'amount' => $order->total_amount,
+                'insurance_provider_id' => $paymentSource === 'insurance' ? $patient->insurance_provider_id : null,
+                'amount' => $totalAmount,
                 'payment_source' => $paymentSource,
             ]);
 
-            //  create transaction with the receivable ID
+            // Create transaction for tracking
             $this->createTransaction($receivable, 'receivable', 'pending');
 
             Log::info('Receivable created successfully', [
                 'receivable_id' => $receivable->id,
                 'order_id' => $order->id,
-                'amount' => $order->total_amount,
+                'amount' => $totalAmount,
+                'payment_source' => $paymentSource,
             ]);
 
             return $receivable;
@@ -140,6 +128,136 @@ class PaymentService
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * Create payable to supplier
+     * 
+     */
+    protected function createPayableToSupplier(Order $order): ?Payable
+    {
+        try {
+            // Supplier gets the supplier_total 
+            $supplierAmount = $order->supplier_total;
+
+            $payable = Payable::create([
+                'reference' => $this->generatePayableReference(),
+                'order_id' => $order->id,
+                'vendor_id' => $order->supplier->user_id,
+                'vendor_type' => 'supplier',
+                'amount' => $supplierAmount,
+                'due_date' => now()->addDays(30), 
+                'description' => "Payment to supplier for order {$order->order_number}",
+            ]);
+
+            // Create transaction for tracking
+            $this->createTransaction($payable, 'payable', 'pending');
+
+            Log::info('Supplier payable created successfully', [
+                'payable_id' => $payable->id,
+                'order_id' => $order->id,
+                'supplier_id' => $order->supplier_id,
+                'amount' => $supplierAmount,
+            ]);
+
+            return $payable;
+
+        } catch (\Exception $e) {
+            Log::error('Error creating supplier payable', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Create payable for physician commission
+     * 
+     */
+    protected function createCommissionPayable(Order $order): ?Payable
+    {
+        try {
+            $prescription = $order->prescription;
+            $physician = $prescription->physician;
+
+            // Get physician commission rate
+            $commissionRate = $this->getPhysicianCommissionRate($physician, $order);
+
+            // Calculate commission on MARKUP amount
+            $markupAmount = $order->markup_total; // This is the profit margin
+            $commissionAmount = $markupAmount * ($commissionRate / 100);
+
+            // Don't create payable if commission is zero or negative
+            if ($commissionAmount <= 0) {
+                Log::info('Commission amount is zero or negative, skipping payable creation', [
+                    'order_id' => $order->id,
+                    'markup_amount' => $markupAmount,
+                    'commission_rate' => $commissionRate,
+                ]);
+                return null;
+            }
+
+            $payable = Payable::create([
+                'reference' => $this->generatePayableReference(),
+                'order_id' => $order->id,
+                'vendor_id' => $physician->id,
+                'vendor_type' => 'physician',
+                'amount' => $commissionAmount,
+                'due_date' => now()->addDays(15), // Pay physicians faster (Net 15)
+                'description' => "Commission for Dr. {$physician->name} - Order {$order->order_number}",
+                'metadata' => [
+                    'commission_rate' => $commissionRate,
+                    'markup_amount' => $markupAmount,
+                    'calculation' => "{$markupAmount} × {$commissionRate}% = {$commissionAmount}",
+                ],
+            ]);
+
+            // Create transaction for tracking
+            $this->createTransaction($payable, 'payable', 'pending');
+
+            Log::info('Commission payable created successfully', [
+                'payable_id' => $payable->id,
+                'order_id' => $order->id,
+                'physician_id' => $physician->id,
+                'markup_amount' => $markupAmount,
+                'commission_rate' => $commissionRate,
+                'commission_amount' => $commissionAmount,
+            ]);
+
+            return $payable;
+
+        } catch (\Exception $e) {
+            Log::error('Error creating commission payable', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Get physician commission rate
+     */
+    protected function getPhysicianCommissionRate($physician, Order $order): float
+    {
+        // Try to get rate from physician profile
+        if ($physician->physician && $physician->physician->commission_rate) {
+            return $physician->physician->commission_rate;
+        }
+
+        // Default rate
+        $defaultRate = 5.00; // 5% of markup
+
+        Log::info('Using default commission rate', [
+            'physician_id' => $physician->id,
+            'order_id' => $order->id,
+            'rate' => $defaultRate,
+        ]);
+
+        return $defaultRate;
     }
 
     /**
@@ -169,6 +287,7 @@ class PaymentService
 
             Log::info('Payable marked as paid', [
                 'payable_id' => $payable->id,
+                'vendor_type' => $payable->vendor_type,
                 'amount' => $payable->amount,
             ]);
 
@@ -196,6 +315,8 @@ class PaymentService
 
             $receivable->update([
                 'received_at' => now(),
+                'payment_method' => $paymentData['payment_method'] ?? null,
+                'gateway_reference' => $paymentData['gateway_reference'] ?? null,
             ]);
 
             // Update claim status if insurance payment
@@ -208,6 +329,7 @@ class PaymentService
                 if ($receivable->prescription && $receivable->prescription->insuranceClaim) {
                     $receivable->prescription->insuranceClaim->update([
                         'status' => 'paid',
+                        'paid_at' => now(),
                     ]);
                 }
             }
@@ -226,6 +348,7 @@ class PaymentService
             Log::info('Receivable marked as received', [
                 'receivable_id' => $receivable->id,
                 'amount' => $receivable->amount,
+                'payment_source' => $receivable->payment_source,
             ]);
 
             return true;
@@ -281,27 +404,20 @@ class PaymentService
      */
     public function getOrderPaymentSummary(Order $order): array
     {
-        $payables = Payable::where('order_id', $order->id)->get();
         $receivables = Receivable::where('order_id', $order->id)->get();
+        $payables = Payable::where('order_id', $order->id)->get();
+
+        // Separate payables by type
+        $supplierPayables = $payables->where('vendor_type', 'supplier');
+        $commissionPayables = $payables->where('vendor_type', 'physician');
 
         return [
-            'order_total' => $order->total_amount,
-            'delivery_fee' => $order->delivery ? $order->delivery->delivery_fee : 0,
-            'grand_total' => $order->total_amount + ($order->delivery ? $order->delivery->delivery_fee : 0),
-            'payables' => [
-                'total' => $payables->sum('amount'),
-                'paid' => $payables->whereNotNull('paid_at')->sum('amount'),
-                'pending' => $payables->whereNull('paid_at')->sum('amount'),
-                'items' => $payables->map(function ($payable) {
-                    return [
-                        'id' => $payable->id,
-                        'reference' => $payable->reference,
-                        'vendor' => $payable->vendor->name ?? 'N/A',
-                        'amount' => $payable->amount,
-                        'status' => $payable->paid_at ? 'paid' : 'pending',
-                        'paid_at' => $payable->paid_at?->toIso8601String(),
-                    ];
-                }),
+            'order_breakdown' => [
+                'supplier_total' => $order->supplier_total,
+                'markup_total' => $order->markup_total,
+                'order_total' => $order->total_amount,
+                'delivery_fee' => $order->delivery ? $order->delivery->delivery_fee : 0,
+                'grand_total' => $order->total_amount + ($order->delivery ? $order->delivery->delivery_fee : 0),
             ],
             'receivables' => [
                 'total' => $receivables->sum('amount'),
@@ -318,11 +434,55 @@ class PaymentService
                     ];
                 }),
             ],
+            'payables' => [
+                'total' => $payables->sum('amount'),
+                'paid' => $payables->whereNotNull('paid_at')->sum('amount'),
+                'pending' => $payables->whereNull('paid_at')->sum('amount'),
+                'supplier' => [
+                    'total' => $supplierPayables->sum('amount'),
+                    'paid' => $supplierPayables->whereNotNull('paid_at')->sum('amount'),
+                    'pending' => $supplierPayables->whereNull('paid_at')->sum('amount'),
+                    'items' => $supplierPayables->map(function ($payable) {
+                        return [
+                            'id' => $payable->id,
+                            'reference' => $payable->reference,
+                            'vendor' => $payable->vendor->name ?? 'N/A',
+                            'amount' => $payable->amount,
+                            'status' => $payable->paid_at ? 'paid' : 'pending',
+                            'paid_at' => $payable->paid_at?->toIso8601String(),
+                            'due_date' => $payable->due_date?->toIso8601String(),
+                        ];
+                    }),
+                ],
+                'commission' => [
+                    'total' => $commissionPayables->sum('amount'),
+                    'paid' => $commissionPayables->whereNotNull('paid_at')->sum('amount'),
+                    'pending' => $commissionPayables->whereNull('paid_at')->sum('amount'),
+                    'items' => $commissionPayables->map(function ($payable) {
+                        return [
+                            'id' => $payable->id,
+                            'reference' => $payable->reference,
+                            'physician' => $payable->vendor->name ?? 'N/A',
+                            'amount' => $payable->amount,
+                            'commission_rate' => $payable->metadata['commission_rate'] ?? null,
+                            'markup_amount' => $payable->metadata['markup_amount'] ?? null,
+                            'status' => $payable->paid_at ? 'paid' : 'pending',
+                            'paid_at' => $payable->paid_at?->toIso8601String(),
+                            'due_date' => $payable->due_date?->toIso8601String(),
+                        ];
+                    }),
+                ],
+            ],
+            'profit_analysis' => [
+                'gross_profit' => $order->markup_total,
+                'commission_expense' => $commissionPayables->sum('amount'),
+                'net_profit' => $order->markup_total - $commissionPayables->sum('amount'),
+            ],
         ];
     }
 
     /**
-     * Get outstanding payables
+     * Get outstanding payables grouped by type
      */
     public function getOutstandingPayables(): array
     {
@@ -330,14 +490,32 @@ class PaymentService
             ->with(['vendor', 'order'])
             ->get();
 
+        $supplierPayables = $payables->where('vendor_type', 'supplier');
+        $commissionPayables = $payables->where('vendor_type', 'physician');
+
         return [
             'total_amount' => $payables->sum('amount'),
             'total_count' => $payables->count(),
             'overdue_amount' => $payables->where('due_date', '<', now())->sum('amount'),
             'overdue_count' => $payables->where('due_date', '<', now())->count(),
+            'by_type' => [
+                'supplier' => [
+                    'amount' => $supplierPayables->sum('amount'),
+                    'count' => $supplierPayables->count(),
+                    'overdue_amount' => $supplierPayables->where('due_date', '<', now())->sum('amount'),
+                    'overdue_count' => $supplierPayables->where('due_date', '<', now())->count(),
+                ],
+                'commission' => [
+                    'amount' => $commissionPayables->sum('amount'),
+                    'count' => $commissionPayables->count(),
+                    'overdue_amount' => $commissionPayables->where('due_date', '<', now())->sum('amount'),
+                    'overdue_count' => $commissionPayables->where('due_date', '<', now())->count(),
+                ],
+            ],
             'by_vendor' => $payables->groupBy('vendor_id')->map(function ($group) {
                 return [
                     'vendor_name' => $group->first()->vendor->name ?? 'N/A',
+                    'vendor_type' => $group->first()->vendor_type,
                     'total_amount' => $group->sum('amount'),
                     'count' => $group->count(),
                 ];
@@ -358,12 +536,46 @@ class PaymentService
             'total_amount' => $receivables->sum('amount'),
             'total_count' => $receivables->count(),
             'by_source' => [
-                'patient' => $receivables->where('payment_source', 'patient')->sum('amount'),
-                'insurance' => $receivables->where('payment_source', 'insurance')->sum('amount'),
+                'patient' => [
+                    'amount' => $receivables->where('payment_source', 'patient')->sum('amount'),
+                    'count' => $receivables->where('payment_source', 'patient')->count(),
+                ],
+                'insurance' => [
+                    'amount' => $receivables->where('payment_source', 'insurance')->sum('amount'),
+                    'count' => $receivables->where('payment_source', 'insurance')->count(),
+                ],
             ],
             'insurance_pending' => $receivables->where('payment_source', 'insurance')
                 ->whereIn('claim_status', ['submitted', 'under_review', 'approved'])
                 ->sum('amount'),
+        ];
+    }
+
+    /**
+     * Get physician commission earnings
+     */
+    public function getPhysicianCommissionEarnings($physicianId, $startDate = null, $endDate = null): array
+    {
+        $query = Payable::where('vendor_id', $physicianId)
+            ->where('vendor_type', 'physician');
+
+        if ($startDate) {
+            $query->whereDate('created_at', '>=', $startDate);
+        }
+
+        if ($endDate) {
+            $query->whereDate('created_at', '<=', $endDate);
+        }
+
+        $payables = $query->get();
+
+        return [
+            'total_earned' => $payables->sum('amount'),
+            'paid' => $payables->whereNotNull('paid_at')->sum('amount'),
+            'pending' => $payables->whereNull('paid_at')->sum('amount'),
+            'count' => $payables->count(),
+            'average_commission' => $payables->avg('amount'),
+            'orders' => $payables->pluck('order_id')->unique()->count(),
         ];
     }
 }

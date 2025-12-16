@@ -32,4 +32,57 @@ class Payable extends Model
     {
         return $this->belongsTo(User::class, 'vendor_id');
     }
+
+    public function scopeSupplierPayables($query)
+    {
+        return $query->where('vendor_type', 'supplier');
+    }
+
+    public function scopeCommissionPayables($query)
+    {
+        return $query->where('vendor_type','physician');
+    }
+
+    public function scopeUnpaid($query)
+    {
+        return $query->whereNull('paid_at');
+    }
+
+    public function scopeOverdue($query)
+    {
+        return $query->whereNull('paid_at')->where('due_date' ,'<', now());
+    }
+
+    /**
+     * Format amount for display
+     */
+    public function getFormattedAmountAttribute(): string
+    {
+        return 'KES ' . number_format($this->amount, 2);
+    }
+
+    /**
+     * Get days until due
+     */
+    public function getDaysUntilDueAttribute(): ?int
+    {
+        if (!$this->due_date || $this->is_paid) {
+            return null;
+        }
+
+        return now()->diffInDays($this->due_date, false);
+    }
+
+    /**
+     * Get days overdue
+     */
+    public function getDaysOverdueAttribute(): ?int
+    {
+        if (!$this->is_overdue) {
+            return null;
+        }
+
+        return now()->diffInDays($this->due_date);
+    }
+
 }

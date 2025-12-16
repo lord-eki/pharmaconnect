@@ -66,10 +66,7 @@ class DeliveriesTable
                     ->tooltip(fn ($record) => $record->delivery_address)
                     ->label('Delivery Address'),
 
-                TextColumn::make('delivery_fee')
-                    ->money('KES')
-                    ->sortable()
-                    ->label('Fee'),
+            
 
                 TextColumn::make('estimated_distance_km')
                     ->numeric(2)

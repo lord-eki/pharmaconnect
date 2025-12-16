@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Commission;
 use App\Models\Order;
+use App\Models\Payable;
 use App\Models\Prescription;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,10 @@ class CommissionService
         try {
             // Only calculate for delivered orders
             if ($order->status !== 'delivered') {
+                Log::info('Order not delivered, skipping commission calculation', [
+                    'order_id' => $order->id,
+                    'status' => $order->status,
+                ]);
                 return null;
             }
 
@@ -37,27 +42,52 @@ class CommissionService
             // Get commission rate
             $commissionRate = $this->getCommissionRate($physician, $order);
 
-            // Calculate amounts
-            $grossAmount = $order->supplier_total ?? $order->total_amount;
-            
-            $commissionAmount = $grossAmount * ($commissionRate / 100);
+            // IMPORTANT: Calculate commission on MARKUP amount 
+            $markupAmount = $order->markup_total; 
+            $commissionAmount = $markupAmount * ($commissionRate / 100);
 
-            // Create commission record
+            // Don't create commission if amount is zero or negative
+            if ($commissionAmount <= 0) {
+                Log::warning('Commission amount is zero or negative, skipping creation', [
+                    'order_id' => $order->id,
+                    'markup_amount' => $markupAmount,
+                    'commission_rate' => $commissionRate,
+                ]);
+                return null;
+            }
+
+            // Create commission record 
             $commission = Commission::create([
                 'physician_id' => $physician->id,
                 'prescription_id' => $order->prescription_id,
                 'order_id' => $order->id,
                 'commission_rate' => $commissionRate,
-                'gross_amount' => $grossAmount,
+                'gross_amount' => $markupAmount, 
                 'commission_amount' => $commissionAmount,
                 'status' => 'pending',
             ]);
+
+            // Link to the payable created by PaymentService
+            $commissionPayable = Payable::where('order_id', $order->id)
+                ->where('vendor_id', $physician->id)
+                ->where('vendor_type', 'physician')
+                ->first();
+
+            if ($commissionPayable) {
+                Log::info('Commission linked to payable', [
+                    'commission_id' => $commission->id,
+                    'payable_id' => $commissionPayable->id,
+                ]);
+            }
 
             Log::info('Commission calculated and created', [
                 'commission_id' => $commission->id,
                 'order_id' => $order->id,
                 'physician_id' => $physician->id,
+                'markup_amount' => $markupAmount,
+                'commission_rate' => $commissionRate,
                 'commission_amount' => $commissionAmount,
+                'calculation' => "{$markupAmount} × {$commissionRate}% = {$commissionAmount}",
             ]);
 
             return $commission;
@@ -66,6 +96,7 @@ class CommissionService
             Log::error('Error calculating commission', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return null;
@@ -86,7 +117,6 @@ class CommissionService
                 'prescription_id' => $order->prescription_id,
             ]);
 
-            // Return default rate
             return 5.00;
         }
 
@@ -117,24 +147,46 @@ class CommissionService
 
     /**
      * Approve commission for payment
+     * This updates both the Commission record and the Payable
      */
     public function approveCommission(Commission $commission, User $approver): bool
     {
         try {
+            DB::beginTransaction();
+
+            // Update commission record
             $commission->update([
                 'status' => 'approved',
                 'approved_at' => now(),
                 'approved_by' => $approver->id,
             ]);
 
+            // Find and update the related payable
+            $payable = Payable::where('order_id', $commission->order_id)
+                ->where('vendor_id', $commission->physician_id)
+                ->where('vendor_type', 'physician')
+                ->first();
+
+            if ($payable && !$payable->paid_at) {
+                Log::info('Commission payable ready for payment', [
+                    'payable_id' => $payable->id,
+                    'commission_id' => $commission->id,
+                ]);
+            }
+
+            DB::commit();
+
             Log::info('Commission approved', [
                 'commission_id' => $commission->id,
                 'approved_by' => $approver->id,
+                'amount' => $commission->commission_amount,
             ]);
 
             return true;
 
         } catch (\Exception $e) {
+            DB::rollBack();
+
             Log::error('Error approving commission', [
                 'commission_id' => $commission->id,
                 'error' => $e->getMessage(),
@@ -150,24 +202,51 @@ class CommissionService
     public function markAsPaid(Commission $commission, string $paymentReference): bool
     {
         try {
+            DB::beginTransaction();
+
             if ($commission->status !== 'approved') {
                 throw new \Exception('Commission must be approved before marking as paid');
             }
 
+            // Update commission record
             $commission->update([
                 'status' => 'paid',
                 'paid_at' => now(),
                 'payment_reference' => $paymentReference,
             ]);
 
+            // Update the related payable
+            $payable = Payable::where('order_id', $commission->order_id)
+                ->where('vendor_id', $commission->physician_id)
+                ->where('vendor_type', 'physician')
+                ->first();
+
+            if ($payable && !$payable->paid_at) {
+                $payable->update([
+                    'paid_at' => now(),
+                    'payment_method' => 'bank_transfer',
+                    'gateway_reference' => $paymentReference,
+                ]);
+
+                Log::info('Commission payable marked as paid', [
+                    'payable_id' => $payable->id,
+                    'payment_reference' => $paymentReference,
+                ]);
+            }
+
+            DB::commit();
+
             Log::info('Commission marked as paid', [
                 'commission_id' => $commission->id,
                 'payment_reference' => $paymentReference,
+                'amount' => $commission->commission_amount,
             ]);
 
             return true;
 
         } catch (\Exception $e) {
+            DB::rollBack();
+
             Log::error('Error marking commission as paid', [
                 'commission_id' => $commission->id,
                 'error' => $e->getMessage(),
@@ -194,9 +273,23 @@ class CommissionService
 
         $commissions = $query->get();
 
+        // Also get payables for more accurate payment tracking
+        $payablesQuery = Payable::where('vendor_id', $physician->id)
+            ->where('vendor_type', 'physician');
+
+        if ($startDate) {
+            $payablesQuery->where('created_at', '>=', $startDate);
+        }
+
+        if ($endDate) {
+            $payablesQuery->where('created_at', '<=', $endDate);
+        }
+
+        $payables = $payablesQuery->get();
+
         return [
             'total_commissions' => $commissions->count(),
-            'total_gross_amount' => $commissions->sum('gross_amount'),
+            'total_markup_amount' => $commissions->sum('gross_amount'), // Now represents markup
             'total_commission_amount' => $commissions->sum('commission_amount'),
             'pending_amount' => $commissions->where('status', 'pending')->sum('commission_amount'),
             'approved_amount' => $commissions->where('status', 'approved')->sum('commission_amount'),
@@ -207,6 +300,14 @@ class CommissionService
                 'approved' => $commissions->where('status', 'approved')->count(),
                 'paid' => $commissions->where('status', 'paid')->count(),
             ],
+            'payables_summary' => [
+                'total' => $payables->sum('amount'),
+                'paid' => $payables->whereNotNull('paid_at')->sum('amount'),
+                'pending' => $payables->whereNull('paid_at')->sum('amount'),
+            ],
+            'average_commission' => $commissions->avg('commission_amount'),
+            'highest_commission' => $commissions->max('commission_amount'),
+            'total_orders' => $commissions->count(),
         ];
     }
 
@@ -230,7 +331,6 @@ class CommissionService
                 if (! $commission) {
                     $results['failed']++;
                     $results['errors'][] = "Commission {$commissionId} not found";
-
                     continue;
                 }
 
@@ -238,10 +338,17 @@ class CommissionService
                     $results['approved']++;
                 } else {
                     $results['failed']++;
+                    $results['errors'][] = "Failed to approve commission {$commissionId}";
                 }
             }
 
             DB::commit();
+
+            Log::info('Batch commission approval completed', [
+                'approved' => $results['approved'],
+                'failed' => $results['failed'],
+                'approver_id' => $approver->id,
+            ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -254,5 +361,71 @@ class CommissionService
         }
 
         return $results;
+    }
+
+    /**
+     * Get commission breakdown by order
+     */
+    public function getOrderCommissionBreakdown(Order $order): array
+    {
+        return [
+            'order_number' => $order->order_number,
+            'supplier_cost' => $order->supplier_total,
+            'markup_amount' => $order->markup_total,
+            'total_amount' => $order->total_amount,
+            'commission' => $order->commission ? [
+                'id' => $order->commission->id,
+                'rate' => $order->commission->commission_rate,
+                'amount' => $order->commission->commission_amount,
+                'status' => $order->commission->status,
+                'calculation' => "{$order->markup_total} × {$order->commission->commission_rate}% = {$order->commission->commission_amount}",
+            ] : null,
+            'net_profit' => $order->markup_total - ($order->commission?->commission_amount ?? 0),
+            'profit_breakdown' => [
+                'gross_markup' => $order->markup_total,
+                'physician_commission' => $order->commission?->commission_amount ?? 0,
+                'net_to_platform' => $order->markup_total - ($order->commission?->commission_amount ?? 0),
+            ],
+        ];
+    }
+
+    /**
+     * Get platform profit summary
+     */
+    public function getPlatformProfitSummary($startDate = null, $endDate = null): array
+    {
+        $query = Order::where('status', 'delivered');
+
+        if ($startDate) {
+            $query->whereDate('delivered_at', '>=', $startDate);
+        }
+
+        if ($endDate) {
+            $query->whereDate('delivered_at', '<=', $endDate);
+        }
+
+        $orders = $query->with('commission')->get();
+
+        $totalMarkup = $orders->sum('markup_total');
+        $totalCommissions = $orders->sum(function ($order) {
+            return $order->commission?->commission_amount ?? 0;
+        });
+        $netProfit = $totalMarkup - $totalCommissions;
+
+        return [
+            'total_orders' => $orders->count(),
+            'total_revenue' => $orders->sum('total_amount'),
+            'total_supplier_cost' => $orders->sum('supplier_total'),
+            'total_markup' => $totalMarkup,
+            'total_commissions_paid' => $totalCommissions,
+            'net_platform_profit' => $netProfit,
+            'average_markup_per_order' => $orders->avg('markup_total'),
+            'average_commission_per_order' => $orders->avg(function ($order) {
+                return $order->commission?->commission_amount ?? 0;
+            }),
+            'profit_margin' => $orders->sum('total_amount') > 0 
+                ? ($netProfit / $orders->sum('total_amount')) * 100 
+                : 0,
+        ];
     }
 }
