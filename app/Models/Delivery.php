@@ -31,6 +31,7 @@ class Delivery extends Model
         'recipient_name',
         'recipient_phone',
         'proof_of_delivery',
+        'delivery_note_document_id',
     ];
 
     protected $casts = [
@@ -79,5 +80,33 @@ class Delivery extends Model
         }
 
         return sprintf('%s%s-%s', $prefix, $ym, str_pad($sequence, 5, '0', STR_PAD_LEFT));
+    }
+
+     /**
+     * Get the delivery note document
+     */
+    public function deliveryNoteDocument(): BelongsTo
+    {
+        return $this->belongsTo(Document::class, 'delivery_note_document_id');
+    }
+
+    /**
+     * Check if delivery note has been generated
+     */
+    public function hasDeliveryNote(): bool
+    {
+        return !is_null($this->delivery_note_document_id);
+    }
+
+    /**
+     * Get the delivery note URL if it exists
+     */
+    public function getDeliveryNoteUrl(): ?string
+    {
+        if (!$this->hasDeliveryNote()) {
+            return null;
+        }
+
+        return $this->deliveryNoteDocument->getDownloadUrl();
     }
 }

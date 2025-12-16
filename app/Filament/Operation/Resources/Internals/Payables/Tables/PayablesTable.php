@@ -26,6 +26,11 @@ class PayablesTable
     {
         return $table
             ->columns([
+
+                  TextColumn::make('created_at')
+                    ->dateTime()->label('Date')
+                    ->sortable(),
+                
                 TextColumn::make('reference')
                     ->searchable()
                     ->sortable()
@@ -66,10 +71,7 @@ class PayablesTable
                     ->boolean()
                     ->sortable(),
 
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+              
             ])
             ->filters([
                 SelectFilter::make('vendor_type')
