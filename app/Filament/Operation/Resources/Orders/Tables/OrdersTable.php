@@ -3,6 +3,7 @@
 namespace App\Filament\Operation\Resources\Orders\Tables;
 
 use App\Models\Order;
+use App\Services\OrderReportService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -22,6 +23,7 @@ use Filament\Tables\Filters\Indicator;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Storage;
 
 class OrdersTable
 {
@@ -42,9 +44,6 @@ class OrdersTable
                     ->label('Prescription')
                     ->searchable()
                     ->sortable()
-                    // ->url(fn ($record) => $record->prescription
-                    //     ? route('filament.operations.resources.prescriptions.view', $record->prescription)
-                    //     : null)
                     ->color('primary')
                     ->icon('heroicon-m-document-text'),
 
@@ -142,7 +141,7 @@ class OrdersTable
                     ->badge()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->placeholder('No delivery'),
-            ])
+            ])->defaultSort('created_at', 'desc')
             ->filters([
                 SelectFilter::make('status')
                     ->label('Order Status')
@@ -206,41 +205,54 @@ class OrdersTable
             ->recordActions([
                 ViewAction::make(),
 
-                Action::make('send_to_supplier')
-                    ->label('Send to Supplier')
-                    ->icon('heroicon-o-paper-airplane')
+                Action::make('download_lpo')
+                    ->label('Download LPO')
+                    ->icon('heroicon-o-arrow-down-tray')
                     ->color('success')
-                    ->visible(fn (Order $record): bool => $record->status === 'pending_review')
-                    ->form([
-                        Textarea::make('notes')
-                            ->label('Notes for Supplier (Optional)')
-                            ->helperText('Add any special instructions or notes for the supplier')
-                            ->rows(3),
-                    ])
-                    ->action(function (Order $record, array $data): void {
+                    ->action(function (Order $record) {
                         try {
-                            $record->sendToSupplier($data['notes'] ?? null);
-
+                            $reportService = app(OrderReportService::class);
+                            
+                            // Generate the PDF and store it temporarily
+                            $path = $reportService->generateLPO($record);
+                            
+                            // Create a download URL
+                            $url = Storage::url($path);
+                            
+                            // Notify user with download link
                             Notification::make()
-                                ->title('Order sent to supplier')
-                                ->body("Order {$record->order_number} has been sent to {$record->supplier->name}")
+                                ->title('LPO Ready')
+                                ->body('Your LPO has been generated successfully.')
                                 ->success()
-                                ->duration(5000)
+                                ->actions([
+                                    Action::make('download')
+                                        ->label('Download PDF')
+                                        ->url($url)
+                                        ->openUrlInNewTab(),
+                                ])
+                                ->persistent()
                                 ->send();
+                                
                         } catch (\Exception $e) {
+                            \Log::error('LPO Generation Error', [
+                                'order_id' => $record->id,
+                                'error' => $e->getMessage(),
+                                'trace' => $e->getTraceAsString()
+                            ]);
+                            
                             Notification::make()
-                                ->title('Error sending order')
-                                ->body($e->getMessage())
+                                ->title('Error generating LPO')
+                                ->body('Unable to generate PDF. Please try again or contact support.')
                                 ->danger()
                                 ->send();
                         }
                     })
-                    ->requiresConfirmation()
-                    ->modalHeading('Send Order to Supplier')
-                    ->modalDescription(fn (Order $record) => "This will notify {$record->supplier->name} and make the order visible to them. They will be able to confirm and process the order.")
-                    ->modalSubmitActionLabel('Send to Supplier')
-                    ->successNotificationTitle('Order sent!'),
+                    ->requiresConfirmation(false)
+                    ->tooltip('Download Local Purchase Order as PDF'),
 
+               
+
+                
                 Action::make('cancel')
                     ->label('Cancel')
                     ->icon('heroicon-o-x-circle')
@@ -276,55 +288,58 @@ class OrdersTable
                     ->modalSubmitActionLabel('Cancel Order'),
             ])
             ->toolbarActions([
-           BulkActionGroup::make([
-                    BulkAction::make('send_to_suppliers')
-                        ->label('Send Selected to Suppliers')
-                        ->icon('heroicon-o-paper-airplane')
+                BulkActionGroup::make([
+                    BulkAction::make('download_bulk_lpo')
+                        ->label('Download Selected as LPO')
+                        ->icon('heroicon-o-arrow-down-tray')
                         ->color('success')
-                        ->action(function (\Illuminate\Database\Eloquent\Collection $records): void {
-                            $sent = 0;
-                            $errors = 0;
-                            
-                            foreach ($records as $record) {
-                                if ($record->status === 'pending_review') {
-                                    try {
-                                        $record->sendToSupplier();
-                                        $sent++;
-                                    } catch (\Exception $e) {
-                                        $errors++;
-                                        \Illuminate\Support\Facades\Log::error('Failed to send order to supplier', [
-                                            'order_id' => $record->id,
-                                            'error' => $e->getMessage(),
-                                        ]);
-                                    }
-                                }
-                            }
-                            
-                            if ($sent > 0) {
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            try {
+                                $reportService = app(OrderReportService::class);
+                                $orderIds = $records->pluck('id')->toArray();
+                                
+                                // Generate and store the PDF
+                                $path = $reportService->generateBulkLPO($orderIds);
+                                
+                                // Return download URL
+                                $url = Storage::url($path);
+                                
                                 Notification::make()
-                                    ->title("{$sent} order(s) sent to suppliers")
+                                    ->title('Bulk LPO Generated')
+                                    ->body('Click the link below to download')
                                     ->success()
+                                    ->actions([
+                                      Action::make('download')
+                                            ->label('Download PDF')
+                                            ->url($url)
+                                            ->openUrlInNewTab()
+                                    ])
+                                    ->persistent()
                                     ->send();
-                            }
-                            
-                            if ($errors > 0) {
+                                    
+                            } catch (\Exception $e) {
+                                \Log::error('Bulk LPO Error', [
+                                    'order_ids' => $records->pluck('id')->toArray(),
+                                    'error' => $e->getMessage()
+                                ]);
+                                
                                 Notification::make()
-                                    ->title("{$errors} order(s) failed to send")
-                                    ->warning()
+                                    ->title('Error generating bulk LPO')
+                                    ->body('Unable to generate PDF. Please try with fewer orders.')
+                                    ->danger()
                                     ->send();
                             }
                         })
                         ->deselectRecordsAfterCompletion()
                         ->requiresConfirmation()
-                        ->modalHeading('Send Orders to Suppliers')
-                        ->modalDescription('This will send all selected orders that are in "Pending Review" status to their respective suppliers.')
-                        ->modalSubmitActionLabel('Send Orders'),
-                    
-                    ExportBulkAction::make()
-                        ->label('Export Selected'),
-                        ]),
+                        ->modalHeading('Download Bulk LPO')
+                        ->modalDescription('This will generate a PDF document containing all selected orders.')
+                        ->modalSubmitActionLabel('Generate PDF'),
+
+                   
+                ]),
             ])->emptyStateHeading('No orders yet')
             ->emptyStateDescription('Orders will appear here once prescriptions are submitted.')
-            ->emptyStateIcon('heroicon-o-shopping-bag');;
+            ->emptyStateIcon('heroicon-o-shopping-bag');
     }
 }
