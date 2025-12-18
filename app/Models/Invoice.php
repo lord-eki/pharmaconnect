@@ -13,7 +13,6 @@ class Invoice extends Model
     protected $fillable = [
         'invoice_number',
         'order_id',
-        'billed_to_id',
         'subtotal',
         'tax_amount',
         'discount_amount',
@@ -23,6 +22,7 @@ class Invoice extends Model
         'status',
         'paid_at',
         'notes',
+        'insurance_provider_id',
     ];
 
     protected $casts = [
@@ -41,6 +41,33 @@ class Invoice extends Model
 
     public function billedTo(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'billed_to_id');
+        return $this->belongsTo(InsuranceProvider::class, 'insurance_provider_id');
+    }
+
+    /**
+     * Check if invoice is overdue
+     */
+    public function isOverdue(): bool
+    {
+        if ($this->status !== 'pending' || ! $this->due_date) {
+            return false;
+        }
+
+        return $this->due_date->isPast();
+    }
+
+    /**
+     * Get the status badge color
+     */
+    public function getStatusColorAttribute(): string
+    {
+        return match ($this->status) {
+            'paid' => 'success',
+            'pending' => 'warning',
+            'sent' => 'info',
+            'overdue' => 'danger',
+            'cancelled' => 'secondary',
+            default => 'primary',
+        };
     }
 }

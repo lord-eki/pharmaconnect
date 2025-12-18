@@ -289,6 +289,36 @@ class Order extends Model
         return $this->hasOne(Commission::class);
     }
 
+
+    /**
+     * Check if order is eligible for invoice generation
+     */
+    public function isEligibleForInvoice(): bool
+    {
+        // Must be delivered
+        if ($this->status !== 'delivered') {
+            return false;
+        }
+
+        // Must have a prescription with patient
+        if (!$this->prescription || !$this->prescription->patient) {
+            return false;
+        }
+
+        // Patient must have insurance
+        if (!$this->prescription->patient->insurance_provider_id) {
+            return false;
+        }
+        
+
+        // Must not already have an invoice
+        if ($this->invoices()->exists()) {
+            return false;
+        }
+
+        return true;
+    }
+
     // Generate unique order number (LPO)
     public static function generateOrderNumber(): string
     {

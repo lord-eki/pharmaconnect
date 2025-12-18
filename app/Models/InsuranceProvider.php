@@ -27,7 +27,7 @@ class InsuranceProvider extends Model
         'logo_path',
         'form_header',
         'form_footer',
-        'required_fields'
+        'required_fields',
     ];
 
     protected $casts = [
@@ -50,6 +50,16 @@ class InsuranceProvider extends Model
         return $this->hasMany(InsuranceClaim::class);
     }
 
+    public function patients(): HasMany
+    {
+        return $this->hasMany(Patient::class, 'insurance_provider_id');
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class, 'billed_to_id');
+    }
+
     public function claimForms(): HasMany
     {
         return $this->hasMany(ClaimForm::class, 'insurance_provider_id');
@@ -58,6 +68,26 @@ class InsuranceProvider extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(Document::class, 'insurance_provider_id');
+    }
+
+    /**
+     * Get pending invoices amount
+     */
+    public function getPendingInvoicesAmountAttribute(): float
+    {
+        return $this->invoices()
+            ->where('status', 'pending')
+            ->sum('total_amount');
+    }
+
+    /**
+     * Get total invoiced amount
+     */
+    public function getTotalInvoicedAmountAttribute(): float
+    {
+        return $this->invoices()
+            ->where('status', '!=', 'cancelled')
+            ->sum('total_amount');
     }
 
     /**
@@ -108,6 +138,7 @@ class InsuranceProvider extends Model
     public function isFieldRequired(string $fieldName): bool
     {
         $requiredFields = $this->getRequiredFields();
+
         return in_array($fieldName, $requiredFields);
     }
 
@@ -116,7 +147,7 @@ class InsuranceProvider extends Model
      */
     public function getLogoUrl(): ?string
     {
-        if (!$this->logo_path) {
+        if (! $this->logo_path) {
             return null;
         }
 

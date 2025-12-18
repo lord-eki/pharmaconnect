@@ -31,6 +31,7 @@ class Patient extends Model
         'allergies',
         'medical_conditions',
         'is_active',
+        
     ];
 
     protected $casts = [
