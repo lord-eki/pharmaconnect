@@ -3,6 +3,7 @@
 namespace App\Filament\Physician\Resources\Physician\ClaimForms\Schemas;
 
 use App\Models\InsuranceProvider;
+use App\Models\Prescription;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\KeyValue;
@@ -40,10 +41,52 @@ class ClaimFormForm
                                 ->live()
                                 ->afterStateUpdated(function ($state, Set $set) {
                                     if ($state) {
-                                        $prescription = \App\Models\Prescription::find($state);
+                                        $prescription = Prescription::with(['patient', 'physician', 'items.medicine'])
+                                            ->find($state);
+                                        
                                         if ($prescription) {
+                                            // Set patient and physician
                                             $set('patient_id', $prescription->patient_id);
                                             $set('physician_id', $prescription->physician_id);
+                                            
+                                            // Auto-fill clinical information
+                                            if ($prescription->diagnosis) {
+                                                $set('diagnosis', $prescription->diagnosis);
+                                            }
+                                            
+                                            // Build treatment notes from prescription items
+                                            $treatmentNotes = $prescription->notes ?? '';
+                                            
+                                            if ($prescription->items->isNotEmpty()) {
+                                                $medicinesList = "\n\nPrescribed Medicines:\n";
+                                                foreach ($prescription->items as $item) {
+                                                    $medicine = $item->medicine;
+                                                    $medicinesList .= "- {$medicine->generic_name}";
+                                                    if ($medicine->brand_name) {
+                                                        $medicinesList .= " ({$medicine->brand_name})";
+                                                    }
+                                                    $medicinesList .= " - {$medicine->strength}\n";
+                                                    $medicinesList .= "  Qty: {$item->quantity}, ";
+                                                    if ($item->frequency) {
+                                                        $medicinesList .= "Dosage: {$item->frequency}, ";
+                                                    }
+                                                    if ($item->duration_days) {
+                                                        $medicinesList .= "Duration: {$item->duration_days} days";
+                                                    }
+                                                    $medicinesList .= "\n";
+                                                    if ($item->dosage_instructions) {
+                                                        $medicinesList .= "  Instructions: {$item->dosage_instructions}\n";
+                                                    }
+                                                }
+                                                $treatmentNotes .= $medicinesList;
+                                            }
+                                            
+                                            $set('treatment_notes', trim($treatmentNotes));
+                                            
+                                            // Auto-fill insurance provider if patient has one
+                                            if ($prescription->patient && $prescription->patient->insurance_provider_id) {
+                                                $set('insurance_provider_id', $prescription->patient->insurance_provider_id);
+                                            }
                                         }
                                     }
                                 }),
@@ -105,33 +148,21 @@ class ClaimFormForm
                     ]),
 
                 Section::make('Clinical Information')
+                    ->description('Clinical details from prescription (editable)')
                     ->schema([
                         Textarea::make('diagnosis')
                             ->label('Diagnosis')
                             ->required()
                             ->rows(3)
                             ->maxLength(1000)
-                            ->helperText('Primary diagnosis'),
+                            ->helperText('Primary diagnosis - auto-filled from prescription'),
 
                         Textarea::make('treatment_notes')
                             ->label('Treatment Notes')
-                            ->rows(3)
-                            ->maxLength(1000)
-                            ->helperText('Treatment plan and clinical notes'),
+                            ->rows(5)
+                            ->maxLength(2000)
+                            ->helperText('Treatment plan and prescribed medicines - auto-filled from prescription'),
                     ]),
-
-                Section::make('Insurance-Specific Fields')
-                    ->description('Fields customized for the selected insurance provider')
-                    ->schema([
-                        KeyValue::make('form_data')
-                            ->label('Additional Fields')
-                            ->keyLabel('Field Name')
-                            ->valueLabel('Value')
-                            ->helperText('Add any additional fields required by the insurance provider')
-                            ->addActionLabel('Add Field')
-                            ->reorderable(),
-                    ])
-                    ->collapsible(),
 
                 Section::make('Manual Form Upload')
                     ->description('Upload scanned physical claim form (only for manual submissions)')
@@ -146,9 +177,7 @@ class ClaimFormForm
                             ->previewable()
                             ->helperText('Upload the scanned claim form if offline system was used')
                             ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                                // Automatically create document record when file is uploaded
                                 if ($state && $get('submission_type') === 'manual') {
-                                    // This will be handled in the page class
                                     $set('has_uploaded_document', true);
                                 }
                             }),
@@ -156,31 +185,6 @@ class ClaimFormForm
                     ->visible(fn (Get $get) => $get('submission_type') === 'manual')
                     ->collapsible(),
 
-                Section::make('Digital Signatures')
-                    ->description('Electronic signatures (for online submissions)')
-                    ->schema([
-                        Grid::make(2)->schema([
-                            Textarea::make('physician_signature')
-                                ->label('Physician Signature')
-                                ->rows(3)
-                                ->helperText('Digital signature or typed name confirmation')
-                                ->visible(fn (Get $get) => $get('submission_type') === 'online'),
-
-                            Textarea::make('patient_signature')
-                                ->label('Patient Signature')
-                                ->rows(3)
-                                ->helperText('Digital signature or typed consent')
-                                ->visible(fn (Get $get) => $get('submission_type') === 'online'),
-
-                            DateTimePicker::make('signed_at')
-                                ->label('Signed At')
-                                ->disabled()
-                                ->dehydrated(false)
-                                ->visible(fn ($context) => $context === 'edit'),
-                        ]),
-                    ])
-                    ->collapsible()
-                    ->collapsed(),
             ]);
     }
 }

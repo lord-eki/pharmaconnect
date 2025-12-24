@@ -45,7 +45,7 @@ class PrescriptionForm
                                     )
                                     ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->first_name} {$record->last_name} - {$record->patient_number}")
                                     ->searchable(['first_name', 'last_name', 'patient_number'])
-                                    ->preload(false)
+                                    ->preload(true)
                                     ->required()
                                     ->createOptionForm([
                                         Grid::make(2)
@@ -261,7 +261,7 @@ class PrescriptionForm
     }
 
     /**
-     * OPTIMIZED: Cache medicine options with longer TTL
+     *  Cache medicine options with longer TTL
      */
     protected static function getCachedMedicineOptions(): array
     {

@@ -59,7 +59,7 @@ class DocumentForm
 
                         Textarea::make('description')
                             ->label('Description')
-                            ->rows(3)
+                            ->rows(2)
                             ->columnSpanFull(),
 
                         FileUpload::make('file_path')
@@ -81,10 +81,7 @@ class DocumentForm
                                 }
                             }),
 
-                        TagsInput::make('tags')
-                            ->label('Tags')
-                            ->placeholder('Add tags')
-                            ->columnSpanFull(),
+                       
                     ]),
 
                 Section::make('Related Entities')
