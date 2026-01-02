@@ -4,6 +4,7 @@ namespace App\Filament\Insurer\Resources\Insurance\ClaimVerifications\Tables;
 
 use App\Models\InsuranceClaim;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -100,8 +101,7 @@ class ClaimVerificationsTable
                         'approved' => 'Approved',
                         'rejected' => 'Rejected',
                         'paid' => 'Paid',
-                    ])
-                    ->default('submitted'),
+                    ]),
 
                 Filter::make('submitted_today')
                     ->query(fn (Builder $query) => $query->whereDate('submitted_at', today()))
@@ -112,71 +112,73 @@ class ClaimVerificationsTable
                     ->label('Pending Review'),
             ])
             ->recordActions([
-                // ViewAction::make(),
+                ActionGroup::make([
+                    // ViewAction::make(),
 
-                // EditAction::make()
-                //     ->visible(fn ($record) => $record->canBeApproved() || $record->canBeRejected()),
+                    // EditAction::make()
+                    //     ->visible(fn ($record) => $record->canBeApproved() || $record->canBeRejected()),
 
-                Action::make('approve')
-                    ->icon('heroicon-o-check-circle')
-                    ->color('success')
-                    ->visible(fn ($record) => $record->canBeApproved())
-                    ->requiresConfirmation()
-                    ->form([
+                    Action::make('approve')
+                        ->icon('heroicon-o-check-circle')
+                        ->color('success')
+                        ->visible(fn ($record) => $record->canBeApproved())
+                        ->requiresConfirmation()
+                        ->form([
 
-                        TextInput::make('approved_amount')
-                            ->label('Approved Amount')
-                            ->prefix('KES')
-                            ->numeric()
-                            ->required()
-                            ->default(fn ($record) => $record->claimed_amount),
+                            TextInput::make('approved_amount')
+                                ->label('Approved Amount')
+                                ->prefix('KES')
+                                ->numeric()
+                                ->required()
+                                ->default(fn ($record) => $record->claimed_amount),
 
-                        Textarea::make('notes')
-                            ->label('Review Notes')
-                            ->rows(3),
-                    ])
-                    ->action(function (InsuranceClaim $record, array $data) {
-                        $record->approve($data['approved_amount'], $data['notes'] ?? null);
+                            Textarea::make('notes')
+                                ->label('Review Notes')
+                                ->rows(3),
+                        ])
+                        ->action(function (InsuranceClaim $record, array $data) {
+                            $record->approve($data['approved_amount'], $data['notes'] ?? null);
 
-                        Notification::make()
-                            ->title('Claim Approved')
-                            ->success()
-                            ->send();
-                    }),
+                            Notification::make()
+                                ->title('Claim Approved')
+                                ->success()
+                                ->send();
+                        }),
 
-                Action::make('reject')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('danger')
-                    ->visible(fn ($record) => $record->canBeRejected())
-                    ->requiresConfirmation()
-                    ->form([
-                        Textarea::make('rejection_reason')
-                            ->label('Rejection Reason')
-                            ->required()
-                            ->rows(3),
-                    ])
-                    ->action(function (InsuranceClaim $record, array $data) {
-                        $record->reject($data['rejection_reason']);
+                    Action::make('reject')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->visible(fn ($record) => $record->canBeRejected())
+                        ->requiresConfirmation()
+                        ->form([
+                            Textarea::make('rejection_reason')
+                                ->label('Rejection Reason')
+                                ->required()
+                                ->rows(3),
+                        ])
+                        ->action(function (InsuranceClaim $record, array $data) {
+                            $record->reject($data['rejection_reason']);
 
-                        Notification::make()
-                            ->title('Claim Rejected')
-                            ->warning()
-                            ->send();
-                    }),
+                            Notification::make()
+                                ->title('Claim Rejected')
+                                ->warning()
+                                ->send();
+                        }),
 
-                Action::make('mark_paid')
-                    ->icon('heroicon-o-currency-dollar')
-                    ->color('primary')
-                    ->visible(fn ($record) => $record->status === 'approved')
-                    ->requiresConfirmation()
-                    ->action(function (InsuranceClaim $record) {
-                        $record->markAsPaid();
+                    Action::make('mark_paid')
+                        ->icon('heroicon-o-currency-dollar')
+                        ->color('primary')
+                        ->visible(fn ($record) => $record->status === 'approved')
+                        ->requiresConfirmation()
+                        ->action(function (InsuranceClaim $record) {
+                            $record->markAsPaid();
 
-                        Notification::make()
-                            ->title('Claim Marked as Paid')
-                            ->success()
-                            ->send();
-                    }),
+                            Notification::make()
+                                ->title('Claim Marked as Paid')
+                                ->success()
+                                ->send();
+                        }),
+                ]),
             ])
             ->toolbarActions([
                 BulkAction::make('move_to_review')

@@ -28,6 +28,10 @@ class ReceivablesTable
     {
         return $table
             ->columns([
+                 TextColumn::make('created_at')
+                    ->label('Date')
+                    ->date()
+                    ->sortable(),
                 TextColumn::make('reference')
                     ->label('Ref#')
                     ->searchable()
@@ -78,10 +82,7 @@ class ReceivablesTable
                     ->sortable()
                     ->tooltip(fn ($record) => $record->received_at ? 'Received on ' . $record->received_at->format('M d, Y') : 'Not received'),
 
-                TextColumn::make('created_at')
-                    ->label('Created')
-                    ->dateTime()
-                    ->sortable()
+               
             ])
             ->filters([
                 SelectFilter::make('payment_source')
@@ -275,6 +276,6 @@ class ReceivablesTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])->defaultSort('created_at', 'desc');
     }
 }
