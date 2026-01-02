@@ -368,18 +368,54 @@ class Order extends Model
         }
 
         return DB::transaction(function () {
+
+            $oldStatus = $this->status;
+
             $this->status = 'confirmed';
             $this->save();
 
-            // Update stock quantities
-            foreach ($this->items as $item) {
-                $supplierMedicine = $item->medicine->supplierMedicines()
-                    ->where('supplier_id', $this->supplier_id)
-                    ->first();
+            if (in_array($oldStatus, ['sent_to_supplier', 'pending'])) {
+                foreach ($this->items as $item) {
+                    $supplierMedicine = $item->medicine->supplierMedicines()
+                        ->where('supplier_id', $this->supplier_id)
+                        ->first();
 
-                if ($supplierMedicine) {
-                    $supplierMedicine->decrement('stock_quantity', $item->quantity);
+                    if ($supplierMedicine) {
+                        // Check if there is enough stock
+                        if ($supplierMedicine->stock_quantity < $item->quantity) {
+                            Log::warning('Insufficient stock for order confirmation', [
+                                'order_id' => $this->id,
+                                'medicine_id' => $item->medicine_id,
+                                'required' => $item->quantity,
+                                'available' => $supplierMedicine->stock_quantity,
+                            ]);
+
+                            throw new \Exception(
+                                "Insufficient stock for {$item->medicine->generic_name}. ".
+                                "Required: {$item->quantity}, Available: {$supplierMedicine->stock_quantity}"
+                            );
+                        }
+
+                        $supplierMedicine->decrement('stock_quantity', $item->quantity);
+                        $supplierMedicine->update(['last_updated' => now()]);
+
+                        Log::info('Stock decremented for order confirmation', [
+                            'order_id' => $this->id,
+                            'medicine_id' => $item->medicine_id,
+                            'quantity_reduced' => $item->quantity,
+                            'remaining_stock' => $supplierMedicine->fresh()->stock_quantity,
+                        ]);
+                    }
                 }
+
+                // Clear medicine caches for all items
+                $medicineIds = $this->items->pluck('medicine_id')->toArray();
+                Medicine::clearCachesForMedicines($medicineIds);
+            } else {
+                Log::info('Skipping stock deduction - order already confirmed', [
+                    'order_id' => $this->id,
+                    'old_status' => $oldStatus,
+                ]);
             }
 
             // Create delivery when order is confirmed
@@ -595,17 +631,19 @@ class Order extends Model
     // Cancel order
     public function cancel(string $reason): bool
     {
-        if (! in_array($this->status, ['pending_review', 'sent_to_supplier', 'confirmed'])) {
-            throw new \Exception('Cannot cancel order in current status');
+        if (! in_array($this->status, ['pending_review', 'sent_to_supplier', 'confirmed', 'processing', 'shipped'])) {
+            throw new \Exception('Cannot cancel order in current status: '.$this->status);
         }
 
         return DB::transaction(function () use ($reason) {
+            $oldStatus = $this->status;
+
             $this->status = 'cancelled';
             $this->notes = ($this->notes ? $this->notes."\n\n" : '').'Cancelled: '.$reason;
             $this->save();
 
-            // Restore stock quantities if order was confirmed
-            if ($this->wasChanged('status') && $this->getOriginal('status') === 'confirmed') {
+            // Restore stock quantities if order was confirmed or beyond
+            if (in_array($oldStatus, ['confirmed', 'processing', 'shipped'])) {
                 foreach ($this->items as $item) {
                     $supplierMedicine = $item->medicine->supplierMedicines()
                         ->where('supplier_id', $this->supplier_id)
@@ -613,13 +651,41 @@ class Order extends Model
 
                     if ($supplierMedicine) {
                         $supplierMedicine->increment('stock_quantity', $item->quantity);
+                        $supplierMedicine->update(['last_updated' => now()]);
+
+                        Log::info('Stock restored after order cancellation', [
+                            'order_id' => $this->id,
+                            'medicine_id' => $item->medicine_id,
+                            'quantity_restored' => $item->quantity,
+                            'new_stock' => $supplierMedicine->fresh()->stock_quantity,
+                        ]);
                     }
                 }
+
+                // Clear medicine caches
+                $medicineIds = $this->items->pluck('medicine_id')->toArray();
+                Medicine::clearCachesForMedicines($medicineIds);
+
+                Log::info('Stock restored for cancelled order', [
+                    'order_id' => $this->id,
+                    'order_number' => $this->order_number,
+                    'previous_status' => $oldStatus,
+                ]);
+            } else {
+                Log::info('No stock restoration needed - order not yet confirmed', [
+                    'order_id' => $this->id,
+                    'status' => $oldStatus,
+                ]);
             }
 
             // Cancel delivery if exists
             if ($this->delivery) {
                 $this->delivery->update(['status' => 'cancelled']);
+
+                // Free up rider if assigned
+                if ($this->delivery->rider) {
+                    $this->delivery->rider->update(['is_available' => true]);
+                }
             }
 
             // Notify stakeholders

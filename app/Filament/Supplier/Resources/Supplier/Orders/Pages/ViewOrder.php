@@ -5,7 +5,6 @@ namespace App\Filament\Supplier\Resources\Supplier\Orders\Pages;
 use App\Filament\Supplier\Resources\Supplier\Orders\OrderResource;
 use App\Services\OrderFulfillmentService;
 use Filament\Actions\Action;
-use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -138,7 +137,7 @@ class ViewOrder extends ViewRecord
                 ->visible(fn ($record) => ! in_array($record->status, ['delivered', 'cancelled']))
                 ->requiresConfirmation()
                 ->modalHeading('Cancel Order')
-                ->modalDescription('Are you sure you want to cancel this order? Stock will be restored.')
+                ->modalDescription('Are you sure you want to cancel this order? Stock will be restored if applicable.')
                 ->form([
                     Textarea::make('cancellation_reason')
                         ->label('Reason for Cancellation')
@@ -146,40 +145,29 @@ class ViewOrder extends ViewRecord
                         ->maxLength(500),
                 ])
                 ->action(function ($record, array $data) {
-                    // Restore stock if order was confirmed
-                    if (in_array($record->status, ['confirmed', 'processing', 'shipped'])) {
-                        foreach ($record->items as $item) {
-                            $supplierMedicine = \App\Models\SupplierMedicine::where('supplier_id', $record->supplier_id)
-                                ->where('medicine_id', $item->medicine_id)
-                                ->first();
+                    try {
+                        // Use the model's cancel method which handles stock restoration
+                        $record->cancel($data['cancellation_reason']);
 
-                            if ($supplierMedicine) {
-                                $supplierMedicine->increment('stock_quantity', $item->quantity);
-                                $supplierMedicine->update(['last_updated' => now()]);
-                            }
-                        }
+                        Notification::make()
+                            ->success()
+                            ->title('Order Cancelled')
+                            ->body('Order cancelled successfully. Stock has been restored if applicable.')
+                            ->send();
+
+                    } catch (\Exception $e) {
+                        \Log::error('Order cancellation failed', [
+                            'order_id' => $record->id,
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                        ]);
+
+                        Notification::make()
+                            ->danger()
+                            ->title('Cancellation Failed')
+                            ->body('Failed to cancel order: '.$e->getMessage())
+                            ->send();
                     }
-
-                    $record->update([
-                        'status' => 'cancelled',
-                        'notes' => ($record->notes ?? '')."\n\nCancelled: ".now()->toDateTimeString()."\nReason: ".$data['cancellation_reason'],
-                    ]);
-
-                    // Cancel delivery if exists
-                    if ($record->delivery) {
-                        $record->delivery->update(['status' => 'cancelled']);
-
-                        // Free up rider
-                        if ($record->delivery->rider) {
-                            $record->delivery->rider->update(['is_available' => true]);
-                        }
-                    }
-
-                    Notification::make()
-                        ->success()
-                        ->title('Order Cancelled')
-                        ->body('Order cancelled and stock restored.')
-                        ->send();
                 }),
 
             Action::make('print')
