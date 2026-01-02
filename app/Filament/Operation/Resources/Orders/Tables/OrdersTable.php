@@ -463,7 +463,7 @@ class OrdersTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     BulkAction::make('send_to_supplier')
-                        ->label('Send to Supplier')
+                        ->label('Send to Suppliers')
                         ->icon('heroicon-o-paper-airplane')
                         ->color('info')
                         ->form([
