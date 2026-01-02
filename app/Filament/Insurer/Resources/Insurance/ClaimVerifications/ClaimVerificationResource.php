@@ -56,7 +56,7 @@ class ClaimVerificationResource extends Resource
         return [
             'index' => ListClaimVerifications::route('/'),
             'create' => CreateClaimVerification::route('/create'),
-            'edit' => EditClaimVerification::route('/{record}/edit'),
+            // 'edit' => EditClaimVerification::route('/{record}/edit'),
             // 'view' => ViewClaimVerification::route('/{record}'),
 
         ];

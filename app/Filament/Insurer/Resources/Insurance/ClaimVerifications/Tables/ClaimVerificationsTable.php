@@ -165,19 +165,19 @@ class ClaimVerificationsTable
                                 ->send();
                         }),
 
-                    Action::make('mark_paid')
-                        ->icon('heroicon-o-currency-dollar')
-                        ->color('primary')
-                        ->visible(fn ($record) => $record->status === 'approved')
-                        ->requiresConfirmation()
-                        ->action(function (InsuranceClaim $record) {
-                            $record->markAsPaid();
+                    // Action::make('mark_paid')
+                    //     ->icon('heroicon-o-currency-dollar')
+                    //     ->color('primary')
+                    //     ->visible(fn ($record) => $record->status === 'approved')
+                    //     ->requiresConfirmation()
+                    //     ->action(function (InsuranceClaim $record) {
+                    //         $record->markAsPaid();
 
-                            Notification::make()
-                                ->title('Claim Marked as Paid')
-                                ->success()
-                                ->send();
-                        }),
+                    //         Notification::make()
+                    //             ->title('Claim Marked as Paid')
+                    //             ->success()
+                    //             ->send();
+                    //     }),
                 ]),
             ])
             ->toolbarActions([
