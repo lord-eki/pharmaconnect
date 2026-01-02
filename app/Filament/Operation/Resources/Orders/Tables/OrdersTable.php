@@ -93,7 +93,7 @@ class OrdersTable
                     ])
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'pending_review' => 'Pending Review',
-                        'sent_to_supplier' => 'Received',
+                        'sent_to_supplier' => 'Sent to Supplier',
                         'confirmed' => 'Confirmed',
                         'processing' => 'Processing',
                         'shipped' => 'Shipped',

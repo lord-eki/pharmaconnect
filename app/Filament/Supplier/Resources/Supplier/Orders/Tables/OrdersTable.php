@@ -72,7 +72,16 @@ class OrdersTable
                         'shipped' => 'success',
                         'delivered' => 'success',
                         'cancelled' => 'danger',
+                        'sent_to_supplier' => 'gray',
                         default => 'gray',
+                    })->formatStateUsing(fn (string $state): string => match ($state) {
+                        'pending' => 'Pending',
+                        'confirmed' => 'Confirmed',
+                        'processing' => 'Processing',
+                        'shipped' => 'Shipped',
+                        'delivered' => 'Delivered',
+                        'cancelled' => 'Cancelled',
+                        'sent_to_supplier' => 'Pending',
                     }),
 
                 TextColumn::make('ordered_at')
@@ -86,8 +95,8 @@ class OrdersTable
                     ->dateTime()
                     ->sortable()
                     ->color(fn ($state, $record) => $state && $state->isPast() && $record->status !== 'delivered'
-                            ? 'danger'
-                            : 'success'
+                                            ? 'danger'
+                                            : 'success'
                     )
                     ->description(fn ($state) => $state ? $state->diffForHumans() : null),
 
@@ -141,8 +150,8 @@ class OrdersTable
                 ActionGroup::make([
                     ViewAction::make(),
 
-                    EditAction::make()
-                        ->visible(fn ($record) => ! in_array($record->status, ['delivered', 'cancelled'])),
+                    // EditAction::make()
+                    //     ->visible(fn ($record) => ! in_array($record->status, ['delivered', 'cancelled'])),
 
                     Action::make('confirm')
                         ->label('Confirm Order')
