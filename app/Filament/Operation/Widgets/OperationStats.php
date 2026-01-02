@@ -6,7 +6,10 @@ use App\Models\Delivery;
 use App\Models\InsuranceClaim;
 use App\Models\Order;
 use App\Models\Prescription;
+use App\Models\Receivable;
+use App\Models\Payable;
 use App\Models\Rider;
+use App\Services\RevenueService;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -16,8 +19,24 @@ class OperationStats extends StatsOverviewWidget
 
     protected function getStats(): array
     {
+        $revenueService = app(RevenueService::class);
+        
         // Today's metrics
         $today = now()->startOfDay();
+        $todayEnd = now()->endOfDay();
+
+        // Get proper revenue metrics for today
+        $todayMetrics = $revenueService->getRevenueMetrics($today, $todayEnd);
+        
+        // Yesterday's revenue for comparison
+        $yesterday = now()->subDay()->startOfDay();
+        $yesterdayEnd = now()->subDay()->endOfDay();
+        $yesterdayMetrics = $revenueService->getRevenueMetrics($yesterday, $yesterdayEnd);
+
+        // Calculate change
+        $revenueChange = $yesterdayMetrics['gross_revenue'] > 0
+            ? (($todayMetrics['gross_revenue'] - $yesterdayMetrics['gross_revenue']) / $yesterdayMetrics['gross_revenue']) * 100
+            : 0;
 
         // Orders metrics
         $pendingOrders = Order::where('status', 'pending_review')->count();
@@ -30,9 +49,6 @@ class OperationStats extends StatsOverviewWidget
         // Delivery metrics
         $pendingDeliveries = Delivery::where('status', 'pending')->count();
         $inTransitDeliveries = Delivery::whereIn('status', ['assigned', 'picked_up', 'in_transit'])->count();
-        $deliveredTodayCount = Delivery::where('status', 'delivered')
-            ->whereDate('actual_delivery', $today)
-            ->count();
 
         // Prescription metrics
         $pendingPrescriptions = Prescription::where('status', 'pending')->count();
@@ -41,23 +57,6 @@ class OperationStats extends StatsOverviewWidget
         // Insurance claims
         $pendingClaims = InsuranceClaim::whereIn('status', ['submitted', 'under_review'])->count();
 
-        // Revenue metrics (today)
-        $todayRevenue = Order::where('status', 'delivered')
-            ->whereDate('delivered_at', $today)
-            ->sum('total_amount');
-
-        // Week comparison
-        $lastWeekRevenue = Order::where('status', 'delivered')
-            ->whereBetween('delivered_at', [
-                now()->subWeek()->startOfDay(),
-                now()->subWeek()->endOfDay(),
-            ])
-            ->sum('total_amount');
-
-        $revenueChange = $lastWeekRevenue > 0
-            ? (($todayRevenue - $lastWeekRevenue) / $lastWeekRevenue) * 100
-            : 0;
-
         // Active riders
         $availableRiders = Rider::where('is_active', true)
             ->where('is_available', true)
@@ -65,26 +64,37 @@ class OperationStats extends StatsOverviewWidget
 
         $totalActiveRiders = Rider::where('is_active', true)->count();
 
-        // Suppliers
-        $activeSuppliersToday = Order::where('status', 'sent_to_supplier')
-            ->orWhere('status', 'confirmed')
-            ->whereDate('created_at', $today)
-            ->distinct('supplier_id')
-            ->count('supplier_id');
+        // Outstanding financials
+        $outstandingReceivables = Receivable::whereNull('received_at')->sum('amount');
+        $outstandingPayables = Payable::whereNull('paid_at')->sum('amount');
+        $overduePayables = Payable::whereNull('paid_at')
+            ->where('due_date', '<', now())
+            ->sum('amount');
 
         return [
-            // Revenue
-            Stat::make('Today\'s Revenue', 'KES '.number_format($todayRevenue, 2))
+            // REVENUE METRICS
+            Stat::make('Today\'s Gross Revenue', 'KES '.number_format($todayMetrics['gross_revenue'], 2))
                 ->description($revenueChange >= 0
-                    ? 'Up '.number_format(abs($revenueChange), 1).'% from last week'
-                    : 'Down '.number_format(abs($revenueChange), 1).'% from last week')
+                    ? 'Up '.number_format(abs($revenueChange), 1).'% from yesterday'
+                    : 'Down '.number_format(abs($revenueChange), 1).'% from yesterday')
                 ->descriptionIcon($revenueChange >= 0 ? 'heroicon-o-arrow-trending-up' : 'heroicon-o-arrow-trending-down')
                 ->color($revenueChange >= 0 ? 'success' : 'danger')
                 ->chart($this->getRevenueTrend())
                 ->url(route('filament.Operation.resources.orders.index', [
                     'tableFilters' => ['status' => ['value' => 'delivered']],
                 ])),
-            // Orders Overview
+
+            Stat::make('Collected Revenue', 'KES '.number_format($todayMetrics['collected_revenue'], 2))
+                ->description('Payment received today ('.$todayMetrics['collection_rate'].'% collection rate)')
+                ->descriptionIcon('heroicon-o-banknotes')
+                ->color('success'),
+
+            Stat::make('Net Profit Today', 'KES '.number_format($todayMetrics['net_profit'], 2))
+                ->description('Margin: '.$todayMetrics['net_margin_percent'].'%')
+                ->descriptionIcon('heroicon-o-chart-bar')
+                ->color($todayMetrics['net_profit'] > 0 ? 'success' : 'danger'),
+
+            // ORDERS OVERVIEW
             Stat::make('Pending Review', $pendingOrders)
                 ->description('Orders awaiting review')
                 ->descriptionIcon('heroicon-o-clock')
@@ -118,7 +128,7 @@ class OperationStats extends StatsOverviewWidget
                     'tableFilters' => ['status' => ['value' => 'delivered']],
                 ])),
 
-            // Delivery Overview
+            // DELIVERY OVERVIEW
             Stat::make('Pending Deliveries', $pendingDeliveries)
                 ->description('Waiting for rider assignment')
                 ->descriptionIcon('heroicon-o-user-plus')
@@ -133,7 +143,20 @@ class OperationStats extends StatsOverviewWidget
                 ->color('info')
                 ->url(route('filament.Operation.resources.internals.deliveries.index')),
 
-            // Prescriptions
+            // FINANCIAL OVERVIEW
+            Stat::make('Outstanding Receivables', 'KES '.number_format($outstandingReceivables, 2))
+                ->description('Pending customer payments')
+                ->descriptionIcon('heroicon-o-currency-dollar')
+                ->color($outstandingReceivables > 100000 ? 'warning' : 'info'),
+
+            Stat::make('Outstanding Payables', 'KES '.number_format($outstandingPayables, 2))
+                ->description($overduePayables > 0 
+                    ? 'KES '.number_format($overduePayables, 2).' overdue!' 
+                    : 'All payments current')
+                ->descriptionIcon($overduePayables > 0 ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle')
+                ->color($overduePayables > 0 ? 'danger' : 'success'),
+
+            // PRESCRIPTIONS
             Stat::make('Pending Prescriptions', $pendingPrescriptions)
                 ->description('Need quotation')
                 ->descriptionIcon('heroicon-o-document-text')
@@ -150,26 +173,19 @@ class OperationStats extends StatsOverviewWidget
                     'tableFilters' => ['status' => ['value' => 'quoted']],
                 ])),
 
-            // Insurance Claims
+            // INSURANCE CLAIMS
             Stat::make('Pending Claims', $pendingClaims)
                 ->description('Require insurance review')
                 ->descriptionIcon('heroicon-o-shield-check')
                 ->color($pendingClaims > 20 ? 'warning' : 'success')
                 ->url(route('filament.Admin.resources.insurance-claims.index')),
 
-            // Riders
+            // RIDERS
             Stat::make('Available Riders', $availableRiders.' / '.$totalActiveRiders)
                 ->description('Ready for dispatch')
                 ->descriptionIcon('heroicon-o-user-group')
                 ->color($availableRiders < 3 ? 'danger' : 'success')
                 ->url(route('filament.Operation.resources.internals.riders.index')),
-
-            // Suppliers
-            Stat::make('Active Suppliers Today', $activeSuppliersToday)
-                ->description('Processing orders')
-                ->descriptionIcon('heroicon-o-building-storefront')
-                ->color('info')
-                ->url(route('filament.Admin.resources.suppliers.index')),
         ];
     }
 
@@ -195,16 +211,11 @@ class OperationStats extends StatsOverviewWidget
     }
 
     /**
-     * Get revenue trend for the last 7 days
+     * Get revenue trend for the last 7 days sing receivables
      */
     private function getRevenueTrend(): array
     {
-        return Order::where('status', 'delivered')
-            ->selectRaw('DATE(delivered_at) as date, SUM(total_amount) as total')
-            ->whereBetween('delivered_at', [now()->subDays(7), now()])
-            ->groupBy('date')
-            ->orderBy('date')
-            ->pluck('total')
-            ->toArray();
+        $revenueService = app(RevenueService::class);
+        return array_values($revenueService->getDailyRevenueTrend(7));
     }
 }

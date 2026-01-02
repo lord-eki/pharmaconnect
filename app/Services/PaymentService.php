@@ -79,56 +79,94 @@ class PaymentService
      * 
      */
     protected function createReceivableForOrder(Order $order): ?Receivable
-    {
-        try {
-            $prescription = $order->prescription;
-            $patient = $prescription->patient;
-
-            $paymentSource = 'patient'; 
-
-            // Determine if insurance will pay
-            if ($prescription->insurance_covered && $patient->insurance_provider_id) {
-                $paymentSource = 'insurance';
-            }
-
-            // Total amount includes
-            $totalAmount = $order->total_amount;
-            if ($order->delivery) {
-                $totalAmount += $order->delivery->delivery_fee;
-            }
-
-            // Create receivable record
-            $receivable = Receivable::create([
-                'reference' => $this->generateReceivableReference(),
+{
+    try {
+        // Eager load necessary relationships to avoid null values
+        $order->load(['prescription.patient.insuranceProvider']);
+        
+        $prescription = $order->prescription;
+        
+        if (!$prescription) {
+            Log::error('Cannot create receivable - order has no prescription', [
+                'order_id' => $order->id,
+            ]);
+            return null;
+        }
+        
+        $patient = $prescription->patient;
+        
+        if (!$patient) {
+            Log::error('Cannot create receivable - prescription has no patient', [
                 'order_id' => $order->id,
                 'prescription_id' => $prescription->id,
-                'patient_id' => $patient->id,
-                'insurance_provider_id' => $paymentSource === 'insurance' ? $patient->insurance_provider_id : null,
-                'amount' => $totalAmount,
-                'payment_source' => $paymentSource,
             ]);
-
-            // Create transaction for tracking
-            $this->createTransaction($receivable, 'receivable', 'pending');
-
-            Log::info('Receivable created successfully', [
-                'receivable_id' => $receivable->id,
-                'order_id' => $order->id,
-                'amount' => $totalAmount,
-                'payment_source' => $paymentSource,
-            ]);
-
-            return $receivable;
-
-        } catch (\Exception $e) {
-            Log::error('Error creating receivable', [
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            throw $e;
+            return null;
         }
+
+        $paymentSource = 'patient'; 
+
+        // Determine if insurance will pay
+        // Check BOTH prescription flag AND patient has complete insurance info
+        if ($prescription->insurance_covered && 
+            $patient->insurance_provider_id && 
+            $patient->insurance_number) {
+            $paymentSource = 'insurance';
+            
+            Log::info('Receivable will be from insurance', [
+                'order_id' => $order->id,
+                'patient_id' => $patient->id,
+                'insurance_provider_id' => $patient->insurance_provider_id,
+                'insurance_number' => $patient->insurance_number,
+            ]);
+        } else {
+            Log::info('Receivable will be from patient', [
+                'order_id' => $order->id,
+                'patient_id' => $patient->id,
+                'prescription_insurance_covered' => $prescription->insurance_covered,
+                'patient_has_provider' => !empty($patient->insurance_provider_id),
+                'patient_has_number' => !empty($patient->insurance_number),
+            ]);
+        }
+
+        // Total amount includes order total + delivery fee
+        $totalAmount = $order->total_amount;
+        if ($order->delivery) {
+            $totalAmount += $order->delivery->delivery_fee;
+        }
+
+        // Create receivable record
+        $receivable = Receivable::create([
+            'reference' => $this->generateReceivableReference(),
+            'order_id' => $order->id,
+            'prescription_id' => $prescription->id,
+            'patient_id' => $patient->id,
+            'insurance_provider_id' => $paymentSource === 'insurance' ? $patient->insurance_provider_id : null,
+            'amount' => $totalAmount,
+            'payment_source' => $paymentSource,
+        ]);
+
+        // Create transaction for tracking
+        $this->createTransaction($receivable, 'receivable', 'pending');
+
+        Log::info('Receivable created successfully', [
+            'receivable_id' => $receivable->id,
+            'order_id' => $order->id,
+            'amount' => $totalAmount,
+            'payment_source' => $paymentSource,
+            'insurance_provider_id' => $receivable->insurance_provider_id,
+        ]);
+
+        return $receivable;
+
+    } catch (\Exception $e) {
+        Log::error('Error creating receivable', [
+            'order_id' => $order->id,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        throw $e;
     }
+}
 
     /**
      * Create payable to supplier

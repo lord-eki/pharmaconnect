@@ -9,13 +9,14 @@ class Payable extends Model
     protected $fillable = [
         'reference', 'order_id', 'vendor_id', 'vendor_type',
         'amount', 'payment_method', 'gateway_reference',
-        'due_date', 'paid_at',
+        'due_date', 'paid_at', 'description', 'metadata',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'due_date' => 'date',
         'paid_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     public function transaction()
@@ -62,6 +63,26 @@ class Payable extends Model
     }
 
     /**
+     * Check if payable is paid
+     */
+    public function getIsPaidAttribute(): bool
+    {
+        return !is_null($this->paid_at);
+    }
+
+    /**
+     * Check if payable is overdue
+     */
+    public function getIsOverdueAttribute(): bool
+    {
+        if ($this->is_paid || !$this->due_date) {
+            return false;
+        }
+
+        return $this->due_date->isPast();
+    }
+
+    /**
      * Get days until due
      */
     public function getDaysUntilDueAttribute(): ?int
@@ -85,4 +106,32 @@ class Payable extends Model
         return now()->diffInDays($this->due_date);
     }
 
+    /**
+     * Get status label
+     */
+    public function getStatusAttribute(): string
+    {
+        if ($this->is_paid) {
+            return 'paid';
+        }
+
+        if ($this->is_overdue) {
+            return 'overdue';
+        }
+
+        return 'pending';
+    }
+
+    /**
+     * Get status color
+     */
+    public function getStatusColorAttribute(): string
+    {
+        return match ($this->status) {
+            'paid' => 'success',
+            'overdue' => 'danger',
+            'pending' => 'warning',
+            default => 'gray',
+        };
+    }
 }
