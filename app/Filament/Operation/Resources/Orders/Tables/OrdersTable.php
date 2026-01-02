@@ -2,6 +2,7 @@
 
 namespace App\Filament\Operation\Resources\Orders\Tables;
 
+use App\Jobs\BulkSendOrdersToSupplierJob;
 use App\Jobs\GenerateInvoicePdfJob;
 use App\Jobs\SendInvoiceEmailJob;
 use App\Models\Order;
@@ -461,6 +462,63 @@ class OrdersTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    BulkAction::make('send_to_supplier')
+                        ->label('Send to Supplier')
+                        ->icon('heroicon-o-paper-airplane')
+                        ->color('info')
+                        ->form([
+                            Textarea::make('notes')
+                                ->label('Notes for Supplier (Optional)')
+                                ->rows(3)
+                                ->helperText('These notes will be added to all selected orders'),
+                        ])
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data) {
+                            try {
+                                // Filter only pending_review orders
+                                $eligibleOrders = $records->filter(fn ($order) => $order->status === 'pending_review');
+
+                                if ($eligibleOrders->isEmpty()) {
+                                    Notification::make()
+                                        ->title('No Eligible Orders')
+                                        ->body('Only orders in "Pending Review" status can be sent to suppliers.')
+                                        ->warning()
+                                        ->send();
+
+                                    return;
+                                }
+
+                                $orderIds = $eligibleOrders->pluck('id')->toArray();
+
+                                BulkSendOrdersToSupplierJob::dispatch(
+                                    $orderIds,
+                                    $data['notes'] ?? null,
+                                    auth()->id()
+                                );
+
+                                Notification::make()
+                                    ->title('Orders Being Sent')
+                                    ->body("Processing {$eligibleOrders->count()} orders. Suppliers will be notified shortly.")
+                                    ->success()
+                                    ->send();
+
+                            } catch (\Exception $e) {
+                                \Log::error('Bulk Send to Supplier Error', [
+                                    'error' => $e->getMessage(),
+                                    'trace' => $e->getTraceAsString(),
+                                ]);
+
+                                Notification::make()
+                                    ->title('Error Processing Orders')
+                                    ->body('Unable to send orders. Please try again.')
+                                    ->danger()
+                                    ->send();
+                            }
+                        })
+                        ->deselectRecordsAfterCompletion()
+                        ->requiresConfirmation()
+                        ->modalHeading('Send Orders to Suppliers')
+                        ->modalDescription('This will send all selected pending review orders to their respective suppliers for processing.')
+                        ->modalSubmitActionLabel('Send to Suppliers'),
                     BulkAction::make('generate_invoices')
                         ->label('Generate Invoices')
                         ->icon('heroicon-o-document-currency-dollar')

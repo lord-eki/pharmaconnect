@@ -194,7 +194,7 @@ class Prescription extends Model
     }
 
     /**
-     * OPTIMIZED: Generate quotation with bulk operations
+     * Generate quotation with bulk operations
      */
     protected function generateQuotationSync(): ?Quotation
     {
