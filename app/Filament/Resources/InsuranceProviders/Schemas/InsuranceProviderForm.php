@@ -24,17 +24,7 @@ class InsuranceProviderForm
 
                 Section::make('Basic Information')
                     ->schema([
-                        Select::make('user_id')
-                            ->label('Associated User')
-                            ->options(function () {
-                                return User::whereHas('roles', fn($q) => $q->where('name', 'Insurer'))
-                                    ->whereDoesntHave('insuranceProvider')
-                                    ->pluck('name', 'id');
-                            })
-                            ->required()
-                            ->searchable()
-                            ->helperText('Select the user account for this insurance provider'),
-
+                   
                         TextInput::make('company_name')
                             ->required()
                             ->maxLength(255)
@@ -70,14 +60,12 @@ class InsuranceProviderForm
                             ->required()
                             ->rows(3)
                             ->columnSpanFull()
-                            ->live(onBlur: true)
                             ->placeholder('Complete physical address'),
 
                         TextInput::make('website')
                             ->url()
                             ->maxLength(255)
-                            ->placeholder('https://www.example.com')
-                            ->live(onBlur: true),
+                            ->placeholder('https://www.example.com'),
 
                         Toggle::make('is_active')
                             ->label('Active Status')

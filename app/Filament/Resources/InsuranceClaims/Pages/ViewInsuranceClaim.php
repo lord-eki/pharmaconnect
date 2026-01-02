@@ -18,7 +18,6 @@ class ViewInsuranceClaim extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make(),
 
             // Download Claim Form
             Action::make('download_claim')
@@ -36,54 +35,54 @@ class ViewInsuranceClaim extends ViewRecord
                 ->openUrlInNewTab(),
 
             // Approve Claim (for insurers)
-            Action::make('approve')
-                ->label('Approve Claim')
-                ->icon('heroicon-o-check-circle')
-                ->color('success')
-                ->visible(fn () => $this->record->canBeApproved())
-                ->requiresConfirmation()
-                ->form([
-                    TextInput::make('approved_amount')
-                        ->label('Approved Amount')
-                        ->numeric()
-                        ->prefix('KES')
-                        ->required()
-                        ->default(fn () => $this->record->claimed_amount),
-                    Textarea::make('notes')
-                        ->label('Notes')
-                        ->rows(3),
-                ])
-                ->action(function (array $data) {
-                    $this->record->approve($data['approved_amount'], $data['notes']);
+            // Action::make('approve')
+            //     ->label('Approve Claim')
+            //     ->icon('heroicon-o-check-circle')
+            //     ->color('success')
+            //     ->visible(fn () => $this->record->canBeApproved())
+            //     ->requiresConfirmation()
+            //     ->form([
+            //         TextInput::make('approved_amount')
+            //             ->label('Approved Amount')
+            //             ->numeric()
+            //             ->prefix('KES')
+            //             ->required()
+            //             ->default(fn () => $this->record->claimed_amount),
+            //         Textarea::make('notes')
+            //             ->label('Notes')
+            //             ->rows(3),
+            //     ])
+            //     ->action(function (array $data) {
+            //         $this->record->approve($data['approved_amount'], $data['notes']);
 
-                    \Filament\Notifications\Notification::make()
-                        ->title('Claim Approved')
-                        ->success()
-                        ->send();
-                }),
+            //         \Filament\Notifications\Notification::make()
+            //             ->title('Claim Approved')
+            //             ->success()
+            //             ->send();
+            //     }),
 
             // Reject Claim
-            Action::make('reject')
-                ->label('Reject Claim')
-                ->icon('heroicon-o-x-circle')
-                ->color('danger')
-                ->visible(fn () => $this->record->canBeRejected())
-                ->requiresConfirmation()
-                ->form([
-                    Textarea::make('rejection_reason')
-                        ->label('Rejection Reason')
-                        ->required()
-                        ->rows(3),
-                ])
-                ->action(function (array $data) {
-                    $this->record->reject($data['rejection_reason']);
+            // Action::make('reject')
+            //     ->label('Reject Claim')
+            //     ->icon('heroicon-o-x-circle')
+            //     ->color('danger')
+            //     ->visible(fn () => $this->record->canBeRejected())
+            //     ->requiresConfirmation()
+            //     ->form([
+            //         Textarea::make('rejection_reason')
+            //             ->label('Rejection Reason')
+            //             ->required()
+            //             ->rows(3),
+            //     ])
+            //     ->action(function (array $data) {
+            //         $this->record->reject($data['rejection_reason']);
 
-                    \Filament\Notifications\Notification::make()
-                        ->title('Claim Rejected')
-                        ->danger()
-                        ->send();
-                }),
+            //         \Filament\Notifications\Notification::make()
+            //             ->title('Claim Rejected')
+            //             ->danger()
+            //             ->send();
+            //     }),
 
-            DeleteAction::make(),        ];
+           ];
     }
 }

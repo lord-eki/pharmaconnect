@@ -39,6 +39,11 @@ class DocumentResource extends Resource
         ];
     }
 
+    public static function getEloquentQuery() : Builder
+    {
+        return parent::getEloquentQuery()->where('uploaded_by',auth()->user()->id);
+    }
+
     public static function getPages(): array
     {
         return [

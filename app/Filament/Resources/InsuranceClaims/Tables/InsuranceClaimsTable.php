@@ -135,7 +135,6 @@ class InsuranceClaimsTable
 
                 ActionGroup::make([
                     ViewAction::make(),
-                    EditAction::make(),
 
                     // Download Claim Form PDF
                     Action::make('download_claim')

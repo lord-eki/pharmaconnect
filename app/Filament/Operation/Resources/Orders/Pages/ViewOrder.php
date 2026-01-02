@@ -5,6 +5,7 @@ namespace App\Filament\Operation\Resources\Orders\Pages;
 use App\Filament\Operation\Resources\Orders\OrderResource;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -24,7 +25,7 @@ class ViewOrder extends ViewRecord
                 ->color('success')
                 ->visible(fn () => $this->record->status === 'pending_review')
                 ->form([
-                    \Filament\Forms\Components\Textarea::make('notes')
+                    Textarea::make('notes')
                         ->label('Notes for Supplier')
                         ->helperText('Optional notes that will be added to the order')
                         ->rows(3),
@@ -59,7 +60,7 @@ class ViewOrder extends ViewRecord
                 ->color('danger')
                 ->visible(fn () => in_array($this->record->status, ['pending_review', 'sent_to_supplier', 'confirmed']))
                 ->form([
-                    \Filament\Forms\Components\Textarea::make('reason')
+                    Textarea::make('reason')
                         ->label('Cancellation Reason')
                         ->required()
                         ->rows(3),

@@ -22,14 +22,14 @@ class OrderInfolist
                         Group::make([
                             TextEntry::make('order_number')
                                 ->label('Order Number')
-                                ->size(TextSize::Large)
+                                ->size(TextSize::Small)
                                 ->weight(FontWeight::Bold)
                                 ->copyable()
                                 ->icon('heroicon-m-clipboard-document'),
                             
                             TextEntry::make('status')
                                 ->badge()
-                                ->size(TextSize::Large)
+                                ->size(TextSize::Small)
                                 ->color(fn (string $state): string => match ($state) {
                                     'pending_review' => 'warning',
                                     'sent_to_supplier' => 'info',
@@ -61,7 +61,7 @@ class OrderInfolist
                             
                             TextEntry::make('total_amount')
                                 ->money('KES')
-                                ->size(TextSize::Large)
+                                ->size(TextSize::Small)
                                 ->weight(FontWeight::Bold)
                                 ->color('success'),
                         ])->columns(3),
@@ -71,19 +71,16 @@ class OrderInfolist
                     ->schema([
                         TextEntry::make('supplier_total')
                             ->label('Supplier Cost')
-                            ->money('KES')
-                            ->helperText('Amount paid to supplier'),
+                            ->money('KES'),
                         
                         TextEntry::make('markup_total')
                             ->label('Markup')
                             ->money('KES')
-                            ->helperText('Our markup amount')
                             ->color('warning'),
                         
                         TextEntry::make('total_amount')
                             ->label('Patient Total')
                             ->money('KES')
-                            ->helperText('Final amount charged')
                             ->weight(FontWeight::Bold)
                             ->color('success'),
                     ])
@@ -100,7 +97,7 @@ class OrderInfolist
                             ->color('primary')
                             ->icon('heroicon-m-document-text'),
                         
-                        TextEntry::make('supplier.name')
+                        TextEntry::make('supplier.company_name')
                             ->label('Supplier')
                             ->icon('heroicon-m-building-storefront'),
                         
@@ -219,18 +216,6 @@ class OrderInfolist
                     ->columns(2)
                     ->visible(fn ($record) => $record->delivery)
                     ->collapsible(),
-
-               Section::make('Notes')
-                    ->schema([
-                       TextEntry::make('notes')
-                            ->label('')
-                            ->placeholder('No notes available')
-                            ->columnSpanFull()
-                            ->prose(),
-                    ])
-                    ->visible(fn ($record) => !empty($record->notes))
-                    ->collapsible()
-                    ->collapsed(),
     
             ]);
     }

@@ -61,6 +61,6 @@ class InsuranceClaimResource extends Resource
 
     public static function getNavigationBadgeColor(): ?string
     {
-        return 'warning';
+        return 'success';
     }
 }

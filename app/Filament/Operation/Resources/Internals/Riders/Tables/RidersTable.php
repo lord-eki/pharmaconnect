@@ -3,6 +3,7 @@
 namespace App\Filament\Operation\Resources\Internals\Riders\Tables;
 
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -24,7 +25,7 @@ class RidersTable
     {
         return $table
             ->columns([
-              TextColumn::make('rider_code')
+                TextColumn::make('rider_code')
                     ->label('Rider Code')
                     ->searchable()
                     ->sortable()
@@ -91,7 +92,7 @@ class RidersTable
                     ->action(
                         Action::make('toggle_availability')
                             ->requiresConfirmation()
-                            ->action(fn ($record) => $record->update(['is_available' => !$record->is_available]))
+                            ->action(fn ($record) => $record->update(['is_available' => ! $record->is_available]))
                     ),
 
                 TextColumn::make('rating')
@@ -127,7 +128,7 @@ class RidersTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                  SelectFilter::make('vehicle_type')
+                SelectFilter::make('vehicle_type')
                     ->options([
                         'motorcycle' => 'Motorcycle',
                         'car' => 'Car',
@@ -182,18 +183,20 @@ class RidersTable
                     }),
             ])
             ->recordActions([
-             ViewAction::make(),
-                EditAction::make(),
-                Action::make('toggle_availability')
-                    ->label(fn ($record) => $record->is_available ? 'Mark Unavailable' : 'Mark Available')
-                    ->icon(fn ($record) => $record->is_available ? 'heroicon-o-x-circle' : 'heroicon-o-check-circle')
-                    ->color(fn ($record) => $record->is_available ? 'warning' : 'success')
-                    ->requiresConfirmation()
-                    ->action(fn ($record) => $record->update(['is_available' => !$record->is_available]))
-                    ->visible(fn ($record) => $record->is_active),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make(),
+                    Action::make('toggle_availability')
+                        ->label(fn ($record) => $record->is_available ? 'Mark Unavailable' : 'Mark Available')
+                        ->icon(fn ($record) => $record->is_available ? 'heroicon-o-x-circle' : 'heroicon-o-check-circle')
+                        ->color(fn ($record) => $record->is_available ? 'warning' : 'success')
+                        ->requiresConfirmation()
+                        ->action(fn ($record) => $record->update(['is_available' => ! $record->is_available]))
+                        ->visible(fn ($record) => $record->is_active),
+                ]),
             ])
             ->toolbarActions([
-              BulkActionGroup::make([
+                BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     BulkAction::make('activate')
                         ->label('Activate Selected')

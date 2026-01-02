@@ -2,23 +2,24 @@
 
 namespace App\Filament\Operation\Resources\Internals\Payables\Tables;
 
+use App\Models\Commission;
 use App\Models\Payable;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Builder;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\DB;
 
 class PayablesTable
 {
@@ -27,10 +28,10 @@ class PayablesTable
         return $table
             ->columns([
 
-                  TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()->label('Date')
                     ->sortable(),
-                
+
                 TextColumn::make('reference')
                     ->searchable()
                     ->sortable()
@@ -71,7 +72,6 @@ class PayablesTable
                     ->boolean()
                     ->sortable(),
 
-              
             ])
             ->filters([
                 SelectFilter::make('vendor_type')
@@ -89,27 +89,26 @@ class PayablesTable
                     ->label('Unpaid'),
 
                 Filter::make('overdue')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->whereNull('paid_at')
-                              ->where('due_date', '<', now())
+                    ->query(fn (Builder $query): Builder => $query->whereNull('paid_at')
+                        ->where('due_date', '<', now())
                     )
                     ->label('Overdue'),
             ])
             ->recordActions([
                 ActionGroup::make([
-                   
+
                     Action::make('mark_paid')
                         ->label('Mark as Paid')
                         ->icon('heroicon-o-check-circle')
                         ->color('success')
                         ->requiresConfirmation()
-                        ->visible(fn (Payable $record) => !$record->paid_at)
+                        ->visible(fn (Payable $record) => ! $record->paid_at)
                         ->form([
                             Select::make('payment_method')
                                 ->options([
                                     'mpesa' => 'M-Pesa',
                                     'bank_transfer' => 'Bank Transfer',
-                                    'check' => 'Check',
+                                    'cheque' => 'Cheque',
                                 ])
                                 ->required(),
                             TextInput::make('gateway_reference')
@@ -120,17 +119,36 @@ class PayablesTable
                                 ->required(),
                         ])
                         ->action(function (Payable $record, array $data) {
+                            DB::transaction(function () use ($record, $data)
+                            {
+
                             $record->update($data);
-                            
-                            // Create transaction record
-                            $record->transaction()->create([
-                                'reference' => 'TXN-' . strtoupper(uniqid()),
-                                'amount' => $record->amount,
-                                'currency' => 'KES',
-                                'type' => 'payable',
-                                'status' => 'completed',
-                                'completed_at' => $data['paid_at'],
-                            ]);
+
+                            if ($record->transaction) {
+                                $record->transaction()->update([
+                                    'status' => 'completed',
+                                    'completed_at' => $data['paid_at'],
+                                ]);
+                            }
+
+                            if ($record->vendor_type === 'physician' && $record->order_id) {
+                                Commission::where('order_id', $record->order_id)
+                                    ->where('physician_id', $record->vendor_id)
+                                    ->whereIn('status', ['pending', 'approved'])
+                                    ->update([
+                                        'status' => 'paid',
+                                        'paid_at' => $data['paid_at'],
+                                        'payment_reference' => $data['gateway_reference'] ?? null,
+                                    ]);
+                            }
+                        });
+
+                            Notification::make()
+                                ->success()
+                                ->title('Payment Recorded')
+                                ->body('The payable has been marked as paid.')
+                                ->send();
+
                         }),
                 ]),
             ])

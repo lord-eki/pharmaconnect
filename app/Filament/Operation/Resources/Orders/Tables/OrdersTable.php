@@ -7,6 +7,7 @@ use App\Jobs\SendInvoiceEmailJob;
 use App\Models\Order;
 use App\Services\OrderReportService;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\ViewAction;
@@ -203,191 +204,28 @@ class OrdersTable
                     }),
             ])
             ->recordActions([
-                ViewAction::make(),
+                ActionGroup::make([
+                    ViewAction::make(),
 
-                Action::make('download_lpo')
-                    ->label('Download LPO')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->color('success')
-                    ->action(function (Order $record) {
-                        try {
-                            $reportService = app(OrderReportService::class);
+                    Action::make('download_lpo')
+                        ->label('Download LPO')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->color('success')
+                        ->action(function (Order $record) {
+                            try {
+                                $reportService = app(OrderReportService::class);
 
-                            // Generate the PDF and store it temporarily
-                            $path = $reportService->generateLPO($record);
+                                // Generate the PDF and store it temporarily
+                                $path = $reportService->generateLPO($record);
 
-                            // Create a download URL
-                            $url = Storage::url($path);
+                                // Create a download URL
+                                $url = Storage::url($path);
 
-                            // Notify user with download link
-                            Notification::make()
-                                ->title('LPO Ready')
-                                ->body('Your LPO has been generated successfully.')
-                                ->success()
-                                ->actions([
-                                    Action::make('download')
-                                        ->label('Download PDF')
-                                        ->url($url)
-                                        ->openUrlInNewTab(),
-                                ])
-                                ->persistent()
-                                ->send();
-
-                        } catch (\Exception $e) {
-                            \Log::error('LPO Generation Error', [
-                                'order_id' => $record->id,
-                                'error' => $e->getMessage(),
-                                'trace' => $e->getTraceAsString(),
-                            ]);
-
-                            Notification::make()
-                                ->title('Error generating LPO')
-                                ->body('Unable to generate PDF. Please try again or contact support.')
-                                ->danger()
-                                ->send();
-                        }
-                    })
-                    ->requiresConfirmation(false)
-                    ->tooltip('Download Local Purchase Order as PDF'),
-
-                Action::make('generate_invoice')
-                    ->label('Generate Invoice')
-                    ->icon('heroicon-o-document-currency-dollar')
-                    ->color('info')
-                    ->visible(fn (Order $record): bool => $record->isEligibleForInvoice())
-                    ->form([
-                        DatePicker::make('due_date')
-                            ->label('Due Date')
-                            ->default(now()->addDays(30))
-                            ->required()
-                            ->minDate(now()),
-
-                        \Filament\Forms\Components\TextInput::make('discount_amount')
-                            ->label('Discount Amount (Optional)')
-                            ->numeric()
-                            ->prefix('KES')
-                            ->default(0)
-                            ->minValue(0),
-
-                        Textarea::make('notes')
-                            ->label('Invoice Notes (Optional)')
-                            ->rows(3),
-                    ])
-                    ->action(function (Order $record, array $data): void {
-                        try {
-                            $invoiceService = app(\App\Services\InvoiceService::class);
-
-                            // Generate invoice synchronously (this is quick)
-                            $invoice = $invoiceService->createInvoiceFromOrder($record, [
-                                'discount_amount' => $data['discount_amount'] ?? 0,
-                                'currency' => 'KES',
-                                'due_date' => $data['due_date'],
-                                'notes' => $data['notes'] ?? null,
-                            ]);
-
-                            // Generate PDF asynchronously 
-                            GenerateInvoicePdfJob::dispatch($invoice);
-
-                            Notification::make()
-                                ->title('Invoice Generated')
-                                ->body("Invoice {$invoice->invoice_number} is being processed. PDF will be available shortly.")
-                                ->success()
-                                ->send();
-
-                        } catch (\Exception $e) {
-                            \Log::error('Invoice Generation Error', [
-                                'order_id' => $record->id,
-                                'error' => $e->getMessage(),
-                            ]);
-
-                            Notification::make()
-                                ->title('Error generating invoice')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    })
-                    ->requiresConfirmation()
-                    ->modalHeading('Generate Insurance Invoice')
-                    ->modalDescription('This will create an invoice for the insurance company.')
-                    ->modalSubmitActionLabel('Generate Invoice')
-                    ->tooltip('Generate invoice for insurance'),
-
-                Action::make('send_invoice')
-                    ->label('Send Invoice')
-                    ->icon('heroicon-o-envelope')
-                    ->color('success')
-                    ->visible(fn (Order $record): bool => $record->invoices()->exists())
-                    ->form([
-                        \Filament\Forms\Components\TagsInput::make('cc')
-                            ->label('CC Email Addresses')
-                            ->placeholder('Add email addresses to CC'),
-
-                        Textarea::make('message')
-                            ->label('Additional Message (Optional)')
-                            ->rows(3),
-                    ])
-                    ->action(function (Order $record, array $data): void {
-                        try {
-                            $invoice = $record->invoices()->latest()->first();
-
-                            // Dispatch job to send email asynchronously
-                            SendInvoiceEmailJob::dispatch($invoice, [
-                                'cc' => $data['cc'] ?? [],
-                                'message' => $data['message'] ?? null,
-                            ]);
-
-                            Notification::make()
-                                ->title('Invoice Queued for Sending')
-                                ->body("Invoice {$invoice->invoice_number} will be sent to {$invoice->order->prescription->patient->insuranceProvider->company_name} shortly.")
-                                ->success()
-                                ->send();
-
-                        } catch (\Exception $e) {
-                            \Log::error('Invoice Send Error', [
-                                'order_id' => $record->id,
-                                'error' => $e->getMessage(),
-                            ]);
-
-                            Notification::make()
-                                ->title('Error queuing invoice')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    })
-                    ->requiresConfirmation()
-                    ->modalHeading('Send Invoice to Insurance')
-                    ->modalDescription(fn (Order $record) => 'Send invoice to '.$record->prescription->patient->insuranceProvider?->company_name
-                    )
-                    ->modalSubmitActionLabel('Send Email')
-                    ->tooltip('Email invoice to insurance company'),
-
-                Action::make('download_invoice')
-                    ->label('Download Invoice')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->color('primary')
-                    ->visible(fn (Order $record): bool => $record->invoices()->exists())
-                    ->action(function (Order $record) {
-                        try {
-                            $invoice = $record->invoices()->latest()->first();
-
-                            // Check if PDF already exists
-                            $existingPath = 'reports/invoices/Invoice_'.
-                                           preg_replace('/[^A-Za-z0-9_-]/', '_', $invoice->invoice_number).
-                                           '_*.pdf';
-
-                            $files = Storage::disk('public')->files('reports/invoices');
-                            $matchingFile = collect($files)->first(function ($file) use ($invoice) {
-                                return str_contains($file, preg_replace('/[^A-Za-z0-9_-]/', '_', $invoice->invoice_number));
-                            });
-
-                            if ($matchingFile) {
-                                // PDF exists, provide immediate download
-                                $url = Storage::url($matchingFile);
-
+                                // Notify user with download link
                                 Notification::make()
-                                    ->title('Invoice PDF Ready')
+                                    ->title('LPO Ready')
+                                    ->body('Your LPO has been generated successfully.')
+                                    ->success()
                                     ->actions([
                                         Action::make('download')
                                             ->label('Download PDF')
@@ -396,65 +234,230 @@ class OrdersTable
                                     ])
                                     ->persistent()
                                     ->send();
-                            } else {
+
+                            } catch (\Exception $e) {
+                                \Log::error('LPO Generation Error', [
+                                    'order_id' => $record->id,
+                                    'error' => $e->getMessage(),
+                                    'trace' => $e->getTraceAsString(),
+                                ]);
+
+                                Notification::make()
+                                    ->title('Error generating LPO')
+                                    ->body('Unable to generate PDF. Please try again or contact support.')
+                                    ->danger()
+                                    ->send();
+                            }
+                        })
+                        ->requiresConfirmation(false)
+                        ->tooltip('Download Local Purchase Order as PDF'),
+
+                    Action::make('generate_invoice')
+                        ->label('Generate Invoice')
+                        ->icon('heroicon-o-document-currency-dollar')
+                        ->color('info')
+                        ->visible(fn (Order $record): bool => $record->isEligibleForInvoice())
+                        ->form([
+                            DatePicker::make('due_date')
+                                ->label('Due Date')
+                                ->default(now()->addDays(30))
+                                ->required()
+                                ->minDate(now()),
+
+                            \Filament\Forms\Components\TextInput::make('discount_amount')
+                                ->label('Discount Amount (Optional)')
+                                ->numeric()
+                                ->prefix('KES')
+                                ->default(0)
+                                ->minValue(0),
+
+                            Textarea::make('notes')
+                                ->label('Invoice Notes (Optional)')
+                                ->rows(3),
+                        ])
+                        ->action(function (Order $record, array $data): void {
+                            try {
+                                $invoiceService = app(\App\Services\InvoiceService::class);
+
+                                // Generate invoice synchronously (this is quick)
+                                $invoice = $invoiceService->createInvoiceFromOrder($record, [
+                                    'discount_amount' => $data['discount_amount'] ?? 0,
+                                    'currency' => 'KES',
+                                    'due_date' => $data['due_date'],
+                                    'notes' => $data['notes'] ?? null,
+                                ]);
+
+                                // Generate PDF asynchronously
                                 GenerateInvoicePdfJob::dispatch($invoice);
 
                                 Notification::make()
-                                    ->title('Generating PDF')
-                                    ->body('Your invoice PDF is being generated. Please check back in a moment.')
-                                    ->info()
+                                    ->title('Invoice Generated')
+                                    ->body("Invoice {$invoice->invoice_number} is being processed. PDF will be available shortly.")
+                                    ->success()
+                                    ->send();
+
+                            } catch (\Exception $e) {
+                                \Log::error('Invoice Generation Error', [
+                                    'order_id' => $record->id,
+                                    'error' => $e->getMessage(),
+                                ]);
+
+                                Notification::make()
+                                    ->title('Error generating invoice')
+                                    ->body($e->getMessage())
+                                    ->danger()
                                     ->send();
                             }
+                        })
+                        ->requiresConfirmation()
+                        ->modalHeading('Generate Insurance Invoice')
+                        ->modalDescription('This will create an invoice for the insurance company.')
+                        ->modalSubmitActionLabel('Generate Invoice')
+                        ->tooltip('Generate invoice for insurance'),
 
-                        } catch (\Exception $e) {
-                            \Log::error('Invoice PDF Error', [
-                                'order_id' => $record->id,
-                                'error' => $e->getMessage(),
-                            ]);
+                    Action::make('send_invoice')
+                        ->label('Send Invoice')
+                        ->icon('heroicon-o-envelope')
+                        ->color('success')
+                        ->visible(fn (Order $record): bool => $record->invoices()->exists())
+                        ->form([
+                            \Filament\Forms\Components\TagsInput::make('cc')
+                                ->label('CC Email Addresses')
+                                ->placeholder('Add email addresses to CC'),
 
-                            Notification::make()
-                                ->title('Error with invoice PDF')
-                                ->body('Unable to process PDF request. Please try again.')
-                                ->danger()
-                                ->send();
-                        }
-                    })
-                    ->requiresConfirmation(false)
-                    ->tooltip('Download invoice as PDF'),
+                            Textarea::make('message')
+                                ->label('Additional Message (Optional)')
+                                ->rows(3),
+                        ])
+                        ->action(function (Order $record, array $data): void {
+                            try {
+                                $invoice = $record->invoices()->latest()->first();
 
-                Action::make('cancel')
-                    ->label('Cancel')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('danger')
-                    ->visible(fn (Order $record): bool => in_array($record->status, ['pending_review', 'sent_to_supplier', 'confirmed']))
-                    ->form([
-                        Textarea::make('reason')
-                            ->label('Cancellation Reason')
-                            ->required()
-                            ->rows(3)
-                            ->helperText('Please provide a reason for cancelling this order'),
-                    ])
-                    ->action(function (Order $record, array $data): void {
-                        try {
-                            $record->cancel($data['reason']);
+                                // Dispatch job to send email asynchronously
+                                SendInvoiceEmailJob::dispatch($invoice, [
+                                    'cc' => $data['cc'] ?? [],
+                                    'message' => $data['message'] ?? null,
+                                ]);
 
-                            Notification::make()
-                                ->title('Order cancelled')
-                                ->body('The order has been cancelled successfully')
-                                ->success()
-                                ->send();
-                        } catch (\Exception $e) {
-                            Notification::make()
-                                ->title('Error cancelling order')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    })
-                    ->requiresConfirmation()
-                    ->modalHeading('Cancel Order')
-                    ->modalDescription('Are you sure you want to cancel this order? This action cannot be undone.')
-                    ->modalSubmitActionLabel('Cancel Order'),
+                                Notification::make()
+                                    ->title('Invoice Queued for Sending')
+                                    ->body("Invoice {$invoice->invoice_number} will be sent to {$invoice->order->prescription->patient->insuranceProvider->company_name} shortly.")
+                                    ->success()
+                                    ->send();
+
+                            } catch (\Exception $e) {
+                                \Log::error('Invoice Send Error', [
+                                    'order_id' => $record->id,
+                                    'error' => $e->getMessage(),
+                                ]);
+
+                                Notification::make()
+                                    ->title('Error queuing invoice')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        })
+                        ->requiresConfirmation()
+                        ->modalHeading('Send Invoice to Insurance')
+                        ->modalDescription(fn (Order $record) => 'Send invoice to '.$record->prescription->patient->insuranceProvider?->company_name
+                        )
+                        ->modalSubmitActionLabel('Send Email')
+                        ->tooltip('Email invoice to insurance company'),
+
+                    Action::make('download_invoice')
+                        ->label('Download Invoice')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->color('primary')
+                        ->visible(fn (Order $record): bool => $record->invoices()->exists())
+                        ->action(function (Order $record) {
+                            try {
+                                $invoice = $record->invoices()->latest()->first();
+
+                                // Check if PDF already exists
+                                $existingPath = 'reports/invoices/Invoice_'.
+                                               preg_replace('/[^A-Za-z0-9_-]/', '_', $invoice->invoice_number).
+                                               '_*.pdf';
+
+                                $files = Storage::disk('public')->files('reports/invoices');
+                                $matchingFile = collect($files)->first(function ($file) use ($invoice) {
+                                    return str_contains($file, preg_replace('/[^A-Za-z0-9_-]/', '_', $invoice->invoice_number));
+                                });
+
+                                if ($matchingFile) {
+                                    // PDF exists, provide immediate download
+                                    $url = Storage::url($matchingFile);
+
+                                    Notification::make()
+                                        ->title('Invoice PDF Ready')
+                                        ->actions([
+                                            Action::make('download')
+                                                ->label('Download PDF')
+                                                ->url($url)
+                                                ->openUrlInNewTab(),
+                                        ])
+                                        ->persistent()
+                                        ->send();
+                                } else {
+                                    GenerateInvoicePdfJob::dispatch($invoice);
+
+                                    Notification::make()
+                                        ->title('Generating PDF')
+                                        ->body('Your invoice PDF is being generated. Please check back in a moment.')
+                                        ->info()
+                                        ->send();
+                                }
+
+                            } catch (\Exception $e) {
+                                \Log::error('Invoice PDF Error', [
+                                    'order_id' => $record->id,
+                                    'error' => $e->getMessage(),
+                                ]);
+
+                                Notification::make()
+                                    ->title('Error with invoice PDF')
+                                    ->body('Unable to process PDF request. Please try again.')
+                                    ->danger()
+                                    ->send();
+                            }
+                        })
+                        ->requiresConfirmation(false)
+                        ->tooltip('Download invoice as PDF'),
+
+                    Action::make('cancel')
+                        ->label('Cancel')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->visible(fn (Order $record): bool => in_array($record->status, ['pending_review', 'sent_to_supplier', 'confirmed']))
+                        ->form([
+                            Textarea::make('reason')
+                                ->label('Cancellation Reason')
+                                ->required()
+                                ->rows(3)
+                                ->helperText('Please provide a reason for cancelling this order'),
+                        ])
+                        ->action(function (Order $record, array $data): void {
+                            try {
+                                $record->cancel($data['reason']);
+
+                                Notification::make()
+                                    ->title('Order cancelled')
+                                    ->body('The order has been cancelled successfully')
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                Notification::make()
+                                    ->title('Error cancelling order')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        })
+                        ->requiresConfirmation()
+                        ->modalHeading('Cancel Order')
+                        ->modalDescription('Are you sure you want to cancel this order? This action cannot be undone.')
+                        ->modalSubmitActionLabel('Cancel Order'),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

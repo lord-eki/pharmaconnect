@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Http\Responses\CustomLoginResponse;
+use App\Models\ClaimForm;
 use App\Models\Prescription;
+use App\Observers\ClaimFormObserver;
 use App\Services\CommissionService;
 use App\Services\DeliveryTrackingService;
 use App\Services\OrderFulfillmentService;
@@ -45,5 +47,6 @@ class AppServiceProvider extends ServiceProvider
         Model::preventsAccessingMissingAttributes();
 
         Prescription::observe(PrescriptionObserver::class);
+        ClaimForm::observe(ClaimFormObserver::class);
     }
 }

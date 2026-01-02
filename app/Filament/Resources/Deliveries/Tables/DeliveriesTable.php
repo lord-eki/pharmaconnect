@@ -16,7 +16,7 @@ class DeliveriesTable
         return $table
             ->columns([
                        TextColumn::make('created_at')
-                    ->dateTime()->sortable()
+                    ->date()->sortable()
                     ->label('Date'),
                 TextColumn::make('delivery_number')
                     ->searchable(),
@@ -25,18 +25,15 @@ class DeliveriesTable
                 TextColumn::make('rider.last_name')
                     ->searchable()->label('Rider'),
               
-                TextColumn::make('estimated_distance_km')
-                    ->numeric()
-                    ->sortable()->label('Distance (km)'),
-                TextColumn::make('delivery_fee')
-                    ->numeric()->money('KES')
-                    ->sortable(),
+        
+               
                 BadgeColumn::make('status')->colors([
                         'success' => 'delivered',
                         'warning' => 'pending',
                         'info' => 'picked_up',
                         'danger' => 'cancelled',
                         'gray' =>'assigned'
+                        
                     ]),
            
                 TextColumn::make('actual_delivery')

@@ -4,17 +4,18 @@ namespace App\Filament\Physician\Resources\Physician\ClaimForms\Schemas;
 
 use App\Models\InsuranceProvider;
 use App\Models\Prescription;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\KeyValue;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\ViewField;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class ClaimFormForm
 {
@@ -41,7 +42,7 @@ class ClaimFormForm
                                 ->live()
                                 ->afterStateUpdated(function ($state, Set $set) {
                                     if ($state) {
-                                        $prescription = Prescription::with(['patient', 'physician', 'items.medicine'])
+                                        $prescription = Prescription::with(['patient.insuranceProvider', 'physician', 'items.medicine'])
                                             ->find($state);
                                         
                                         if ($prescription) {
@@ -86,6 +87,17 @@ class ClaimFormForm
                                             // Auto-fill insurance provider if patient has one
                                             if ($prescription->patient && $prescription->patient->insurance_provider_id) {
                                                 $set('insurance_provider_id', $prescription->patient->insurance_provider_id);
+                                                
+                                                // Check if provider has template
+                                                $provider = InsuranceProvider::with('activeFormTemplate')
+                                                    ->find($prescription->patient->insurance_provider_id);
+                                                
+                                                if ($provider && $provider->activeFormTemplate) {
+                                                    $set('has_template', true);
+                                                    $set('template_info', $provider->activeFormTemplate->template_name);
+                                                } else {
+                                                    $set('has_template', false);
+                                                }
                                             }
                                         }
                                     }
@@ -100,8 +112,17 @@ class ClaimFormForm
                                 ->live()
                                 ->afterStateUpdated(function ($state, Set $set) {
                                     if ($state) {
-                                        $provider = InsuranceProvider::find($state);
-                                        $set('form_template', $provider->form_template ?? null);
+                                        $provider = InsuranceProvider::with('activeFormTemplate')->find($state);
+                                        
+                                        if ($provider && $provider->activeFormTemplate) {
+                                            $template = $provider->activeFormTemplate;
+                                            $set('form_template', $template->template_name);
+                                            $set('has_template', true);
+                                            $set('template_info', "{$template->template_name} (v{$template->version})");
+                                        } else {
+                                            $set('has_template', false);
+                                            $set('template_info', null);
+                                        }
                                     }
                                 }),
 
@@ -124,13 +145,17 @@ class ClaimFormForm
                             Select::make('submission_type')
                                 ->label('Submission Type')
                                 ->options([
-                                    'online' => 'Online (Electronic)',
-                                    'manual' => 'Manual (Scanned)',
+                                    'online' => 'Online (Auto-Generate Form)',
+                                    'manual' => 'Manual (Upload Scanned Form)',
                                 ])
                                 ->default('online')
                                 ->required()
                                 ->live()
-                                ->helperText('Online: Fill form electronically. Manual: Upload scanned physical form.'),
+                                ->helperText(fn (Get $get) => 
+                                    $get('submission_type') === 'online' 
+                                        ? '✓ Form will be automatically generated using insurance provider template'
+                                        : 'Upload a scanned physical form'
+                                ),
 
                             Select::make('status')
                                 ->label('Status')
@@ -146,6 +171,32 @@ class ClaimFormForm
                                 ->disabled(fn ($context) => $context === 'create'),
                         ]),
                     ]),
+
+                // Template Information Section
+                Section::make('Form Template Information')
+                    ->description('Insurance provider form template details')
+                    ->schema([
+                        Placeholder::make('template_info')
+                            ->label('Active Template')
+                            ->content(fn (Get $get) => $get('template_info') ?? 'No template configured for this provider'),
+                        
+                        Placeholder::make('template_status')
+                            ->label('Generation Status')
+                            ->content(fn (Get $get) => 
+                                $get('has_template') 
+                                    ? '✓ Form will be auto-generated when you create this claim'
+                                    : '⚠ No template available - please configure template or use manual submission'
+                            )
+                            ->helperText(fn (Get $get) => 
+                                !$get('has_template') && $get('insurance_provider_id')
+                                    ? 'Contact admin to set up form template for this insurance provider'
+                                    : null
+                            ),
+                    ])
+                    ->visible(fn (Get $get) => 
+                        $get('submission_type') === 'online' && $get('insurance_provider_id')
+                    )
+                    ->collapsible(),
 
                 Section::make('Clinical Information')
                     ->description('Clinical details from prescription (editable)')
@@ -170,19 +221,43 @@ class ClaimFormForm
                         FileUpload::make('document_path')
                             ->label('Upload Scanned Form')
                             ->disk('local')
-                            ->directory('claim-forms')
+                            ->directory('claim-forms/manual')
                             ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])
                             ->maxSize(5120)
                             ->downloadable()
                             ->previewable()
-                            ->helperText('Upload the scanned claim form if offline system was used')
-                            ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                                if ($state && $get('submission_type') === 'manual') {
-                                    $set('has_uploaded_document', true);
-                                }
-                            }),
+                            ->helperText('Upload the completed and scanned claim form')
+                            ->required(fn (Get $get) => $get('submission_type') === 'manual'),
                     ])
                     ->visible(fn (Get $get) => $get('submission_type') === 'manual')
+                    ->collapsible(),
+
+                // Show generated document in edit mode
+                Section::make('Generated Claim Form')
+                    ->description('Auto-generated insurance claim form')
+                    ->schema([
+                        Placeholder::make('generated_info')
+                            ->label('Generation Details')
+                            ->content(fn ($record) => 
+                                $record && $record->generated_at
+                                    ? "Generated on {$record->generated_at->format('M d, Y H:i')} using {$record->template_used}"
+                                    : 'Not yet generated'
+                            ),
+                        
+                        FileUpload::make('generated_document_path')
+                            ->label('Generated Form')
+                            ->disk('local')
+                            ->downloadable()
+                            ->previewable()
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->visible(fn ($record) => $record && $record->generated_document_path),
+                    ])
+                    ->visible(fn ($context, $record) => 
+                        $context === 'edit' && 
+                        $record && 
+                        $record->submission_type === 'online'
+                    )
                     ->collapsible(),
 
             ]);

@@ -73,7 +73,7 @@ class ViewDelivery extends ViewRecord
                             ->label('Order Amount')
                             ->money('KES'),
 
-                        TextEntry::make('order.prescription.physician.full_name')
+                        TextEntry::make('order.prescription.physician.name')
                             ->label('Physician'),
 
                         TextEntry::make('order.prescription.patient.full_name')
@@ -175,7 +175,7 @@ class ViewDelivery extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            // STEP 1: Start Processing (Only for confirmed orders without delivery started)
+            // Start Processing Only for confirmed orders without delivery started
             Action::make('start_processing')
                 ->label('Start Processing')
                 ->icon('heroicon-o-play')
@@ -207,7 +207,7 @@ class ViewDelivery extends ViewRecord
                     }
                 }),
 
-            // STEP 2: Assign Rider (Only after processing started)
+            //  Assign Rider (Only after processing started)
             Action::make('assign_rider')
                 ->label('Assign Rider')
                 ->icon('heroicon-o-user-plus')
@@ -247,7 +247,7 @@ class ViewDelivery extends ViewRecord
                     }
                 }),
 
-            // STEP 3: Reassign Rider (If needed)
+            // Reassign Rider (If needed)
             Action::make('reassign_rider')
                 ->label('Reassign Rider')
                 ->icon('heroicon-o-arrow-path')

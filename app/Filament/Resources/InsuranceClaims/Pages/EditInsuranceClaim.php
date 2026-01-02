@@ -14,8 +14,8 @@ class EditInsuranceClaim extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            ViewAction::make(),
-            DeleteAction::make(),
+            // ViewAction::make(),
+            // DeleteAction::make(),
         ];
     }
 }

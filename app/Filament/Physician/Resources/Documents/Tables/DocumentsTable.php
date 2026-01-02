@@ -146,7 +146,6 @@ class DocumentsTable
                             ->when($data['uploaded_until'], fn ($q, $date) => $q->whereDate('uploaded_at', '<=', $date));
                     }),            ])
             ->recordActions([
-                EditAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

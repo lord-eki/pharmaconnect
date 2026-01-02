@@ -153,7 +153,7 @@ class Prescription extends Model
             // Check interactions asynchronously after submission
             dispatch(function () {
                 $this->checkDrugInteractions();
-            })->afterResponse();
+            });
 
             $this->status = 'submitted';
             $this->save();
@@ -187,7 +187,7 @@ class Prescription extends Model
             // Notify stakeholders asynchronously
             dispatch(function () {
                 $this->notifyStakeholders();
-            })->afterResponse();
+            });
 
             return true;
         });
@@ -206,7 +206,7 @@ class Prescription extends Model
             'valid_until' => now()->addHours(24),
         ]);
 
-        // OPTIMIZED: Single query to get all relevant supplier medicines
+        // Single query to get all relevant supplier medicines
         $medicineIds = $this->items->pluck('medicine_id')->toArray();
 
         $supplierMedicines = DB::table('supplier_medicines')
@@ -266,7 +266,7 @@ class Prescription extends Model
     }
 
     /**
-     * OPTIMIZED: Create orders with better grouping
+     *  Create orders with better grouping
      */
     protected function createOrdersFromQuotation(Quotation $quotation): void
     {
@@ -295,9 +295,6 @@ class Prescription extends Model
                 ]);
             }
         }
-
-        $this->status = 'processing';
-        $this->save();
 
     }
 
@@ -348,7 +345,7 @@ class Prescription extends Model
     /**
      * Create order for supplier with bulk insert
      */
-   protected function createOrderForSupplier(Quotation $quotation, int $supplierId, array $groupData): void
+    protected function createOrderForSupplier(Quotation $quotation, int $supplierId, array $groupData): void
     {
         $pricingService = app(PricingService::class);
 
@@ -430,11 +427,34 @@ class Prescription extends Model
             'status' => 'pending_review',
         ]);
 
-        
-        //Notify internal operations team instead
+        // Notify internal operations team instead
         dispatch(function () use ($order) {
             $this->notifyOperations($order);
-        })->afterResponse();
+        });
+    }
+
+    protected function notifyOperations(Order $order): void
+    {
+        // Send notification to operations team
+        try {
+            $operationsUsers = User::whereHas('roles', function ($query) {
+                $query->where('name', 'operations');
+            })->get();
+
+            foreach ($operationsUsers as $user) {
+                $user->notify(new NewOrderNotification($order));
+            }
+
+            Log::info('Operations team notified of new order', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to notify operations team', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -524,7 +544,7 @@ class Prescription extends Model
         // Notify insurance provider asynchronously
         dispatch(function () use ($claim) {
             $this->notifyInsuranceProvider($claim);
-        })->afterResponse();
+        });
 
         return $claim;
     }
@@ -571,7 +591,7 @@ class Prescription extends Model
                 return;
             }
 
-            // Queue email 
+            // Queue email
             Mail::to($provider->email)->queue(
                 new InsuranceClaimFormMail($claim)
             );
@@ -592,7 +612,7 @@ class Prescription extends Model
         }
     }
 
-     protected function notifySupplier(Order $order, $supplier): void
+    protected function notifySupplier(Order $order, $supplier): void
     {
         try {
             if (! $supplier) {

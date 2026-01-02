@@ -11,18 +11,18 @@ class DocumentStatsWidget extends StatsOverviewWidget
 {
    protected function getStats(): array
     {
-        $totalDocuments = Document::count();
-        $pendingVerification = Document::where('verification_status', 'pending')->count();
-        $verifiedDocuments = Document::where('verification_status', 'verified')->count();
-        $rejectedDocuments = Document::where('verification_status', 'rejected')->count();
+        $totalDocuments = Document::where('uploaded_by',auth()->user()->id)->count();
+        $pendingVerification = Document::where('verification_status', 'pending')->where('uploaded_by',auth()->user()->id)->count();
+        $verifiedDocuments = Document::where('verification_status', 'verified')->where('uploaded_by',auth()->user()->id)->count();
+        $rejectedDocuments = Document::where('verification_status', 'rejected')->where('uploaded_by',auth()->user()->id)->count();
         
         // Documents uploaded this month
-        $thisMonth = Document::whereMonth('uploaded_at', now()->month)
+        $thisMonth = Document::whereMonth('uploaded_at', now()->month)->where('uploaded_by',auth()->user()->id)
             ->whereYear('uploaded_at', now()->year)
             ->count();
         
         // Documents uploaded last month
-        $lastMonth = Document::whereMonth('uploaded_at', now()->subMonth()->month)
+        $lastMonth = Document::whereMonth('uploaded_at', now()->subMonth()->month)->where('uploaded_by',auth()->user()->id)
             ->whereYear('uploaded_at', now()->subMonth()->year)
             ->count();
         
@@ -32,7 +32,7 @@ class DocumentStatsWidget extends StatsOverviewWidget
             : 0;
         
         // Total storage used
-        $totalStorage = Document::sum('file_size');
+        $totalStorage = Document::where('uploaded_by',auth()->user()->id)->sum('file_size');
         $storageFormatted = $this->formatBytes($totalStorage);
         
         // Average document size
@@ -85,7 +85,7 @@ class DocumentStatsWidget extends StatsOverviewWidget
     {
         // Get last 7 days document count
         return Document::selectRaw('DATE(uploaded_at) as date, COUNT(*) as count')
-            ->where('uploaded_at', '>=', now()->subDays(7))
+            ->where('uploaded_at', '>=', now()->subDays(7))->where('uploaded_by',auth()->user()->id)
             ->groupBy('date')
             ->orderBy('date')
             ->pluck('count')
@@ -95,7 +95,7 @@ class DocumentStatsWidget extends StatsOverviewWidget
     protected function getDocumentTypeBreakdown(): string
     {
         $types = Document::select('document_type', DB::raw('COUNT(*) as count'))
-            ->groupBy('document_type')
+            ->groupBy('document_type')->where('uploaded_by',auth()->user()->id)
             ->orderByDesc('count')
             ->limit(3)
             ->get();

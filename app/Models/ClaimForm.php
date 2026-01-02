@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\InsuranceFormGeneratorService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -40,6 +41,14 @@ class ClaimForm extends Model
                 $claimForm->form_number = self::generateFormNumber();
             }
         });
+    }
+
+    public function regenerateForm(): ?string
+    {
+        $service = app(InsuranceFormGeneratorService::class);
+
+        return $service->generateClaimForm($this);
+
     }
 
     public function prescription(): BelongsTo
@@ -84,18 +93,21 @@ class ClaimForm extends Model
     {
         $this->status = 'submitted';
         $this->submitted_at = now();
+
         return $this->save();
     }
 
     public function approve(): bool
     {
         $this->status = 'approved';
+
         return $this->save();
     }
 
     public function reject(): bool
     {
         $this->status = 'rejected';
+
         return $this->save();
     }
 

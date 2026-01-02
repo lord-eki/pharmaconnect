@@ -40,7 +40,7 @@ class ViewPrescription extends ViewRecord
                         Notification::make()
                             ->success()
                             ->title('Prescription Submitted')
-                            ->body('The prescription has been submitted and quotations are being generated.')
+                            ->body('The prescription has been submitted successfully.')
                             ->send();
 
                         $this->redirect($this->getResource()::getUrl('view', ['record' => $this->record]));

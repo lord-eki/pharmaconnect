@@ -46,22 +46,18 @@ class PhysiciansTable
                 TextColumn::make('practice_email')
                     ->searchable(),
                 TextColumn::make('practice_type'),
-                BadgeColumn::make('verification_status'),
-                TextColumn::make('verified_by')
-                    ->numeric()
-                    ->sortable(),
+                BadgeColumn::make('verification_status')->label('Status'),
+              
                 TextColumn::make('commission_rate')
-                    ->numeric()
+                    ->numeric()->label('Commission(%) ')
                     ->sortable(),
                 TextColumn::make('prescriptions_count')->counts('prescriptions')
-                    ->numeric()->label('Total Prescriptions')
+                    ->numeric()->label('Total Presc.')
                     ->sortable(),
                 // TextColumn::make('prescriptions_count')->label('FUlfilled')->counts(['prescriptions' =>  fn(Builder $query) => $query->where('status', 'fulfilled')])
                 //     ->numeric()
                 //     ->sortable(),
-              
-                IconColumn::make('is_active')
-                    ->boolean(),
+            
              
                 
 

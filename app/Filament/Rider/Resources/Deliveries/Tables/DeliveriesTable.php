@@ -93,12 +93,10 @@ class DeliveriesTable
                         'delivered' => 'Delivered',
                         'cancelled' => 'Cancelled',
                     ])
-                    ->default('assigned'),
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
                 ActionGroup::make([
-                    // Accept Delivery Action
                     Action::make('accept')
                         ->icon('heroicon-o-check')
                         ->color('success')

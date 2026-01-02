@@ -153,4 +153,16 @@ class InsuranceProvider extends Model
 
         return \Storage::url($this->logo_path);
     }
+
+    public function formTemplates()
+    {
+        return $this->hasMany(InsuranceFormTemplate::class);
+    }
+
+    public function activeFormTemplate()
+    {
+        return $this->hasOne(InsuranceFormTemplate::class)
+            ->where('is_active', true)
+            ->latest();
+    }
 }

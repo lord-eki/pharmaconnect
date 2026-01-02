@@ -25,7 +25,7 @@ class Order extends Model
         'ordered_at',
         'expected_delivery',
         'delivered_at',
-        'sent_to_supplier_at', 
+        'sent_to_supplier_at',
         'notes',
     ];
 
@@ -34,7 +34,7 @@ class Order extends Model
         'ordered_at' => 'datetime',
         'expected_delivery' => 'datetime',
         'delivered_at' => 'datetime',
-        'sent_to_supplier_at' => 'datetime', 
+        'sent_to_supplier_at' => 'datetime',
     ];
 
     protected static function boot()
@@ -54,7 +54,7 @@ class Order extends Model
             if (! $order->expected_delivery) {
                 $order->expected_delivery = now()->addHours(24);
             }
-            
+
             if (! $order->status) {
                 $order->status = 'pending_review';
             }
@@ -71,19 +71,35 @@ class Order extends Model
             if ($order->isDirty('status')) {
                 switch ($order->status) {
                     case 'sent_to_supplier':
-                        if (!$order->sent_to_supplier_at) {
+                        if (! $order->sent_to_supplier_at) {
                             $order->updateQuietly(['sent_to_supplier_at' => now()]);
                         }
+
+                        if ($order->prescription) {
+                            // Check if any orders for this prescription have been sent
+                            $anySent = $order->prescription->orders()
+                                ->whereIn('status', ['sent_to_supplier', 'confirmed', 'processing', 'shipped', 'delivered'])
+                                ->exists();
+
+                            if ($anySent && $order->prescription->status === 'submitted') {
+                                $order->prescription->updateQuietly(['status' => 'processing']);
+
+                                Log::info('Prescription status changed to processing', [
+                                    'prescription_id' => $order->prescription->id,
+                                    'prescription_number' => $order->prescription->prescription_number,
+                                    'trigger' => 'order_sent_to_supplier',
+                                ]);
+                            }
+                        }
+
                         // Notify supplier
                         $order->notifyStakeholders('sent_to_supplier');
                         break;
-                        
+
                     case 'confirmed':
-                        // Check if all prescription orders are confirmed and create insurance claim
                         static::handlePrescriptionOrdersConfirmed($order);
-                        
-                        // Create delivery when order is confirmed
-                        if (!$order->delivery) {
+
+                        if (! $order->delivery) {
                             $order->createDelivery();
                             Log::info('Delivery created during order confirmation', [
                                 'order_id' => $order->id,
@@ -94,7 +110,7 @@ class Order extends Model
 
                     case 'processing':
                         // Ensure delivery exists when processing starts
-                        if (!$order->delivery) {
+                        if (! $order->delivery) {
                             $order->createDelivery();
                             Log::warning('Delivery created during processing - should have been created at confirmation', [
                                 'order_id' => $order->id,
@@ -124,13 +140,13 @@ class Order extends Model
 
         $this->status = 'sent_to_supplier';
         $this->sent_to_supplier_at = now();
-        
+
         if ($notes) {
-            $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . "Sent to supplier: " . $notes;
+            $this->notes = ($this->notes ? $this->notes."\n\n" : '').'Sent to supplier: '.$notes;
         }
-        
+
         $saved = $this->save();
-        
+
         if ($saved) {
             Log::info('Order sent to supplier', [
                 'order_id' => $this->id,
@@ -138,7 +154,7 @@ class Order extends Model
                 'supplier_id' => $this->supplier_id,
             ]);
         }
-        
+
         return $saved;
     }
 
@@ -289,7 +305,6 @@ class Order extends Model
         return $this->hasOne(Commission::class);
     }
 
-
     /**
      * Check if order is eligible for invoice generation
      */
@@ -301,15 +316,14 @@ class Order extends Model
         }
 
         // Must have a prescription with patient
-        if (!$this->prescription || !$this->prescription->patient) {
+        if (! $this->prescription || ! $this->prescription->patient) {
             return false;
         }
 
         // Patient must have insurance
-        if (!$this->prescription->patient->insurance_provider_id) {
+        if (! $this->prescription->patient->insurance_provider_id) {
             return false;
         }
-        
 
         // Must not already have an invoice
         if ($this->invoices()->exists()) {
@@ -345,11 +359,11 @@ class Order extends Model
         return sprintf('%s%s-%s', $prefix, $ym, $sequencePadded);
     }
 
-    // Confirm order 
+    // Confirm order
     public function confirm(): bool
     {
         //  Must be sent to supplier first
-        if (!in_array($this->status, ['sent_to_supplier', 'pending'])) {
+        if (! in_array($this->status, ['sent_to_supplier', 'pending'])) {
             throw new \Exception('Order must be sent to supplier before confirmation');
         }
 
@@ -369,7 +383,7 @@ class Order extends Model
             }
 
             // Create delivery when order is confirmed
-            if (!$this->delivery) {
+            if (! $this->delivery) {
                 $this->createDelivery();
                 Log::info('Delivery created during order confirmation', [
                     'order_id' => $this->id,
@@ -394,7 +408,7 @@ class Order extends Model
         $this->status = 'shipped';
         $this->save();
 
-        if (!$this->delivery) {
+        if (! $this->delivery) {
             $this->createDelivery();
             Log::warning('Delivery created during shipping - should have existed from confirmation', [
                 'order_id' => $this->id,
@@ -415,6 +429,7 @@ class Order extends Model
                 'order_id' => $this->id,
                 'delivery_id' => $this->delivery->id,
             ]);
+
             return;
         }
 
@@ -491,7 +506,7 @@ class Order extends Model
             $prescription = $this->prescription;
 
             // Only attempt insurance claim if insurance is covered AND patient has complete info
-            if ($prescription->insurance_covered && !$prescription->insuranceClaim) {
+            if ($prescription->insurance_covered && ! $prescription->insuranceClaim) {
                 $patient = $prescription->patient;
 
                 if ($patient->insurance_provider_id && $patient->insurance_number) {
@@ -516,8 +531,8 @@ class Order extends Model
                         'order_id' => $this->id,
                         'prescription_id' => $prescription->id,
                         'patient_id' => $patient->id,
-                        'has_provider' => !empty($patient->insurance_provider_id),
-                        'has_number' => !empty($patient->insurance_number),
+                        'has_provider' => ! empty($patient->insurance_provider_id),
+                        'has_number' => ! empty($patient->insurance_number),
                     ]);
                 }
             }
@@ -574,7 +589,7 @@ class Order extends Model
                 }
             }
         }
-        
+
     }
 
     // Cancel order
@@ -619,7 +634,7 @@ class Order extends Model
     {
         return $query->where('status', 'pending_review');
     }
-    
+
     public function scopeSentToSupplier($query)
     {
         return $query->where('status', 'sent_to_supplier');
@@ -665,7 +680,7 @@ class Order extends Model
             default => 'gray',
         };
     }
-    
+
     public function getStatusLabelAttribute(): string
     {
         return match ($this->status) {

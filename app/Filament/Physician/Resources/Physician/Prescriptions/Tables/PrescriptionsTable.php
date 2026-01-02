@@ -162,7 +162,7 @@ class PrescriptionsTable
                 ->schema(
                     $orders->map(function ($order) {
                         return Section::make($order->order_number)
-                            ->description('Supplier: ' . ($order->supplier->business_name ?? 'N/A'))
+                            ->description('Supplier: ' . ($order->supplier->business_name ?? 'Awaiting Dispatch'))
                             ->icon('heroicon-o-shopping-bag')
                             ->schema([
                                 Placeholder::make("status_{$order->id}")
@@ -233,11 +233,11 @@ class PrescriptionsTable
                                                     '</div>'
                                                 ));
                                         })->toArray()
-                                    )
+                                    )->columnSpanFull()
                                     ->collapsible()
                                     ->collapsed(true),
                             ])
-                            ->columns(3)
+                            ->columns(4)
                             ->collapsible()
                             ->collapsed(false);
                     })->toArray()

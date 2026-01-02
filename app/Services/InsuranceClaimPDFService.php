@@ -24,7 +24,7 @@ class InsuranceClaimPDFService
         
         // Prepare branding data
         $branding = [
-            'logo_url' => $provider->logo_path ? asset('storage/' . $provider->logo_path) : null,
+            'logo_url' => $provider->logo ? asset('storage/' . $provider->logo) : null,
             'header_text' => $provider->header_text ?: "Insurance Claim Form - {$provider->company_name}",
             'footer_text' => $provider->footer_text ?: self::getDefaultFooter($provider),
             'primary_color' => $provider->primary_color ?: '#000000',
