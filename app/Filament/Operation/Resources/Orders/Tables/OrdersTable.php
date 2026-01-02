@@ -78,7 +78,7 @@ class OrdersTable
                     ->colors([
                         'warning' => 'pending_review',
                         'info' => 'sent_to_supplier',
-                        'primary' => ['confirmed', 'processing', 'shipped'],
+                        'primary' => ['confirmed', 'processing', 'shipped','sent_to_supplier'],
                         'success' => 'delivered',
                         'danger' => 'cancelled',
                     ])
@@ -93,7 +93,7 @@ class OrdersTable
                     ])
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'pending_review' => 'Pending Review',
-                        'sent_to_supplier' => 'Sent to Supplier',
+                        'sent_to_supplier' => 'Received',
                         'confirmed' => 'Confirmed',
                         'processing' => 'Processing',
                         'shipped' => 'Shipped',
