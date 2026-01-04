@@ -50,47 +50,34 @@ class PrescriptionForm
                                     ->createOptionForm([
                                         Grid::make(2)
                                             ->schema([
-                                                TextInput::make('first_name')
-                                                    ->required()
-                                                    ->maxLength(255),
-                                                TextInput::make('last_name')
-                                                    ->required()
-                                                    ->maxLength(255),
-                                                DatePicker::make('date_of_birth')
-                                                    ->required()
-                                                    ->maxDate(now()),
-                                                Select::make('gender')
-                                                    ->options([
+                                                TextInput::make('first_name')->required()->maxLength(255),
+                                                TextInput::make('last_name')->required()->maxLength(255),
+                                                DatePicker::make('date_of_birth')->required()->maxDate(now()),
+                                                Select::make('gender')->options([
                                                         'male' => 'Male',
                                                         'female' => 'Female',
-                                                    ])
-                                                    ->required(),
-                                                TextInput::make('phone')
-                                                    ->tel()
-                                                    ->maxLength(255),
-                                                TextInput::make('email')
-                                                    ->email()
-                                                    ->maxLength(255),
-                                                TextInput::make('county')
-                                                    ->maxLength(255),
-                                                TextInput::make('city')
-                                                    ->maxLength(255),
-                                                Textarea::make('address')
-                                                    ->columnSpanFull(),
-                                                Select::make('insurance_provider')
-                                                    ->options(InsuranceProvider::query()->pluck('company_name', 'id')),
-                                                TextInput::make('insurance_number')
-                                                    ->maxLength(255),
-                                                Textarea::make('allergies')
-                                                    ->columnSpanFull()
-                                                    ->placeholder('List any known allergies'),
-                                                Textarea::make('medical_conditions')
-                                                    ->columnSpanFull()
-                                                    ->placeholder('List any existing medical conditions'),
+                                                    ])->required(),
+                                                TextInput::make('phone')->tel()->maxLength(255),
+                                                TextInput::make('email')->email()->maxLength(255),
+                                                TextInput::make('county')->maxLength(255),
+                                                TextInput::make('city')->maxLength(255),
+                                                Textarea::make('address')->columnSpanFull(),
+                                                Select::make('insurance_provider')->options(InsuranceProvider::query()->pluck('company_name', 'id')),
+                                                TextInput::make('insurance_number')->maxLength(255),
+                                                Textarea::make('allergies')->columnSpanFull()->placeholder('List any known allergies'),
+                                                Textarea::make('medical_conditions')->columnSpanFull()->placeholder('List any existing medical conditions'),
                                             ]),
-                                    ])
+                                    ])->createOptionUsing(function (array $data){
+
+                                        $data['insurance_provider_id'] = $data['insurance_provider'];
+                                        $data['insurance_provider'] = InsuranceProvider::find($data['insurance_provider_id'])->pluck('company_name')[0];
+                                    
+                                        return $data ;
+
+                                    })
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(function ($state, Set $set) {
+
                                         $patient = Cache::remember(
                                             "patient_info_{$state}",
                                             3600,
@@ -115,12 +102,12 @@ class PrescriptionForm
                             ->schema([
                                 Textarea::make('diagnosis')
                                     ->label('Diagnosis')
-                                    ->rows(3)
+                                    ->rows(1)->required()
                                     ->columnSpanFull(),
 
                                 Textarea::make('notes')
                                     ->label('Prescription Notes')
-                                    ->rows(2)
+                                    ->rows(2)->required()
                                     ->columnSpanFull()
                                     ->placeholder('Additional notes or instructions'),
                                 Toggle::make('insurance_covered')
@@ -157,8 +144,7 @@ class PrescriptionForm
                                             }),
 
                                         TextInput::make('quantity')
-                                            ->numeric()
-                                            ->required()
+                                            ->numeric()->required()
                                             ->minValue(1)
                                             ->default(1)
                                             ->live(onBlur: true)
@@ -184,7 +170,6 @@ class PrescriptionForm
                                                 $set('total_price', $priceData['unit_price'] * $state);
                                             }),
 
-                                        // Hidden field to store supplier price
                                         TextInput::make('supplier_price')
                                             ->numeric()
                                             ->hidden()
@@ -270,7 +255,7 @@ class PrescriptionForm
                 ->select(['id', 'generic_name', 'brand_name', 'strength', 'dosage_form'])
                 ->where('is_active', true)
                 ->orderBy('generic_name')
-                ->limit(1000) // Increased limit
+                ->limit(1000)
                 ->get()
                 ->mapWithKeys(function ($medicine) {
                     $brandInfo = $medicine->brand_name ? " ({$medicine->brand_name})" : '';
@@ -283,7 +268,7 @@ class PrescriptionForm
     }
 
     /**
-     * OPTIMIZED: Get medicine name with caching
+     *  Get medicine name with caching
      */
     protected static function getMedicineName(int $medicineId): ?string
     {
@@ -293,7 +278,7 @@ class PrescriptionForm
     }
 
     /**
-     * OPTIMIZED: Get cached medicine pricing with markup applied
+     *  Get cached medicine pricing with markup applied
      */
     protected static function getMedicinePricing(int $medicineId, int $quantity = 1): array
     {

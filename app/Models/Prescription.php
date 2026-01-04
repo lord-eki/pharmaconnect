@@ -380,7 +380,7 @@ class Prescription extends Model
             'supplier_total' => $supplierTotal,
             'markup_total' => $markupTotal,
             'total_amount' => $markedUpTotal,
-            'status' => 'pending_review', // NEW: Start in pending_review status
+            'status' => 'pending_review', 
             'ordered_at' => now(),
             'expected_delivery' => now()->addHours(24),
             'notes' => "Auto-generated from prescription {$this->prescription_number}",

@@ -5,6 +5,7 @@ namespace App\Filament\Physician\Resources\Physician\Patients\Tables;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -105,6 +106,7 @@ class PatientsTable
                     // ->url(fn ($record) => route('filament.physician.resources.prescriptions.create', [
                     //     'patient_id' => $record->id,
                     // ])),
+                    DeleteAction::make()
                 ])->label('More actions')
                     ->icon('heroicon-m-ellipsis-vertical')
                     ->size(Size::Small)
