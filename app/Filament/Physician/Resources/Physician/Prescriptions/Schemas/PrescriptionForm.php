@@ -54,9 +54,9 @@ class PrescriptionForm
                                                 TextInput::make('last_name')->required()->maxLength(255),
                                                 DatePicker::make('date_of_birth')->required()->maxDate(now()),
                                                 Select::make('gender')->options([
-                                                        'male' => 'Male',
-                                                        'female' => 'Female',
-                                                    ])->required(),
+                                                    'male' => 'Male',
+                                                    'female' => 'Female',
+                                                ])->required(),
                                                 TextInput::make('phone')->tel()->maxLength(255),
                                                 TextInput::make('email')->email()->maxLength(255),
                                                 TextInput::make('county')->maxLength(255),
@@ -67,13 +67,22 @@ class PrescriptionForm
                                                 Textarea::make('allergies')->columnSpanFull()->placeholder('List any known allergies'),
                                                 Textarea::make('medical_conditions')->columnSpanFull()->placeholder('List any existing medical conditions'),
                                             ]),
-                                    ])->createOptionUsing(function (array $data){
+                                    ])->createOptionUsing(function (array $data) {
+                                        if (! empty($data['insurance_provider'])) {
+                                            $insuranceProviderId = $data['insurance_provider'];
+                                            $data['insurance_provider_id'] = $insuranceProviderId;
 
-                                        $data['insurance_provider_id'] = $data['insurance_provider'];
-                                        $data['insurance_provider'] = InsuranceProvider::find($data['insurance_provider_id'])->pluck('company_name')[0];
-                                    
-                                        return $data ;
+                                            $insuranceProvider = InsuranceProvider::find($insuranceProviderId);
+                                            $data['insurance_provider'] = $insuranceProvider?->company_name;
+                                        } else {
+                                            unset($data['insurance_provider']);
+                                        }
 
+                                        $patient = Patient::create($data);
+
+                                        Cache::forget("patient_info_{$patient->id}");
+
+                                        return $patient;
                                     })
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(function ($state, Set $set) {
