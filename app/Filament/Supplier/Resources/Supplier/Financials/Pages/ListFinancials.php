@@ -5,7 +5,6 @@ namespace App\Filament\Supplier\Resources\Supplier\Financials\Pages;
 use App\Filament\Supplier\Resources\Supplier\Financials\FinancialResource;
 use App\Filament\Supplier\Resources\Supplier\Financials\Widgets\Supplier\FinancialStatsWidget;
 use App\Models\Payment;
-use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,10 +14,9 @@ class ListFinancials extends ListRecords
 {
     protected static string $resource = FinancialResource::class;
 
-   public function getTabs(): array
+    public function getTabs(): array
     {
-        $supplierId = Auth::user()->userProfile->id ?? null;
-        dd($supplierId);
+        $supplierId = Auth::user()->supplier;
 
         return [
             'all' => Tab::make('All Payments')
@@ -57,7 +55,7 @@ class ListFinancials extends ListRecords
     protected function getHeaderWidgets(): array
     {
         return [
-            FinancialStatsWidget::class
+            FinancialStatsWidget::class,
         ];
     }
 }

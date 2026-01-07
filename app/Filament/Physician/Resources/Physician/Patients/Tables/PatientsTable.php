@@ -106,7 +106,6 @@ class PatientsTable
                     // ->url(fn ($record) => route('filament.physician.resources.prescriptions.create', [
                     //     'patient_id' => $record->id,
                     // ])),
-                    DeleteAction::make()
                 ])->label('More actions')
                     ->icon('heroicon-m-ellipsis-vertical')
                     ->size(Size::Small)
