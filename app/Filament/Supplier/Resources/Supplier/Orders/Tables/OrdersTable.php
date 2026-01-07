@@ -36,22 +36,6 @@ class OrdersTable
                     ->badge()
                     ->color('primary'),
 
-                TextColumn::make('prescription.prescription_number')
-                    ->label('Prescription #')
-                    ->searchable()
-                    ->sortable()
-                    ->badge()
-                    ->color('info'),
-
-                TextColumn::make('prescription.patient.first_name')
-                    ->label('Patient')
-                    ->formatStateUsing(fn ($record) => $record->prescription->patient
-                            ? "{$record->prescription->patient->first_name} {$record->prescription->patient->last_name}"
-                            : 'N/A'
-                    )
-                    ->searchable(['first_name', 'last_name'])
-                    ->wrap(),
-
                 TextColumn::make('supplier_total')
                     ->label('Total')
                     ->money('KES')
