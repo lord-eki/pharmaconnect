@@ -67,23 +67,7 @@ class PrescriptionForm
                                                 Textarea::make('allergies')->columnSpanFull()->placeholder('List any known allergies'),
                                                 Textarea::make('medical_conditions')->columnSpanFull()->placeholder('List any existing medical conditions'),
                                             ]),
-                                    ])->createOptionUsing(function (array $data) {
-                                        if (! empty($data['insurance_provider'])) {
-                                            $insuranceProviderId = $data['insurance_provider'];
-                                            $data['insurance_provider_id'] = $insuranceProviderId;
-
-                                            $insuranceProvider = InsuranceProvider::find($insuranceProviderId);
-                                            $data['insurance_provider'] = $insuranceProvider?->company_name;
-                                        } else {
-                                            unset($data['insurance_provider']);
-                                        }
-
-                                        $patient = Patient::create($data);
-
-                                        Cache::forget("patient_info_{$patient->id}");
-
-                                        return $patient;
-                                    })
+                                    ])
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(function ($state, Set $set) {
 
@@ -94,6 +78,7 @@ class PrescriptionForm
                                                 ->find($state)
                                         );
 
+                                        
                                         if ($patient) {
                                             $hasInsurance = ! empty($patient->insurance_number) && ! empty($patient->insurance_provider_id);
                                             $set('patient_has_insurance', $hasInsurance);
