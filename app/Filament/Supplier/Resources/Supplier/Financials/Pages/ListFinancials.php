@@ -40,7 +40,7 @@ class ListFinancials extends ListRecords
 
             'completed' => Tab::make('Completed')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'completed'))
-                ->badge(fn () => \App\Models\Payment::where('payee_id', $supplierId)
+                ->badge(fn () => Payment::where('payee_id', $supplierId)
                     ->where('status', 'completed')
                     ->count())
                 ->badgeColor('success'),
