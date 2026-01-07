@@ -3,6 +3,7 @@
 namespace App\Filament\Supplier\Resources\Supplier\Orders\Tables;
 
 use App\Models\Order;
+use App\Services\OrderReportService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
@@ -21,6 +22,8 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class OrdersTable
 {
@@ -134,8 +137,47 @@ class OrdersTable
                 ActionGroup::make([
                     ViewAction::make(),
 
-                    // EditAction::make()
-                    //     ->visible(fn ($record) => ! in_array($record->status, ['delivered', 'cancelled'])),
+                    Action::make('download_lpo')
+                        ->label('Download LPO')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->color('success')
+                        ->action(function (Order $record) {
+                            try {
+                                $reportService = app(OrderReportService::class);
+
+                                $path = $reportService->generateSupplierLPO($record);
+
+                                $url = Storage::url($path);
+
+                                Notification::make()
+                                    ->title('LPO Ready')
+                                    ->body('Your LPO has been generated successfully.')
+                                    ->success()
+                                    ->actions([
+                                        Action::make('download')
+                                            ->label('Download PDF')
+                                            ->url($url)
+                                            ->openUrlInNewTab(),
+                                    ])
+                                    ->persistent()
+                                    ->send();
+
+                            } catch (\Exception $e) {
+                                Log::error('Supplier LPO Generation Error', [
+                                    'order_id' => $record->id,
+                                    'error' => $e->getMessage(),
+                                    'trace' => $e->getTraceAsString(),
+                                ]);
+
+                                Notification::make()
+                                    ->title('Error generating LPO')
+                                    ->body('Unable to generate PDF. Please try again or contact support.')
+                                    ->danger()
+                                    ->send();
+                            }
+                        })
+                        ->requiresConfirmation(false)
+                        ->tooltip('Download Local Purchase Order as PDF'),
 
                     Action::make('confirm')
                         ->label('Confirm Order')
