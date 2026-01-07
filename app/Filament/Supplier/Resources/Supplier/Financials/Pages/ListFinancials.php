@@ -38,14 +38,14 @@ class ListFinancials extends ListRecords
 
             'completed' => Tab::make('Completed')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'completed'))
-                ->badge(fn () => \App\Models\Payment::where('payee_id', $supplierId)
+                ->badge(fn () => Payment::where('payee_id', $supplierId)
                     ->where('status', 'completed')
                     ->count())
                 ->badgeColor('success'),
 
             'failed' => Tab::make('Failed')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'failed'))
-                ->badge(fn () => \App\Models\Payment::where('payee_id', $supplierId)
+                ->badge(fn () => Payment::where('payee_id', $supplierId)
                     ->where('status', 'failed')
                     ->count())
                 ->badgeColor('danger'),

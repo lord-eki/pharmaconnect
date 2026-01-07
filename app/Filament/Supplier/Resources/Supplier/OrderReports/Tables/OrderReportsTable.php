@@ -41,26 +41,7 @@ class OrderReportsTable
                         default => 'gray',
                     }),
 
-                TextColumn::make('quotation.prescription.prescription_number')
-                    ->label('Prescription')
-                    ->searchable()
-                    ->sortable()
-                    ->badge()
-                    ->color('info'),
-
-                TextColumn::make('quotation.prescription.physician.name')
-                    ->label('Physician')
-                    ->searchable()
-                    ->sortable(),
-
-                TextColumn::make('quotation.prescription.patient.first_name')
-                    ->label('Patient')
-                    ->formatStateUsing(fn ($record) => $record->quotation->prescription->patient
-                        ? "{$record->quotation->prescription->patient->first_name} {$record->quotation->prescription->patient->last_name}"
-                        : 'N/A'
-                    )
-                    ->searchable(['first_name', 'last_name'])
-                    ->sortable(),
+            
 
                 TextColumn::make('supplier_total')
                     ->label('Amount')
@@ -103,8 +84,7 @@ class OrderReportsTable
                         'shipped' => 'Shipped',
                         'delivered' => 'Delivered',
                     ])
-                    ->multiple()
-                    ->default(['confirmed', 'processing', 'shipped', 'delivered']),
+                    ->multiple(),
 
                 Filter::make('date_range')
                     ->form([
