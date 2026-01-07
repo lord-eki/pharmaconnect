@@ -16,11 +16,7 @@ class ListFinancials extends ListRecords
 
     public function getTabs(): array
     {
-<<<<<<< HEAD
-        $supplierId = Auth::user()->userProfile->id ?? null;
-=======
         $supplierId = Auth::user()->supplier;
->>>>>>> dev
 
         return [
             'all' => Tab::make('All Payments')
@@ -49,7 +45,7 @@ class ListFinancials extends ListRecords
 
             'failed' => Tab::make('Failed')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'failed'))
-                ->badge(fn () => \App\Models\Payment::where('payee_id', $supplierId)
+                ->badge(fn () => Payment::where('payee_id', $supplierId)
                     ->where('status', 'failed')
                     ->count())
                 ->badgeColor('danger'),
