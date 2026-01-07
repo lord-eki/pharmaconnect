@@ -18,6 +18,7 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -122,7 +123,7 @@ class PrescriptionForm
                                             ->options(fn () => self::getCachedMedicineOptions())
                                             ->searchable()
                                             ->required()
-                                            ->columnSpan(2)
+                                           
                                             ->live(onBlur: true)
                                             ->afterStateUpdated(function ($state, Set $set, Get $get) {
                                                 if (! $state) {
@@ -192,14 +193,12 @@ class PrescriptionForm
                                             ->minValue(1)
                                             ->suffix('days'),
 
-                                        Textarea::make('dosage_instructions')
+                                        TextInput::make('dosage_instructions')
                                             ->required()
                                             ->placeholder('e.g., Take 1 tablet twice daily after meals')
-                                            ->rows(2)
-                                            ->columnSpanFull(),
 
                                     ])
-                                    ->columns(3)
+                                    ->columns(4)
                                     ->defaultItems(1)
                                     ->addActionLabel('Add Medicine')
                                     ->collapsible()

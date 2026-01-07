@@ -3,6 +3,7 @@
 namespace App\Filament\Physician\Resources\Physician\Patients\Schemas;
 
 use App\Models\InsuranceProvider;
+use App\Models\Patient;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -49,12 +50,12 @@ class PatientForm
                         Grid::make(2)
                             ->schema([
                                 TextInput::make('phone')
-                                    ->tel()
+                                    ->tel()->unique(Patient::class)
                                     ->maxLength(255)
                                     ->placeholder('+254 7XX XXX XXX'),
                                     
                                 TextInput::make('email')
-                                    ->email()
+                                    ->email()->unique(Patient::class)
                                     ->maxLength(255),
                                     
                                 Textarea::make('address')

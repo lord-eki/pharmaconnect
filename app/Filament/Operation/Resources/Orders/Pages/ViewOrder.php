@@ -16,8 +16,7 @@ class ViewOrder extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make()
-                ->visible(fn () => !in_array($this->record->status, ['delivered', 'cancelled'])),
+        
 
             Action::make('send_to_supplier')
                 ->label('Send to Supplier')
