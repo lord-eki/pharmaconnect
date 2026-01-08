@@ -184,7 +184,7 @@ class ViewPrescription extends ViewRecord
                             ->label('Insurance Coverage')
                             ->boolean(),
                     ])
-                    ->columns(1)
+                    ->columnSpanFull()
                     ->collapsible(),
 
                 Section::make('Prescribed Medicines')
@@ -192,12 +192,10 @@ class ViewPrescription extends ViewRecord
                         RepeatableEntry::make('items')
                             ->label('')
                             ->schema([
-                                Grid::make(4)
-                                    ->schema([
+                              
                                         TextEntry::make('medicine.generic_name')
                                             ->label('Medicine')
-                                            ->weight('bold')
-                                            ->columnSpan(2),
+                                            ->weight('bold'),
 
                                         TextEntry::make('quantity')
                                             ->suffix(' units'),
@@ -205,9 +203,6 @@ class ViewPrescription extends ViewRecord
                                         TextEntry::make('total_price')
                                             ->label('Est. Cost')
                                             ->money('KES'),
-                                    ]),
-
-                                Grid::make([
                                     TextEntry::make('medicine.strength')
                                         ->label('Strength')
                                         ->badge()
@@ -220,12 +215,10 @@ class ViewPrescription extends ViewRecord
 
                                     TextEntry::make('dosage_instructions')
                                         ->label('Dosage Instructions')
-                                        ->columnSpanFull()
                                         ->icon('heroicon-o-information-circle'),
-                                ]),
+                               
 
-                                Grid::make(3)
-                                    ->schema([
+                              
                                         TextEntry::make('frequency')
                                             ->label('Frequency'),
 
@@ -234,14 +227,12 @@ class ViewPrescription extends ViewRecord
                                             ->suffix(' days'),
                                         TextEntry::make('notes')
                                             ->label('Special Instructions')
-                                            ->columnSpanFull()
                                             ->default('None')
                                             ->color('warning'),
-                                    ]),
+                                 
 
-                            ])
-                            ->contained(true),
-                    ])->collapsible(),
+                            ])->columns(8),
+                    ])->collapsible()->columnSpanFull(),
 
                 Section::make('Financial Summary')
                     ->schema([

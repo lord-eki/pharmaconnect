@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -104,6 +105,11 @@ class Prescription extends Model
         return $this->hasMany(Commission::class);
     }
 
+    public function delivery(): HasOne
+    {
+        return $this->hasOne(Delivery::class);
+    }
+
     /**
      * OPTIMIZED: Generate prescription number with better caching
      */
@@ -141,7 +147,7 @@ class Prescription extends Model
     }
 
     /**
-     * Submit with  error handling and performance
+     * Submit
      */
     public function submit(): bool
     {
@@ -150,7 +156,7 @@ class Prescription extends Model
                 throw new \Exception('Cannot submit prescription without medicines');
             }
 
-            // Check interactions asynchronously after submission
+            // Check interactions asynchronously
             dispatch(function () {
                 $this->checkDrugInteractions();
             });
@@ -159,11 +165,9 @@ class Prescription extends Model
             $this->save();
 
             try {
-                // Generate quotation
                 $quotation = $this->generateQuotationSync();
 
                 if ($quotation && $quotation->items->isNotEmpty()) {
-                    // Create orders from quotation
                     $this->createOrdersFromQuotation($quotation);
                 } else {
                     Log::warning('No quotation items generated', [
@@ -191,6 +195,190 @@ class Prescription extends Model
 
             return true;
         });
+    }
+
+    /**
+     * Create consolidated delivery for all prescription orders
+     * Called when first order is confirmed
+     */
+    public function createConsolidatedDelivery($orders): Delivery
+    {
+        // Accept either Collection or array
+        if ($orders instanceof \Illuminate\Support\Collection) {
+            if ($orders->isEmpty()) {
+                throw new \Exception('Cannot create delivery without orders');
+            }
+        } elseif (is_array($orders)) {
+            if (empty($orders)) {
+                throw new \Exception('Cannot create delivery without orders');
+            }
+            // Convert array to collection for consistency
+            $orders = collect($orders);
+        } else {
+            throw new \Exception('Orders must be a Collection or array');
+        }
+
+        $patient = $this->patient;
+
+        // Collect all supplier pickup locations
+        $pickupLocations = [];
+        foreach ($orders as $order) {
+            // Ensure supplier relationship is loaded
+            if (! $order->relationLoaded('supplier')) {
+                $order->load('supplier');
+            }
+            $supplier = $order->supplier;
+
+            $pickupLocations[] = [
+                'supplier_id' => $supplier->id,
+                'supplier_name' => $supplier->company_name,
+                'address' => $supplier->address ?? 'Address not set',
+                'county' => $supplier->county,
+                'city' => $supplier->city,
+                'phone' => $supplier->phone,
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+            ];
+        }
+
+        // Calculate delivery fee considering multiple pickups
+        $deliveryFee = $this->calculateConsolidatedDeliveryFee($pickupLocations, $patient);
+
+        $delivery = Delivery::create([
+            'delivery_number' => Delivery::generateDeliveryNumber(),
+            'prescription_id' => $this->id,
+            'pickup_locations' => $pickupLocations,
+            'pickup_address' => $this->getPrimaryPickupAddress($pickupLocations),
+            'delivery_address' => $patient->address ?? "{$patient->city}, {$patient->county}",
+            'estimated_distance_km' => $this->estimateConsolidatedDistance($pickupLocations, $patient),
+            'delivery_fee' => $deliveryFee,
+            'status' => 'pending',
+            'recipient_name' => $patient->full_name,
+            'recipient_phone' => $patient->phone,
+            'scheduled_pickup' => now()->addHours(2),
+            'estimated_delivery' => now()->addHours(6), // More time for multiple pickups
+            'order_statuses' => $this->initializeOrderStatuses($orders),
+        ]);
+
+        // Attach all orders to this delivery
+        foreach ($orders as $order) {
+            $delivery->orders()->attach($order->id, [
+                'pickup_status' => 'pending',
+            ]);
+        }
+
+        Log::info('Consolidated delivery created on first order confirmation', [
+            'prescription_id' => $this->id,
+            'delivery_id' => $delivery->id,
+            'order_count' => $orders->count(),
+            'supplier_count' => count($pickupLocations),
+            'confirmed_orders' => $orders->where('status', 'confirmed')->count(),
+        ]);
+
+        return $delivery;
+    }
+
+    /**
+     * Initialize order statuses tracking
+     */
+    protected function initializeOrderStatuses($orders): array
+    {
+        $statuses = [];
+
+        // Handle both Collection and array
+        $ordersCollection = $orders instanceof \Illuminate\Support\Collection ? $orders : collect($orders);
+
+        foreach ($ordersCollection as $order) {
+            //  supplier relationship is loaded
+            if (! $order->relationLoaded('supplier')) {
+                $order->load('supplier');
+            }
+
+            $statuses[$order->id] = [
+                'order_number' => $order->order_number,
+                'supplier_name' => $order->supplier->company_name,
+                'pickup_status' => 'pending',
+                'pickup_address' => $order->supplier->address,
+                'order_status' => $order->status,
+            ];
+        }
+
+        return $statuses;
+    }
+
+    /**
+     * Get primary pickup address
+     */
+    protected function getPrimaryPickupAddress($pickupLocations): string
+    {
+        if ($pickupLocations instanceof \Illuminate\Support\Collection) {
+            $pickupLocations = $pickupLocations->toArray();
+        }
+
+        if (count($pickupLocations) === 1) {
+            return $pickupLocations[0]['address'] ?? 'Address not set';
+        }
+
+        return count($pickupLocations).' pickup locations - see details';
+    }
+
+    /**
+     * Calculate delivery fee considering multiple pickups
+     */
+    protected function calculateConsolidatedDeliveryFee($pickupLocations, $patient): float
+    {
+        if ($pickupLocations instanceof \Illuminate\Support\Collection) {
+            $pickupLocations = $pickupLocations->toArray();
+        }
+
+        // Base fee
+        $baseFee = 200.00;
+
+        // Add fee for multiple pickups ksh 100 per additional pickup
+        if (count($pickupLocations) > 1) {
+            $baseFee += (count($pickupLocations) - 1) * 100.00;
+        }
+
+        // Check if any pickup is in different county from patient
+        $differentCounty = false;
+        foreach ($pickupLocations as $location) {
+            if (($location['county'] ?? null) !== $patient->county) {
+                $differentCounty = true;
+                break;
+            }
+        }
+
+        if ($differentCounty) {
+            $baseFee += 300.00; // Additional fee for cross-county
+        }
+
+        return $baseFee;
+    }
+
+    /**
+     * Estimate total distance for consolidated delivery
+     */
+    protected function estimateConsolidatedDistance($pickupLocations, $patient): float
+    {
+        // Ensure pickupLocations is an array
+        if ($pickupLocations instanceof \Illuminate\Support\Collection) {
+            $pickupLocations = $pickupLocations->toArray();
+        }
+
+        // Simple estimation: 10km per pickup + distance to patient
+        $pickupDistance = count($pickupLocations) * 10.0;
+
+        // Add distance to patient estimate based on county
+        $toPatientDistance = 10.0; // Same county default
+
+        foreach ($pickupLocations as $location) {
+            if (($location['county'] ?? null) !== $patient->county) {
+                $toPatientDistance = 50.0; // Different county
+                break;
+            }
+        }
+
+        return $pickupDistance + $toPatientDistance;
     }
 
     /**
@@ -265,9 +453,6 @@ class Prescription extends Model
         return $quotation->fresh(['items']);
     }
 
-    /**
-     *  Create orders with better grouping
-     */
     protected function createOrdersFromQuotation(Quotation $quotation): void
     {
         $supplierGroups = $this->groupQuotationItemsBySupplier($quotation);
@@ -284,7 +469,6 @@ class Prescription extends Model
             return;
         }
 
-        // Bulk create orders
         foreach ($supplierGroups as $supplierId => $groupData) {
             try {
                 $this->createOrderForSupplier($quotation, $supplierId, $groupData);
@@ -295,7 +479,6 @@ class Prescription extends Model
                 ]);
             }
         }
-
     }
 
     /**
@@ -345,7 +528,7 @@ class Prescription extends Model
     /**
      * Create order for supplier with bulk insert
      */
-    protected function createOrderForSupplier(Quotation $quotation, int $supplierId, array $groupData): void
+    protected function createOrderForSupplier(Quotation $quotation, int $supplierId, array $groupData): Order
     {
         $pricingService = app(PricingService::class);
 
@@ -355,11 +538,8 @@ class Prescription extends Model
         foreach ($groupData['quotation_items'] as $quotationItem) {
             $prescriptionItem = $quotationItem->prescriptionItem;
             $medicine = $prescriptionItem->medicine;
-
-            // Get supplier price from quotation item
             $supplierPrice = $quotationItem->unit_price;
 
-            // Calculate marked-up price
             $pricing = $pricingService->calculateFinalPrice(
                 $supplierPrice,
                 $medicine,
@@ -380,22 +560,19 @@ class Prescription extends Model
             'supplier_total' => $supplierTotal,
             'markup_total' => $markupTotal,
             'total_amount' => $markedUpTotal,
-            'status' => 'pending_review', 
+            'status' => 'pending_review',
             'ordered_at' => now(),
             'expected_delivery' => now()->addHours(24),
             'notes' => "Auto-generated from prescription {$this->prescription_number}",
         ]);
 
-        // Bulk insert order items with proper pricing
+        // Bulk insert order items
         $orderItems = [];
         foreach ($groupData['quotation_items'] as $quotationItem) {
             $prescriptionItem = $quotationItem->prescriptionItem;
             $medicine = $prescriptionItem->medicine;
-
-            // Get supplier price
             $supplierPrice = $quotationItem->unit_price;
 
-            // Calculate marked-up price
             $pricing = $pricingService->calculateFinalPrice(
                 $supplierPrice,
                 $medicine,
@@ -418,19 +595,21 @@ class Prescription extends Model
 
         OrderItem::insert($orderItems);
 
-        Log::info('Order created and pending internal review', [
+        Log::info('Order created (delivery will be created on first confirmation)', [
             'order_number' => $order->order_number,
             'supplier_id' => $supplierId,
-            'supplier_total' => $supplierTotal,
-            'markup_total' => $markupTotal,
             'total_amount' => $markedUpTotal,
             'status' => 'pending_review',
         ]);
 
         // Notify internal operations team instead
+
         dispatch(function () use ($order) {
             $this->notifyOperations($order);
         });
+
+        return $order;
+
     }
 
     protected function notifyOperations(Order $order): void

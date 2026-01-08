@@ -100,26 +100,18 @@ class OrderInfolist
                         TextEntry::make('supplier.company_name')
                             ->label('Supplier')
                             ->icon('heroicon-m-building-storefront'),
-                        
-                        TextEntry::make('supplier.phone')
-                            ->label('Supplier Phone')
-                            ->icon('heroicon-m-phone')
-                            ->copyable(),
-                        
+                    
                         TextEntry::make('prescription.patient.full_name')
                             ->label('Patient')
                             ->icon('heroicon-m-user'),
                         
-                        TextEntry::make('prescription.patient.phone')
-                            ->label('Patient Phone')
-                            ->icon('heroicon-m-phone')
-                            ->copyable(),
+                      
                         
                         TextEntry::make('prescription.physician.name')
                             ->label('Physician')
                             ->icon('heroicon-m-user-circle'),
                     ])
-                    ->columns(2)
+                    ->columns(4)
                     ->collapsible(),
 
                 Section::make('Important Dates')
@@ -189,9 +181,8 @@ class OrderInfolist
                                     ->color('success'),
                             ])
                             ->columns(6)
-                            ->contained(false),
                     ])
-                    ->collapsible(),
+                    ->collapsible()->columnSpanFull(),
 
                Section::make('Delivery Information')
                     ->schema([

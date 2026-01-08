@@ -6,6 +6,7 @@ use App\Services\CommissionService;
 use App\Services\PaymentService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
@@ -50,7 +51,6 @@ class Order extends Model
                 $order->ordered_at = now();
             }
 
-            // Set expected delivery (default 24 hours)
             if (! $order->expected_delivery) {
                 $order->expected_delivery = now()->addHours(24);
             }
@@ -61,13 +61,20 @@ class Order extends Model
         });
 
         static::saved(function ($order) {
+            // Update prescription status when order delivered
             if ($order->status === 'delivered' && $order->prescription) {
-                $order->prescription->markFulfilled();
+                // Check if all orders are delivered
+                $allDelivered = $order->prescription->orders()
+                    ->where('status', '!=', 'delivered')
+                    ->doesntExist();
+
+                if ($allDelivered) {
+                    $order->prescription->markFulfilled();
+                }
             }
         });
 
         static::updated(function ($order) {
-            // Only handle status changes
             if ($order->isDirty('status')) {
                 switch ($order->status) {
                     case 'sent_to_supplier':
@@ -76,7 +83,6 @@ class Order extends Model
                         }
 
                         if ($order->prescription) {
-                            // Check if any orders for this prescription have been sent
                             $anySent = $order->prescription->orders()
                                 ->whereIn('status', ['sent_to_supplier', 'confirmed', 'processing', 'shipped', 'delivered'])
                                 ->exists();
@@ -92,41 +98,116 @@ class Order extends Model
                             }
                         }
 
-                        // Notify supplier
                         $order->notifyStakeholders('sent_to_supplier');
                         break;
 
                     case 'confirmed':
+                        static::handleOrderConfirmation($order);
                         static::handlePrescriptionOrdersConfirmed($order);
-
-                        if (! $order->delivery) {
-                            $order->createDelivery();
-                            Log::info('Delivery created during order confirmation', [
-                                'order_id' => $order->id,
-                                'order_number' => $order->order_number,
-                            ]);
-                        }
-                        break;
-
-                    case 'processing':
-                        // Ensure delivery exists when processing starts
-                        if (! $order->delivery) {
-                            $order->createDelivery();
-                            Log::warning('Delivery created during processing - should have been created at confirmation', [
-                                'order_id' => $order->id,
-                            ]);
-                        }
                         break;
 
                     case 'delivered':
-                        // Update prescription status
-                        if ($order->prescription) {
-                            $order->prescription->markFulfilled();
-                        }
                         break;
                 }
             }
         });
+    }
+
+    /**
+     * NEW: Handle delivery creation on first order confirmation
+     */
+    protected static function handleOrderConfirmation(Order $order): void
+    {
+        $prescription = $order->prescription;
+
+        if (! $prescription) {
+            return;
+        }
+
+        // Create delivery on first confirmation
+        if (! $prescription->delivery) {
+            try {
+                // Get all orders for this prescription 
+                $allOrders = $prescription->orders()->with('supplier')->get();
+
+                $delivery = $prescription->createConsolidatedDelivery($allOrders);
+
+                Log::info('Delivery created on first order confirmation', [
+                    'prescription_id' => $prescription->id,
+                    'delivery_id' => $delivery->id,
+                    'trigger_order' => $order->order_number,
+                    'total_orders' => $allOrders->count(),
+                    'confirmed_orders' => $prescription->orders()->where('status', 'confirmed')->count(),
+                ]);
+
+                // Schedule a check for other orders 
+                dispatch(function () use ($prescription) {
+                    static::checkPrescriptionOrderCompletion($prescription);
+                })->delay(now()->addHours(24));
+
+            } catch (\Exception $e) {
+                Log::error('Failed to create delivery on order confirmation', [
+                    'order_id' => $order->id,
+                    'prescription_id' => $prescription->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
+        }
+
+        // Update delivery status when ALL orders confirmed
+        if ($prescription->delivery) {
+            $allConfirmed = $prescription->orders()
+                ->whereNotIn('status', ['confirmed', 'delivered'])
+                ->doesntExist();
+
+            if ($allConfirmed) {
+                $prescription->delivery->update([
+                    'status' => 'assigned',
+                    'scheduled_pickup' => now()->addHours(2),
+                ]);
+
+                Log::info('All prescription orders confirmed - delivery ready', [
+                    'delivery_id' => $prescription->delivery->id,
+                    'prescription_id' => $prescription->id,
+                    'order_count' => $prescription->orders()->count(),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Check if prescription orders are taking too long
+     */
+    protected static function checkPrescriptionOrderCompletion(Prescription $prescription): void
+    {
+        $delivery = $prescription->delivery;
+
+        if (! $delivery || $delivery->status !== 'pending') {
+            return;
+        }
+
+        $confirmedCount = $prescription->orders()->where('status', 'confirmed')->count();
+        $totalCount = $prescription->orders()->count();
+        $pendingCount = $totalCount - $confirmedCount;
+
+        Log::info('Checking prescription order completion status', [
+            'prescription_id' => $prescription->id,
+            'delivery_id' => $delivery->id,
+            'confirmed' => $confirmedCount,
+            'pending' => $pendingCount,
+            'total' => $totalCount,
+        ]);
+
+        if ($confirmedCount > 0 && $pendingCount > 0) {
+            Log::warning('Prescription has stalled orders after 24 hours', [
+                'prescription_id' => $prescription->id,
+                'confirmed_orders' => $confirmedCount,
+                'pending_orders' => $pendingCount,
+            ]);
+
+            // dispatch a notification here
+        }
     }
 
     /**
@@ -305,6 +386,21 @@ class Order extends Model
         return $this->hasOne(Commission::class);
     }
 
+    public function deliveries(): BelongsToMany
+    {
+        return $this->belongsToMany(Delivery::class, 'delivery_order')
+            ->withPivot(['pickup_status', 'picked_up_at', 'pickup_notes'])
+            ->withTimestamps();
+    }
+
+    /**
+     * Get the main delivery (prescription-level)
+     */
+    public function getPrescriptionDelivery(): ?Delivery
+    {
+        return $this->prescription->delivery;
+    }
+
     /**
      * Check if order is eligible for invoice generation
      */
@@ -362,34 +458,25 @@ class Order extends Model
     // Confirm order
     public function confirm(): bool
     {
-        //  Must be sent to supplier first
-        if (! in_array($this->status, ['sent_to_supplier', 'pending'])) {
+        if (! in_array($this->status, ['sent_to_supplier', 'pending', 'pending_review'])) {
             throw new \Exception('Order must be sent to supplier before confirmation');
         }
 
         return DB::transaction(function () {
-
             $oldStatus = $this->status;
 
             $this->status = 'confirmed';
             $this->save();
 
-            if (in_array($oldStatus, ['sent_to_supplier', 'pending'])) {
+            // Deduct stock
+            if (in_array($oldStatus, ['sent_to_supplier', 'pending', 'pending_review'])) {
                 foreach ($this->items as $item) {
                     $supplierMedicine = $item->medicine->supplierMedicines()
                         ->where('supplier_id', $this->supplier_id)
                         ->first();
 
                     if ($supplierMedicine) {
-                        // Check if there is enough stock
                         if ($supplierMedicine->stock_quantity < $item->quantity) {
-                            Log::warning('Insufficient stock for order confirmation', [
-                                'order_id' => $this->id,
-                                'medicine_id' => $item->medicine_id,
-                                'required' => $item->quantity,
-                                'available' => $supplierMedicine->stock_quantity,
-                            ]);
-
                             throw new \Exception(
                                 "Insufficient stock for {$item->medicine->generic_name}. ".
                                 "Required: {$item->quantity}, Available: {$supplierMedicine->stock_quantity}"
@@ -408,26 +495,11 @@ class Order extends Model
                     }
                 }
 
-                // Clear medicine caches for all items
+                // Clear medicine caches
                 $medicineIds = $this->items->pluck('medicine_id')->toArray();
                 Medicine::clearCachesForMedicines($medicineIds);
-            } else {
-                Log::info('Skipping stock deduction - order already confirmed', [
-                    'order_id' => $this->id,
-                    'old_status' => $oldStatus,
-                ]);
             }
 
-            // Create delivery when order is confirmed
-            if (! $this->delivery) {
-                $this->createDelivery();
-                Log::info('Delivery created during order confirmation', [
-                    'order_id' => $this->id,
-                    'order_number' => $this->order_number,
-                ]);
-            }
-
-            // Notify physician and operations
             $this->notifyStakeholders('confirmed');
 
             return true;

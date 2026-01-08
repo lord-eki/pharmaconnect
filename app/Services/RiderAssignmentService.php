@@ -11,17 +11,27 @@ use Illuminate\Support\Facades\Log;
 class RiderAssignmentService
 {
     /**
-     * Assign a rider to a delivery based on location and availability
+     * Assign rider to prescription-level delivery
      */
     public function assignRider(Delivery $delivery): ?Rider
     {
         try {
-            // Get patient location from prescription
-            $patient = $delivery->order->prescription->patient;
+            // Don't assign if not ready
+            if ($delivery->status !== 'ready_for_pickup') {
+                Log::warning('Cannot assign rider - delivery not ready', [
+                    'delivery_id' => $delivery->id,
+                    'current_status' => $delivery->status,
+                    'confirmed_orders' => $delivery->confirmed_orders_count,
+                    'pending_orders' => $delivery->pending_orders_count,
+                ]);
+                return null;
+            }
+
+            $patient = $delivery->prescription->patient;
             $deliveryCounty = $patient->county;
             $deliveryCity = $patient->city;
 
-            // Find available riders in the same county/city
+            // Find available rider in same location
             $rider = Rider::active()
                 ->available()
                 ->where(function ($query) use ($deliveryCounty, $deliveryCity) {
@@ -29,10 +39,10 @@ class RiderAssignmentService
                         ->orWhere('base_city', $deliveryCity);
                 })
                 ->orderBy('rating', 'desc')
-                ->orderBy('total_deliveries', 'asc') // Balance workload
+                ->orderBy('total_deliveries', 'asc')
                 ->first();
 
-            // If no rider in same location, find any available rider
+            // Fallback: any available rider
             if (!$rider) {
                 $rider = Rider::active()
                     ->available()
@@ -44,22 +54,26 @@ class RiderAssignmentService
                 $delivery->update([
                     'rider_id' => $rider->id,
                     'status' => 'assigned',
-                    'scheduled_pickup' => now()->addHours(1), // Schedule pickup in 1 hour
-                    'estimated_delivery' => now()->addHours(3), // Estimate 3 hours for delivery
+                    'scheduled_pickup' => now()->addHours(1),
                 ]);
 
-                // Mark rider as unavailable
                 $rider->update(['is_available' => false]);
 
-                Log::info('Rider assigned to delivery', [
+                Log::info('Rider assigned to prescription delivery', [
                     'delivery_id' => $delivery->id,
+                    'prescription_id' => $delivery->prescription_id,
                     'rider_id' => $rider->id,
+                    'order_count' => $delivery->orders->count(),
+                    'pickup_locations' => count($delivery->pickup_locations ?? []),
                 ]);
 
                 return $rider;
             }
 
-           
+            Log::warning('No available riders found', [
+                'delivery_id' => $delivery->id,
+                'county' => $deliveryCounty,
+            ]);
 
             return null;
 
@@ -67,6 +81,7 @@ class RiderAssignmentService
             Log::error('Error assigning rider', [
                 'delivery_id' => $delivery->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return null;
@@ -190,7 +205,7 @@ class RiderAssignmentService
     }
 
     /**
-     * Update delivery status
+     * Update delivery status with order-level tracking
      */
     public function updateDeliveryStatus(Delivery $delivery, string $status, array $data = []): bool
     {
@@ -201,11 +216,11 @@ class RiderAssignmentService
 
             switch ($status) {
                 case 'picked_up':
+                    // This is called when ALL orders are picked up
                     $updates['actual_pickup'] = now();
                     break;
 
                 case 'in_transit':
-                    // Update estimated delivery if needed
                     if (!$delivery->estimated_delivery) {
                         $updates['estimated_delivery'] = now()->addHours(2);
                     }
@@ -215,23 +230,23 @@ class RiderAssignmentService
                     $updates['actual_delivery'] = now();
                     $updates['proof_of_delivery'] = $data['proof_of_delivery'] ?? null;
                     
-                    // Mark rider as available again
                     if ($delivery->rider) {
                         $delivery->rider->update(['is_available' => true]);
                         $delivery->rider->incrementDeliveries();
                     }
 
-                    // Mark order as delivered
-                    $delivery->order->update([
-                        'status' => 'delivered',
-                        'delivered_at' => now(),
-                    ]);
+                    // Mark ALL orders as delivered
+                    foreach ($delivery->orders as $order) {
+                        $order->update([
+                            'status' => 'delivered',
+                            'delivered_at' => now(),
+                        ]);
+                    }
                     break;
 
                 case 'failed':
                     $updates['delivery_notes'] = $data['failure_reason'] ?? 'Delivery failed';
                     
-                    // Mark rider as available again
                     if ($delivery->rider) {
                         $delivery->rider->update(['is_available' => true]);
                     }
@@ -242,9 +257,11 @@ class RiderAssignmentService
 
             DB::commit();
 
-            Log::info('Delivery status updated', [
+            Log::info('Prescription delivery status updated', [
                 'delivery_id' => $delivery->id,
+                'prescription_id' => $delivery->prescription_id,
                 'status' => $status,
+                'order_count' => $delivery->orders->count(),
             ]);
 
             return true;
@@ -254,11 +271,65 @@ class RiderAssignmentService
             
             Log::error('Error updating delivery status', [
                 'delivery_id' => $delivery->id,
-                'status' => $status,
                 'error' => $e->getMessage(),
             ]);
 
             return false;
         }
     }
+
+    /**
+     * Reassign rider to delivery
+     */
+    public function reassignRider(Delivery $delivery, ?int $riderId = null): ?Rider
+    {
+        try {
+            DB::beginTransaction();
+
+            // Mark current rider as available
+            if ($delivery->rider) {
+                $delivery->rider->update(['is_available' => true]);
+            }
+
+            // Assign new rider
+            if ($riderId) {
+                // Manual assignment
+                $rider = Rider::findOrFail($riderId);
+                
+                if (!$rider->is_available) {
+                    throw new \Exception('Selected rider is not available');
+                }
+
+                $delivery->update([
+                    'rider_id' => $rider->id,
+                    'status' => 'assigned',
+                ]);
+
+                $rider->update(['is_available' => false]);
+            } else {
+                // Auto-assignment
+                $rider = $this->assignRider($delivery);
+            }
+
+            DB::commit();
+
+            Log::info('Rider reassigned', [
+                'delivery_id' => $delivery->id,
+                'new_rider_id' => $rider?->id,
+            ]);
+
+            return $rider;
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Error reassigning rider', [
+                'delivery_id' => $delivery->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+    }
+
 }

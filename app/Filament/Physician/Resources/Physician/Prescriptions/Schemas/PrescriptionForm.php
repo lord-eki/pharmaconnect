@@ -198,7 +198,7 @@ class PrescriptionForm
                                             ->placeholder('e.g., Take 1 tablet twice daily after meals')
 
                                     ])
-                                    ->columns(4)
+                                    ->columns(3)
                                     ->defaultItems(1)
                                     ->addActionLabel('Add Medicine')
                                     ->collapsible()
