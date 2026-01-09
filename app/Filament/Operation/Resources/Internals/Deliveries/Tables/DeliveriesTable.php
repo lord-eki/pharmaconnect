@@ -4,21 +4,23 @@ namespace App\Filament\Operation\Resources\Internals\Deliveries\Tables;
 
 use App\Models\Rider;
 use App\Services\DeliveryNoteService;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
-use Filament\Actions\Action;
-use Filament\Actions\BulkAction;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\HtmlString;
 
 class DeliveriesTable
 {
@@ -27,10 +29,6 @@ class DeliveriesTable
         return $table
             ->columns([
                 TextColumn::make('delivery_number')
-                    ->searchable()
-                    ->sortable(),
-
-                TextColumn::make('order.order_number')
                     ->searchable()
                     ->sortable(),
 
@@ -78,7 +76,7 @@ class DeliveriesTable
 
                 TextColumn::make('created_at')
                     ->dateTime()
-                    ->sortable()
+                    ->sortable(),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -114,197 +112,225 @@ class DeliveriesTable
                     ->toggle(),
             ])
             ->recordActions([
-                Action::make('assign_rider')
-                    ->label('Assign')
-                    ->icon('heroicon-o-user-plus')
-                    ->color('primary')
-                    ->visible(fn ($record) => !$record->rider_id && in_array($record->status, ['pending']))
-                    ->modalHeading('Assign Rider to Delivery')
-                    ->modalDescription(fn ($record) => "Delivery: {$record->delivery_number}")
-                    ->form([
-                        Select::make('rider_id')
-                            ->label('Select Rider')
-                            ->options(function () {
-                                return Rider::query()
-                                    ->where('is_active', true)
-                                    ->orderBy('first_name')
-                                    ->get()
-                                    ->mapWithKeys(fn ($rider) => [
-                                        $rider->id => "{$rider->full_name} - {$rider->phone}"
+                ActionGroup::make([
+                    Action::make('assign_rider')
+                        ->label('Assign')
+                        ->icon('heroicon-o-user-plus')
+                        ->color('primary')
+                        ->visible(fn ($record) => ! $record->rider_id && in_array($record->status, ['pending']))
+                        ->modalHeading('Assign Rider to Delivery')
+                        ->modalDescription(fn ($record) => "Delivery: {$record->delivery_number}")
+                        ->form([
+                            Select::make('rider_id')
+                                ->label('Select Rider')
+                                ->options(function () {
+                                    return Rider::query()
+                                        ->where('is_active', true)
+                                        ->orderBy('first_name')
+                                        ->get()
+                                        ->mapWithKeys(fn ($rider) => [
+                                            $rider->id => "{$rider->full_name} - {$rider->phone}",
+                                        ]);
+                                })
+                                ->searchable()
+                                ->required()
+                                ->native(false)
+                                ->placeholder('Choose a rider')
+                                ->helperText('Select an active rider for this delivery'),
+                        ])
+                        ->action(function ($record, array $data) {
+                            try {
+                                DB::transaction(function () use ($record, $data) {
+                                    $rider = Rider::findOrFail($data['rider_id']);
+
+                                    $record->update([
+                                        'rider_id' => $data['rider_id'],
+                                        'status' => 'assigned',
+                                        'assigned_at' => now(),
                                     ]);
-                            })
-                            ->searchable()
-                            ->required()
-                            ->native(false)
-                            ->placeholder('Choose a rider')
-                            ->helperText('Select an active rider for this delivery'),
-                    ])
-                    ->action(function ($record, array $data) {
-                        try {
-                            DB::transaction(function () use ($record, $data) {
-                                $rider = Rider::findOrFail($data['rider_id']);
-                                
+                                });
+
+                                Notification::make()
+                                    ->title('Rider Assigned')
+                                    ->body("Delivery {$record->delivery_number} assigned successfully.")
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                Notification::make()
+                                    ->title('Assignment Failed')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+
+                    Action::make('reassign_rider')
+                        ->label('Reassign')
+                        ->icon('heroicon-o-arrow-path')
+                        ->color('warning')
+                        ->visible(fn ($record) => $record->rider_id && in_array($record->status, ['assigned', 'ready_for_pickup']))
+                        ->modalHeading('Reassign Rider')
+                        ->modalDescription(fn ($record) => "Current rider: {$record->rider->full_name}")
+                        ->form([
+                            Select::make('rider_id')
+                                ->label('New Rider')
+                                ->options(function () {
+                                    return Rider::query()
+                                        ->where('is_active', true)
+                                        ->orderBy('first_name')
+                                        ->get()
+                                        ->mapWithKeys(fn ($rider) => [
+                                            $rider->id => "{$rider->full_name} - {$rider->phone}",
+                                        ]);
+                                })
+                                ->searchable()
+                                ->required()
+                                ->native(false)
+                                ->helperText('This will change the assigned rider'),
+                        ])
+                        ->action(function ($record, array $data) {
+                            try {
+                                $oldRider = $record->rider;
+                                $newRider = Rider::findOrFail($data['rider_id']);
+
                                 $record->update([
                                     'rider_id' => $data['rider_id'],
-                                    'status' => 'assigned',
                                     'assigned_at' => now(),
                                 ]);
-                            });
 
-                            Notification::make()
-                                ->title('Rider Assigned')
-                                ->body("Delivery {$record->delivery_number} assigned successfully.")
-                                ->success()
-                                ->send();
-                        } catch (\Exception $e) {
-                            Notification::make()
-                                ->title('Assignment Failed')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
+                                Notification::make()
+                                    ->title('Rider Reassigned')
+                                    ->body("Changed from {$oldRider->full_name} to {$newRider->full_name}")
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                Notification::make()
+                                    ->title('Reassignment Failed')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
 
-                Action::make('reassign_rider')
-                    ->label('Reassign')
-                    ->icon('heroicon-o-arrow-path')
-                    ->color('warning')
-                    ->visible(fn ($record) => $record->rider_id && in_array($record->status, ['assigned', 'ready_for_pickup']))
-                    ->modalHeading('Reassign Rider')
-                    ->modalDescription(fn ($record) => "Current rider: {$record->rider->full_name}")
-                    ->form([
-                        Select::make('rider_id')
-                            ->label('New Rider')
-                            ->options(function () {
-                                return Rider::query()
-                                    ->where('is_active', true)
-                                    ->orderBy('first_name')
-                                    ->get()
-                                    ->mapWithKeys(fn ($rider) => [
-                                        $rider->id => "{$rider->full_name} - {$rider->phone}"
-                                    ]);
-                            })
-                            ->searchable()
-                            ->required()
-                            ->native(false)
-                            ->helperText('This will change the assigned rider'),
-                    ])
-                    ->action(function ($record, array $data) {
-                        try {
-                            $oldRider = $record->rider;
-                            $newRider = Rider::findOrFail($data['rider_id']);
+                    Action::make('view_orders')
+                        ->label('View Orders')
+                        ->icon('heroicon-o-shopping-bag')
+                        ->color('info')
+                        ->modalHeading(fn ($record) => "Orders for Delivery {$record->delivery_number}")
+                        ->modalDescription(fn ($record) => $record->prescription
+                            ? "Prescription: {$record->prescription->prescription_number} | {$record->orders->count()} order(s)"
+                            : 'No prescription linked')
+                        ->modalContent(function ($record) {
+                            $orders = $record->orders()->with(['supplier', 'items.medicine'])->get();
 
-                            $record->update([
-                                'rider_id' => $data['rider_id'],
-                                'assigned_at' => now(),
-                            ]);
+                            return new HtmlString(
+                                view('filament.components.delivery-orders', [
+                                    'delivery' => $record,
+                                    'orders' => $orders,
+                                ])->render()
+                            );
+                        })
+                        ->modalSubmitAction(false)
+                        ->modalCancelActionLabel('Close')
+                        ->slideOver()
+                        ->modalWidth('7xl'),
 
-                            Notification::make()
-                                ->title('Rider Reassigned')
-                                ->body("Changed from {$oldRider->full_name} to {$newRider->full_name}")
-                                ->success()
-                                ->send();
-                        } catch (\Exception $e) {
-                            Notification::make()
-                                ->title('Reassignment Failed')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
+                    Action::make('generate_delivery_note')
+                        ->label('Generate Note')
+                        ->icon('heroicon-o-document-text')
+                        ->color('success')
+                        ->visible(fn ($record) => $record->status === 'delivered' && ! $record->delivery_note_document_id)
+                        ->form([
+                            Checkbox::make('send_email')
+                                ->label('Send email to patient')
+                                ->default(true)
+                                ->helperText('The delivery note will be sent to the patient\'s email address'),
+                        ])
+                        ->action(function ($record, array $data) {
+                            try {
+                                $deliveryNoteService = app(DeliveryNoteService::class);
 
-                Action::make('generate_delivery_note')
-                    ->label('Generate Note')
-                    ->icon('heroicon-o-document-text')
-                    ->color('success')
-                    ->visible(fn ($record) => $record->status === 'delivered' && !$record->delivery_note_document_id)
-                    ->form([
-                        Checkbox::make('send_email')
-                            ->label('Send email to patient')
-                            ->default(true)
-                            ->helperText('The delivery note will be sent to the patient\'s email address'),
-                    ])
-                    ->action(function ($record, array $data) {
-                        try {
-                            $deliveryNoteService = app(DeliveryNoteService::class);
-                            
-                            if ($data['send_email'] ?? false) {
-                                $result = $deliveryNoteService->generateAndSendDeliveryNote($record, auth()->user());
-                                
-                                if ($result['success']) {
+                                if ($data['send_email'] ?? false) {
+                                    $result = $deliveryNoteService->generateAndSendDeliveryNote($record, auth()->user());
+
+                                    if ($result['success']) {
+                                        Notification::make()
+                                            ->title('Delivery Note Generated')
+                                            ->body($result['email_sent']
+                                                ? 'Delivery note generated and email sent successfully.'
+                                                : 'Delivery note generated but email could not be sent.')
+                                            ->success()
+                                            ->send();
+                                    } else {
+                                        throw new \Exception($result['error']);
+                                    }
+                                } else {
+                                    $document = $deliveryNoteService->generateDeliveryNote($record, auth()->user());
+
                                     Notification::make()
                                         ->title('Delivery Note Generated')
-                                        ->body($result['email_sent'] 
-                                            ? 'Delivery note generated and email sent successfully.'
-                                            : 'Delivery note generated but email could not be sent.')
+                                        ->body('Delivery note generated successfully.')
+                                        ->success()
+                                        ->send();
+                                }
+                            } catch (\Exception $e) {
+                                Notification::make()
+                                    ->title('Generation Failed')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+
+                    Action::make('send_delivery_note')
+                        ->label('Send Note')
+                        ->icon('heroicon-o-envelope')
+                        ->color('info')
+                        ->visible(fn ($record) => $record->status === 'delivered' && $record->delivery_note_document_id)
+                        ->requiresConfirmation()
+                        ->modalHeading('Send Delivery Note')
+                        ->modalDescription(fn ($record) => "Send delivery note to {$record->order->prescription->patient->email}")
+                        ->action(function ($record) {
+                            try {
+                                $deliveryNoteService = app(DeliveryNoteService::class);
+                                $success = $deliveryNoteService->sendDeliveryNoteEmail($record);
+
+                                if ($success) {
+                                    Notification::make()
+                                        ->title('Email Sent')
+                                        ->body('Delivery note sent successfully.')
                                         ->success()
                                         ->send();
                                 } else {
-                                    throw new \Exception($result['error']);
+                                    throw new \Exception('Failed to send email. Please check the logs.');
                                 }
-                            } else {
-                                $document = $deliveryNoteService->generateDeliveryNote($record, auth()->user());
-                                
+                            } catch (\Exception $e) {
                                 Notification::make()
-                                    ->title('Delivery Note Generated')
-                                    ->body('Delivery note generated successfully.')
-                                    ->success()
+                                    ->title('Send Failed')
+                                    ->body($e->getMessage())
+                                    ->danger()
                                     ->send();
                             }
-                        } catch (\Exception $e) {
-                            Notification::make()
-                                ->title('Generation Failed')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
+                        }),
 
-                Action::make('send_delivery_note')
-                    ->label('Send Note')
-                    ->icon('heroicon-o-envelope')
-                    ->color('info')
-                    ->visible(fn ($record) => $record->status === 'delivered' && $record->delivery_note_document_id)
-                    ->requiresConfirmation()
-                    ->modalHeading('Send Delivery Note')
-                    ->modalDescription(fn ($record) => "Send delivery note to {$record->order->prescription->patient->email}")
-                    ->action(function ($record) {
-                        try {
-                            $deliveryNoteService = app(DeliveryNoteService::class);
-                            $success = $deliveryNoteService->sendDeliveryNoteEmail($record);
-                            
-                            if ($success) {
-                                Notification::make()
-                                    ->title('Email Sent')
-                                    ->body('Delivery note sent successfully.')
-                                    ->success()
-                                    ->send();
-                            } else {
-                                throw new \Exception('Failed to send email. Please check the logs.');
-                            }
-                        } catch (\Exception $e) {
-                            Notification::make()
-                                ->title('Send Failed')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
+                    Action::make('view_delivery_note')
+                        ->label('View Note')
+                        ->icon('heroicon-o-document-magnifying-glass')
+                        ->color('gray')
+                        ->visible(fn ($record) => $record->delivery_note_document_id)
+                        // ->url(fn ($record) => route('filament.Operation.resources.documents.view', ['record' => $record->delivery_note_document_id]))
+                        ->openUrlInNewTab(),
 
-                Action::make('view_delivery_note')
-                    ->label('View Note')
-                    ->icon('heroicon-o-document-magnifying-glass')
-                    ->color('gray')
-                    ->visible(fn ($record) => $record->delivery_note_document_id)
-                    // ->url(fn ($record) => route('filament.Operation.resources.documents.view', ['record' => $record->delivery_note_document_id]))
-                    ->openUrlInNewTab(),
-
-                Action::make('view_details')
-                    ->label('Details')
-                    ->icon('heroicon-o-eye')
-                    ->color('info')
-                    ->url(fn ($record) => route('filament.Operation.resources.internals.deliveries.view', ['record' => $record->id]))
-                    ->openUrlInNewTab(false),
+                    Action::make('view_details')
+                        ->label('Details')
+                        ->icon('heroicon-o-eye')
+                        ->color('info')
+                        ->url(fn ($record) => route('filament.Operation.resources.internals.deliveries.view', ['record' => $record->id]))
+                        ->openUrlInNewTab(false),
+                ])->label('Actions')
+                    ->icon('heroicon-o-ellipsis-vertical')
+                    ->size('sm')->color('gray')->outlined()
+                    ->button(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -323,7 +349,7 @@ class DeliveriesTable
                                         ->orderBy('first_name')
                                         ->get()
                                         ->mapWithKeys(fn ($rider) => [
-                                            $rider->id => "{$rider->full_name} - {$rider->phone}"
+                                            $rider->id => "{$rider->full_name} - {$rider->phone}",
                                         ]);
                                 })
                                 ->searchable()
@@ -336,7 +362,7 @@ class DeliveriesTable
                             $skippedCount = 0;
 
                             foreach ($records as $record) {
-                                if (!$record->rider_id && $record->status === 'pending') {
+                                if (! $record->rider_id && $record->status === 'pending') {
                                     try {
                                         $record->update([
                                             'rider_id' => $data['rider_id'],
@@ -356,8 +382,8 @@ class DeliveriesTable
                                 $rider = Rider::find($data['rider_id']);
                                 Notification::make()
                                     ->title('Bulk Assignment Complete')
-                                    ->body("{$assignedCount} deliveries assigned to {$rider->full_name}." . 
-                                          ($skippedCount > 0 ? " {$skippedCount} skipped." : ""))
+                                    ->body("{$assignedCount} deliveries assigned to {$rider->full_name}.".
+                                          ($skippedCount > 0 ? " {$skippedCount} skipped." : ''))
                                     ->success()
                                     ->send();
                             } else {
@@ -385,31 +411,32 @@ class DeliveriesTable
                         ->action(function (Collection $records, array $data) {
                             $deliveryNoteService = app(DeliveryNoteService::class);
                             $deliveryIds = $records->where('status', 'delivered')->pluck('id')->toArray();
-                            
+
                             if (empty($deliveryIds)) {
                                 Notification::make()
                                     ->title('No Eligible Deliveries')
                                     ->body('None of the selected deliveries are in delivered status.')
                                     ->warning()
                                     ->send();
+
                                 return;
                             }
-                            
+
                             try {
                                 if ($data['send_emails'] ?? false) {
                                     $results = $deliveryNoteService->bulkGenerateAndSendDeliveryNotes($deliveryIds, auth()->user());
                                 } else {
                                     $results = $deliveryNoteService->bulkGenerateDeliveryNotes($deliveryIds, auth()->user());
                                 }
-                                
+
                                 $successCount = count($results['success']);
                                 $failedCount = count($results['failed']);
-                                
+
                                 if ($successCount > 0) {
                                     Notification::make()
                                         ->title('Bulk Generation Complete')
-                                        ->body("{$successCount} delivery notes generated." . 
-                                              ($failedCount > 0 ? " {$failedCount} failed." : ""))
+                                        ->body("{$successCount} delivery notes generated.".
+                                              ($failedCount > 0 ? " {$failedCount} failed." : ''))
                                         ->success()
                                         ->send();
                                 } else {

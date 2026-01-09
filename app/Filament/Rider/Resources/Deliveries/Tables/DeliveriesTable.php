@@ -16,6 +16,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\HtmlString;
 
 class DeliveriesTable
 {
@@ -29,11 +30,6 @@ class DeliveriesTable
                     ->copyable()
                     ->label('Delivery #'),
 
-                TextColumn::make('order.order_number')
-                    ->searchable()
-                    ->sortable()
-                    ->label('Order #'),
-                // ->url(fn ($record) => route('filament.rider.resources.orders.view', $record->order_id)),
 
                 BadgeColumn::make('status')
                     ->colors([
@@ -66,8 +62,6 @@ class DeliveriesTable
                     ->tooltip(fn ($record) => $record->delivery_address)
                     ->label('Delivery Address'),
 
-            
-
                 TextColumn::make('estimated_distance_km')
                     ->numeric(2)
                     ->suffix(' km')
@@ -92,11 +86,35 @@ class DeliveriesTable
                         'picked_up' => 'Picked Up',
                         'delivered' => 'Delivered',
                         'cancelled' => 'Cancelled',
-                    ])
+                    ]),
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
                 ActionGroup::make([
+
+                    Action::make('view_orders')
+                        ->label('View Orders')
+                        ->icon('heroicon-o-shopping-bag')
+                        ->color('info')
+                        ->modalHeading(fn ($record) => "Orders for Delivery {$record->delivery_number}")
+                        ->modalDescription(fn ($record) => $record->prescription
+                            ? "Prescription: {$record->prescription->prescription_number} | {$record->orders->count()} order(s)"
+                            : 'No prescription linked')
+                        ->modalContent(function ($record) {
+                            $orders = $record->orders()->with(['supplier', 'items.medicine'])->get();
+
+                            return new HtmlString(
+                                view('filament.components.delivery-orders', [
+                                    'delivery' => $record,
+                                    'orders' => $orders,
+                                ])->render()
+                            );
+                        })
+                        ->modalSubmitAction(false)
+                        ->modalCancelActionLabel('Close')
+                        ->slideOver()
+                        ->modalWidth('7xl'),
+
                     Action::make('accept')
                         ->icon('heroicon-o-check')
                         ->color('success')
@@ -193,7 +211,7 @@ class DeliveriesTable
                         ->icon('heroicon-o-check-circle')
                         ->color('success')
                         ->label('Mark Delivered')
-                        ->visible(fn (Delivery $record) => in_array($record->status, ['assigned', 'picked_up','in_transit']))
+                        ->visible(fn (Delivery $record) => in_array($record->status, ['assigned', 'picked_up', 'in_transit']))
                         ->form([
                             DateTimePicker::make('actual_delivery')
                                 ->label('Delivery Time')
@@ -363,19 +381,11 @@ class DeliveriesTable
                         }),
 
                     // View Details
-                    Action::make('view_details')
-                        ->icon('heroicon-o-eye')
-                        ->color('gray')
-                        ->label('View Details')
-                        ->modalHeading('Delivery Details')
-                        ->modalContent(fn (Delivery $record) => view('filament.rider.modals.delivery-details', [
-                            'delivery' => $record,
-                        ]))
-                        ->modalFooterActions([]),
+                
                 ])
                     ->label('Actions')
                     ->icon('heroicon-o-ellipsis-vertical')
-                    ->size('sm')
+                    ->size('sm')->outlined()
                     ->button(),
             ])
             ->bulkActions([
