@@ -162,11 +162,6 @@ class Order extends Model
                 ->doesntExist();
 
             if ($allConfirmed) {
-                $prescription->delivery->update([
-                    'status' => 'assigned',
-                    'scheduled_pickup' => now()->addHours(2),
-                ]);
-
                 Log::info('All prescription orders confirmed - delivery ready', [
                     'delivery_id' => $prescription->delivery->id,
                     'prescription_id' => $prescription->id,
