@@ -42,7 +42,7 @@ class DeliveryAssignedNotification extends Notification implements ShouldQueue
             ->line('Please review the details below:')
             ->line('')
             ->line('**Delivery Number:** ' . $this->delivery->delivery_number)
-            ->line('**Order Number:** ' . $this->delivery->order->order_number)
+            ->line('**Order Number:** ' . $this->delivery->order?->order_number ?? 'N/A')
             ->line('')
             ->line('📍 **Pickup Details:**')
             ->line($this->delivery->pickup_address)
