@@ -166,15 +166,12 @@ class OrderFulfillmentService
                 'errors' => [],
             ];
 
-            // Verify all orders are picked up
-            if (!$delivery->allOrdersPickedUp()) {
-                $notPickedUp = $delivery->orders()
-                    ->wherePivot('pickup_status', '!=', 'picked_up')
-                    ->pluck('order_number')
-                    ->toArray();
-                    
-                throw new \Exception('Cannot complete delivery - not all orders picked up: ' . implode(', ', $notPickedUp));
+            foreach ($delivery->orders as $order) {
+            $pivot = $delivery->orders->find($order->id)?->pivot;
+            if ($pivot && $pivot->pickup_status !== 'picked_up') {
+                $delivery->markOrderPickedUp($order->id, 'Auto-marked during delivery completion');
             }
+        }
 
             // Update delivery status
             $this->riderService->updateDeliveryStatus($delivery, 'delivered', [

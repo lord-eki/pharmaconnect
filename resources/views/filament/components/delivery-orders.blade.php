@@ -112,7 +112,7 @@
                             <div>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">Picked Up At</p>
                                 <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                    {{ $pivot->picked_up_at->format('M d, Y H:i') }}
+                                    {{ $pivot->picked_up_at }}
                                 </p>
                             </div>
                         @endif
