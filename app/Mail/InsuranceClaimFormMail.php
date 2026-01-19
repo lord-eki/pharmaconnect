@@ -3,11 +3,14 @@
 namespace App\Mail;
 
 use App\Models\InsuranceClaim;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class InsuranceClaimFormMail extends Mailable
 {
@@ -29,7 +32,7 @@ class InsuranceClaimFormMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'New Insurance Claim: ' . $this->claim->claim_number,
+            subject: "Insurance Claim Submission - {$this->claim->claim_number}",
         );
     }
 
@@ -39,11 +42,9 @@ class InsuranceClaimFormMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.insurance-claim-notification',
+            view: 'emails.insurance-claim-form',
             with: [
                 'claim' => $this->claim,
-                'prescription' => $this->claim->prescription,
-                'patient' => $this->claim->patient,
                 'provider' => $this->claim->insuranceProvider,
             ],
         );
@@ -51,11 +52,55 @@ class InsuranceClaimFormMail extends Mailable
 
     /**
      * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
      */
     public function attachments(): array
     {
-        return [];
+        try {
+            // Load all necessary relationships
+            $this->claim->load([
+                'patient',
+                'prescription.physician',
+                'prescription.items.medicine',
+                'prescription.orders.supplier',
+                'insuranceProvider',
+            ]);
+
+            $provider = $this->claim->insuranceProvider;
+
+            
+            
+            // Get branding data from the provider
+            $branding = $provider->getBrandingData();
+
+            // Prepare data for PDF
+            $data = [
+                'claim' => $this->claim,
+                'branding' => $branding,
+            ];
+
+            // Generate PDF
+            $pdf = Pdf::loadView('pdf.insurance-claim', $data)
+                ->setPaper('a4')
+                ->setOptions([
+                    'defaultFont' => 'DejaVu Sans',
+                    'isHtml5ParserEnabled' => true,
+                    'isRemoteEnabled' => true,
+                ]);
+
+            // Return as attachment
+            return [
+                Attachment::fromData(fn () => $pdf->output(), "claim_{$this->claim->claim_number}.pdf")
+                    ->withMime('application/pdf'),
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Failed to generate insurance claim PDF', [
+                'claim_id' => $this->claim->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return [];
+        }
     }
 }

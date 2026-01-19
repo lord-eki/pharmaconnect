@@ -106,8 +106,8 @@ class InsuranceProviderForm
                             ->disk('public')
                             ->directory('insurance-logos')
                             ->maxSize(2048)
-                            ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/jpg'])
-                            ->helperText('Upload company logo (PNG or JPG, max 2MB). Recommended: 400x150px')
+                            ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'])
+                            ->helperText('Upload company logo (PNG, JPG, or SVG, max 2MB). Recommended: 400x150px')
                             ->imageEditor()
                             ->imageEditorAspectRatios([
                                 '16:9',
@@ -146,27 +146,6 @@ class InsuranceProviderForm
                             ->default('#666666')
                             ->helperText('Used for secondary text and borders')
                             ->live(onBlur: true),
-
-                        // Live Preview Section
-                        // Placeholder::make('branding_preview')
-                        //     ->label('Branding Preview')
-                        //     ->content(function (Get $get) {
-                        //         $companyName = $get('company_name') ?: 'Your Company Name';
-                        //         $headerText = $get('header_text') ?: "Insurance Claim Form - {$companyName}";
-                        //         $footerText = $get('footer_text') ?: "Contact: {$get('phone')} | Email: {$get('email')} | {$get('website')}";
-                        //         $primaryColor = $get('primary_color') ?: '#000000';
-                        //         $secondaryColor = $get('secondary_color') ?: '#666666';
-
-                        //         return view('filament.components.insurance-branding-preview', [
-                        //             'companyName' => $companyName,
-                        //             'headerText' => $headerText,
-                        //             'footerText' => $footerText,
-                        //             'primaryColor' => $primaryColor,
-                        //             'secondaryColor' => $secondaryColor,
-                        //             'logoPath' => $get('logo_path'),
-                        //         ]);
-                        //     })
-                        //     ->columnSpanFull(),
                     ])
                     ->columns(2)
                     ->columnSpanFull()

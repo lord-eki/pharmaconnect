@@ -168,7 +168,7 @@ class InsurerReportsTable
                 Action::make('monthly_statement')
                     ->label('Monthly Statement')
                     ->icon('heroicon-o-document-text')
-                    ->color('primary')
+                    ->color('primary')->outlined()
                     ->form([
                         Select::make('month')
                             ->options([
@@ -192,7 +192,7 @@ class InsurerReportsTable
                     }),
 
                 Action::make('analytics')
-                    ->label('View Analytics')
+                    ->label('View Analytics')->outlined()
                     ->icon('heroicon-o-chart-bar')
                     ->color('info')
                     ->url(fn () => route('filament.Insurer.pages.claims-analytics')),

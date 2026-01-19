@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Storage;
 
 class InsuranceProvider extends Model
 {
@@ -28,6 +30,10 @@ class InsuranceProvider extends Model
         'form_header',
         'form_footer',
         'required_fields',
+        'header_text',
+        'footer_text',
+        'primary_color',
+        'secondary_color',
     ];
 
     protected $casts = [
@@ -70,6 +76,18 @@ class InsuranceProvider extends Model
         return $this->hasMany(Document::class, 'insurance_provider_id');
     }
 
+    public function formTemplates(): HasMany
+    {
+        return $this->hasMany(InsuranceFormTemplate::class);
+    }
+
+    public function activeFormTemplate(): HasOne
+    {
+        return $this->hasOne(InsuranceFormTemplate::class)
+            ->where('is_active', true)
+            ->latest();
+    }
+
     /**
      * Get pending invoices amount
      */
@@ -88,6 +106,40 @@ class InsuranceProvider extends Model
         return $this->invoices()
             ->where('status', '!=', 'cancelled')
             ->sum('total_amount');
+    }
+
+    /**
+     * Get the logo URL for use in PDFs and views
+     * Returns full URL for both local storage and external URLs
+     */
+    public function getLogoUrlAttribute(): ?string
+    {
+        if (!$this->logo_path) {
+            return null;
+        }
+
+        // If it's already a full URL, return it
+        if (filter_var($this->logo_path, FILTER_VALIDATE_URL)) {
+            return $this->logo_path;
+        }
+
+        // Generate full URL from storage path
+        return Storage::disk('public')->url($this->logo_path);
+    }
+
+    /**
+     * Get branding data for PDF generation
+     * This method consolidates all branding information needed for claim forms
+     */
+    public function getBrandingData(): array
+    {
+        return [
+            'logo_url' => $this->logo_url,
+            'header_text' => $this->header_text ?: $this->form_header ?: "Insurance Claim Form - {$this->company_name}",
+            'footer_text' => $this->footer_text ?: $this->form_footer ?: "Contact: {$this->phone} | Email: {$this->email}" . ($this->website ? " | {$this->website}" : ""),
+            'primary_color' => $this->primary_color ?: '#000000',
+            'secondary_color' => $this->secondary_color ?: '#666666',
+        ];
     }
 
     /**
@@ -138,31 +190,22 @@ class InsuranceProvider extends Model
     public function isFieldRequired(string $fieldName): bool
     {
         $requiredFields = $this->getRequiredFields();
-
         return in_array($fieldName, $requiredFields);
     }
 
     /**
-     * Get the logo URL for this insurer
+     * Get the logo URL for this insurer 
      */
     public function getLogoUrl(): ?string
     {
-        if (! $this->logo_path) {
-            return null;
-        }
-
-        return \Storage::url($this->logo_path);
+        return $this->logo_url;
     }
 
-    public function formTemplates()
+    /**
+     * Scope to get only active providers
+     */
+    public function scopeActive($query)
     {
-        return $this->hasMany(InsuranceFormTemplate::class);
-    }
-
-    public function activeFormTemplate()
-    {
-        return $this->hasOne(InsuranceFormTemplate::class)
-            ->where('is_active', true)
-            ->latest();
+        return $query->where('is_active', true);
     }
 }

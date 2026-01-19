@@ -732,6 +732,8 @@ class Prescription extends Model
     {
         try {
             if (! $claim) {
+                // Reload claim with all relationships
+                $this->load('insuranceClaim.insuranceProvider');
                 $claim = $this->insuranceClaim;
             }
 
@@ -742,6 +744,15 @@ class Prescription extends Model
 
                 return;
             }
+
+            // Ensure all relationships are loaded
+            $claim->load([
+                'insuranceProvider',
+                'patient',
+                'prescription.physician',
+                'prescription.items.medicine',
+                'prescription.orders.supplier',
+            ]);
 
             $provider = $claim->insuranceProvider;
 
@@ -770,15 +781,19 @@ class Prescription extends Model
                 return;
             }
 
-            // Queue email
+            // Queue email with branded PDF
             Mail::to($provider->email)->queue(
                 new InsuranceClaimFormMail($claim)
             );
 
-            Log::info('Insurance provider email queued', [
+            Log::info('Insurance provider email queued with branded claim form', [
                 'claim_id' => $claim->id,
+                'claim_number' => $claim->claim_number,
                 'provider_id' => $provider->id,
+                'provider_name' => $provider->company_name,
                 'email' => $provider->email,
+                'has_logo' => ! empty($provider->logo_path),
+                'primary_color' => $provider->primary_color,
             ]);
 
         } catch (\Exception $e) {
