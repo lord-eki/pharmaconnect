@@ -25,6 +25,8 @@ class InsuranceClaim extends Model
         'reviewed_by',
         'rejection_reason',
         'notes',
+        'pdf_path',
+        'pdf_generated_at',
     ];
 
     protected $casts = [
@@ -33,6 +35,7 @@ class InsuranceClaim extends Model
         'deductible_amount' => 'decimal:2',
         'submitted_at' => 'datetime',
         'reviewed_at' => 'datetime',
+        'pdf_generated_at' => 'datetime',
     ];
 
     /**
@@ -60,8 +63,8 @@ class InsuranceClaim extends Model
             ->first();
 
         $number = $lastClaim ? ((int) substr($lastClaim->claim_number, -6)) + 1 : 1;
-        
-        return 'CLM-' . $year . '-' . str_pad($number, 6, '0', STR_PAD_LEFT);
+
+        return 'CLM-'.$year.'-'.str_pad($number, 6, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -125,6 +128,35 @@ class InsuranceClaim extends Model
         return $query->where('patient_id', $patientId);
     }
 
+    public function getPdfUrlAttribute(): ?string
+    {
+        if (! $this->pdf_path) {
+            return null;
+        }
+
+        return \Storage::disk('public')->url($this->pdf_path);
+    }
+
+    public function hasPdf(): bool
+    {
+        return $this->pdf_path && \Storage::disk('public')->exists($this->pdf_path);
+    }
+
+    public function deletePdf(): bool
+    {
+        if ($this->hasPdf()) {
+            \Storage::disk('public')->delete($this->pdf_path);
+            $this->update([
+                'pdf_path' => null,
+                'pdf_generated_at' => null,
+            ]);
+
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * Accessors & Helpers
      */
@@ -150,6 +182,7 @@ class InsuranceClaim extends Model
         if ($this->approved_amount) {
             return $this->approved_amount - $this->deductible_amount;
         }
+
         return $this->claimed_amount - $this->deductible_amount;
     }
 

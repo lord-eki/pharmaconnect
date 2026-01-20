@@ -6,9 +6,9 @@ use App\Models\InsuranceClaim;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
-use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Columns\TextColumn;
@@ -17,6 +17,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Storage;
 
 class InsurerReportsTable
 {
@@ -70,16 +71,6 @@ class InsurerReportsTable
                             ->label('Total Deductible'),
                     ]),
 
-                // TextColumn::make('net_amount')
-                //     ->label('Net Payable')
-                //     ->money('KES')
-                //     ->getStateUsing(fn ($record) => $record->net_amount)
-                //     ->summarize([
-                //         Sum::make()
-                //             ->money('KES')
-                //             ->label('Total Payable'),
-                //     ]),
-
                 BadgeColumn::make('status')
                     ->colors([
                         'warning' => 'submitted',
@@ -88,6 +79,7 @@ class InsurerReportsTable
                         'danger' => 'rejected',
                         'primary' => 'paid',
                     ]),
+                TextColumn::make('pdf_path')->wrap()->label('PDF Generated')->formatStateUsing(fn ($state) => $state ? 'Yes' : 'No'),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -146,15 +138,21 @@ class InsurerReportsTable
                     ->label('This Quarter'),
             ])
             ->recordActions([
+                Action::make('view_pdf')
+                    ->label('View PDF')
+                    ->icon('heroicon-o-eye')
+                    ->color('info')->visible((fn ($record) => filled($record->pdf_path)))
+                    ->action(function ($record) {
+                        return static::viewClaimPdf($record);
+                    }),
+
                 Action::make('download_pdf')
-                    ->label('PDF')
+                    ->label('Download')
                     ->icon('heroicon-o-arrow-down-tray')
-                    ->color('danger')
+                    ->color('danger')->visible((fn ($record) => ! filled($record->pdf_path)))
                     ->action(function ($record) {
                         return static::downloadClaimPdf($record);
                     }),
-
-                ViewAction::make(),
             ])
             ->toolbarActions([
                 BulkAction::make('export_statement')
@@ -208,15 +206,217 @@ class InsurerReportsTable
             ]);
     }
 
-    protected static function downloadClaimPdf(InsuranceClaim $claim)
+    /**
+     * Generate and save PDF to storage, then return the path
+     */
+    protected static function generateAndSaveClaimPdf(InsuranceClaim $claim, bool $forceRegenerate = false): string
     {
-        $pdf = Pdf::loadView('pdf.insurance-claim', [
-            'claim' => $claim->load(['prescription.items.medicine', 'prescription.orders', 'patient', 'insuranceProvider']),
+        // Check if PDF exists and is recent (within last hour) unless force regenerate
+        if (! $forceRegenerate && $claim->pdf_path && Storage::disk('public')->exists($claim->pdf_path)) {
+            // Check if PDF is recent (within last hour)
+            if ($claim->pdf_generated_at && $claim->pdf_generated_at->diffInMinutes(now()) < 60) {
+                \Log::info('Using cached PDF', [
+                    'claim_id' => $claim->id,
+                    'pdf_path' => $claim->pdf_path,
+                ]);
+
+                return $claim->pdf_path;
+            }
+        }
+
+        // Load all necessary relationships
+        $claim->load([
+            'prescription.items.medicine',
+            'prescription.orders.items.medicine',
+            'prescription.orders.supplier',
+            'prescription.physician',
+            'patient',
+            'insuranceProvider',
         ]);
 
-        return response()->streamDownload(function () use ($pdf) {
-            echo $pdf->stream();
-        }, "claim-{$claim->claim_number}.pdf");
+        // Get the insurance provider
+        $insuranceProvider = $claim->insuranceProvider;
+
+        // Get branding data
+        if (method_exists($insuranceProvider, 'getBrandingData')) {
+            $branding = $insuranceProvider->getBrandingData();
+        } else {
+            $branding = [
+                'logo_url' => $insuranceProvider->logo_path ? Storage::disk('public')->url($insuranceProvider->logo_path) : null,
+                'header_text' => $insuranceProvider->header_text
+                    ?: $insuranceProvider->form_header
+                    ?: "Insurance Claim Form - {$insuranceProvider->company_name}",
+                'footer_text' => $insuranceProvider->footer_text
+                    ?: $insuranceProvider->form_footer
+                    ?: "Contact: {$insuranceProvider->phone} | Email: {$insuranceProvider->email}",
+                'primary_color' => $insuranceProvider->primary_color ?? '#000000',
+                'secondary_color' => $insuranceProvider->secondary_color ?? '#666666',
+            ];
+        }
+
+        // Generate PDF
+        $pdf = Pdf::loadView('pdf.insurance-claim', [
+            'claim' => $claim,
+            'branding' => $branding,
+        ])
+            ->setPaper('a4')
+            ->setOptions([
+                'defaultFont' => 'DejaVu Sans',
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+            ]);
+
+        // Define storage path - organized by provider and date
+        $date = now();
+        $directory = "insurance-claims/{$insuranceProvider->id}/{$date->format('Y')}/{$date->format('m')}";
+        $filename = "claim-{$claim->claim_number}.pdf";
+        $path = "{$directory}/{$filename}";
+
+        // Delete old PDF if exists
+        if ($claim->pdf_path && Storage::disk('public')->exists($claim->pdf_path)) {
+            Storage::disk('public')->delete($claim->pdf_path);
+        }
+
+        // Ensure directory exists
+        Storage::disk('public')->makeDirectory($directory);
+
+        // Save to storage
+        Storage::disk('public')->put($path, $pdf->output());
+
+        // Update claim record with PDF path
+        $claim->update([
+            'pdf_path' => $path,
+            'pdf_generated_at' => now(),
+        ]);
+
+        \Log::info('Insurance claim PDF generated and saved', [
+            'claim_id' => $claim->id,
+            'claim_number' => $claim->claim_number,
+            'path' => $path,
+            'size' => Storage::disk('public')->size($path),
+        ]);
+
+        return $path;
+    }
+
+    /**
+     * View PDF inline in browser
+     */
+    protected static function viewClaimPdf(InsuranceClaim $claim)
+    {
+        try {
+            // Generate or get cached PDF
+            $path = static::generateAndSaveClaimPdf($claim);
+
+            // Check if file exists
+            if (! Storage::disk('public')->exists($path)) {
+                Notification::make()
+                    ->title('PDF Not Found')
+                    ->body('The PDF file could not be found.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+
+            return redirect()->to(Storage::disk('public')->url($path));
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to view claim PDF', [
+                'claim_id' => $claim->id,
+                'claim_number' => $claim->claim_number,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            Notification::make()
+                ->title('Error Viewing PDF')
+                ->body('Unable to display the PDF: '.$e->getMessage())
+                ->danger()
+                ->send();
+
+            return redirect()->back();
+        }
+    }
+
+    /**
+     * Download PDF to user's device
+     */
+    protected static function downloadClaimPdf(InsuranceClaim $claim)
+    {
+        try {
+            // Generate and save PDF (uses cache if recent)
+            $path = static::generateAndSaveClaimPdf($claim);
+
+            // Check if file exists
+            if (! Storage::disk('public')->exists($path)) {
+                throw new \Exception('PDF file not found after generation');
+            }
+
+            // Notify user
+            Notification::make()
+                ->title('Download Ready')
+                ->body('Claim PDF is now downloading.')
+                ->success()
+                ->send();
+
+            // Download the file
+            return Storage::disk('public')->download(
+                $path,
+                "claim-{$claim->claim_number}.pdf",
+                [
+                    'Content-Type' => 'application/pdf',
+                ]
+            );
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to download claim PDF', [
+                'claim_id' => $claim->id,
+                'claim_number' => $claim->claim_number,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            Notification::make()
+                ->title('Download Failed')
+                ->body('Unable to generate the PDF: '.$e->getMessage())
+                ->danger()
+                ->send();
+
+            return redirect()->back();
+        }
+    }
+
+    /**
+     * Force regenerate PDF incase of claim data changes
+     */
+    protected static function regenerateClaimPdf(InsuranceClaim $claim)
+    {
+        try {
+            $path = static::generateAndSaveClaimPdf($claim, true);
+
+            Notification::make()
+                ->title('PDF Regenerated')
+                ->body('The claim PDF has been regenerated with the latest data.')
+                ->success()
+                ->send();
+
+            return $path;
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to regenerate claim PDF', [
+                'claim_id' => $claim->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            Notification::make()
+                ->title('Regeneration Failed')
+                ->body('Unable to regenerate the PDF.')
+                ->danger()
+                ->send();
+
+            return null;
+        }
     }
 
     protected static function exportStatement($records)
@@ -256,7 +456,6 @@ class InsurerReportsTable
     {
         $insuranceProvider = auth()->user()->insuranceProvider;
 
-        // Build the query directly using the InsuranceClaim model
         $claims = InsuranceClaim::query()
             ->where('insurance_provider_id', $insuranceProvider->id ?? 0)
             ->with(['prescription.orders', 'patient'])
