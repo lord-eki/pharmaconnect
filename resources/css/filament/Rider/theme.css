@@ -3,3 +3,4 @@
 @source '../../../app/Filament/Rider/**/*';
 @source '../../../resources/views/filament/rider/**/*.blade.php';
 @source '../../../resources/views/filament/components/**/*.blade.php';
+@source '../../../resources/components/**/*.blade.php';
