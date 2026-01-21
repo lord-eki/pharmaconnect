@@ -16,7 +16,7 @@ class ListInventories extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->icon('heroicon-o-folder-plus')->label('Add Inventory Item'),
+            CreateAction::make()->icon('heroicon-o-folder-plus')->outlined()->label('Add Inventory Item'),
         ];
     }
 

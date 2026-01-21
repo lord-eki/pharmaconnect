@@ -81,7 +81,6 @@ class DeliveriesTable
             ->filters([
                 SelectFilter::make('status')
                     ->options([
-                        'pending' => 'Pending',
                         'assigned' => 'Assigned',
                         'picked_up' => 'Picked Up',
                         'delivered' => 'Delivered',

@@ -38,13 +38,10 @@ class InventoryForm
                                                 $subQuery->where('supplier_id', $supplierId);
                                             }
                                         })
-                                    )
-                                    ->where('is_active', true)
-                                    ->orderBy('generic_name')
+                                    )->where('is_active', true)->orderBy('generic_name')
                             )
                             ->searchable(['generic_name', 'brand_name'])
-                            ->preload()
-                            ->required()
+                            ->preload()->required()->disabled(fn($operation) => $operation === 'edit')
                             ->getOptionLabelFromRecordUsing(fn (Medicine $record) => 
                                 "{$record->generic_name} - {$record->brand_name} ({$record->strength})"
                             )

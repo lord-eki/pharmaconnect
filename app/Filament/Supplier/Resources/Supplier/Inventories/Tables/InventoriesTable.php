@@ -182,14 +182,6 @@ class InventoriesTable
                     ->color('gray')
                     ->csvDelimiter(',')
                     ->maxRows(10000),
-
-                ExportAction::make()
-                    ->exporter(SupplierMedicineExporter::class)
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->label('Export Medicines')
-                    ->color('primary')
-                    ->fileName(fn (): string => 'supplier-medicines-'.now()->format('Y-m-d-His'))
-                    ->csvDelimiter(','),
             ]);
     }
 }
