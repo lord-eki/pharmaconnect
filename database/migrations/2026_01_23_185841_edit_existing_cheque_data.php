@@ -15,13 +15,6 @@ return new class extends Migration
         DB::table('payables')
             ->where('payment_method', 'check')
             ->update(['payment_method' => 'cheque']);
-
-        DB::statement("
-            ALTER TABLE payables
-            MODIFY payment_method
-            ENUM('mpesa', 'bank_transfer', 'cheque')
-            NULL
-        ");
         });
     }
 
