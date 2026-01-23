@@ -2,6 +2,9 @@
 
 namespace App\Filament\Operation\Resources\Internals\Deliveries\Tables;
 
+use App\Jobs\GenerateDeliveryNoteJob;
+use App\Jobs\BulkGenerateDeliveryNotesJob;
+use App\Jobs\SendDeliveryNoteEmailJob;
 use App\Models\Rider;
 use App\Services\DeliveryNoteService;
 use Filament\Actions\Action;
@@ -20,6 +23,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 
 class DeliveriesTable
@@ -248,34 +252,63 @@ class DeliveriesTable
                         ])
                         ->action(function ($record, array $data) {
                             try {
-                                $deliveryNoteService = app(DeliveryNoteService::class);
+                                // Dispatch job to queue
+                                GenerateDeliveryNoteJob::dispatch(
+                                    $record,
+                                    auth()->user(),
+                                    $data['send_email'] ?? false
+                                );
 
-                                if ($data['send_email'] ?? false) {
-                                    $result = $deliveryNoteService->generateAndSendDeliveryNote($record, auth()->user());
-
-                                    if ($result['success']) {
-                                        Notification::make()
-                                            ->title('Delivery Note Generated')
-                                            ->body($result['email_sent']
-                                                ? 'Delivery note generated and email sent successfully.'
-                                                : 'Delivery note generated but email could not be sent.')
-                                            ->success()
-                                            ->send();
-                                    } else {
-                                        throw new \Exception($result['error']);
-                                    }
-                                } else {
-                                    $document = $deliveryNoteService->generateDeliveryNote($record, auth()->user());
-
-                                    Notification::make()
-                                        ->title('Delivery Note Generated')
-                                        ->body('Delivery note generated successfully.')
-                                        ->success()
-                                        ->send();
-                                }
+                                Notification::make()
+                                    ->title('Generation Queued')
+                                    ->body('Delivery note is being generated in the background. You\'ll be notified when it\'s ready.')
+                                    ->info()
+                                    ->send();
                             } catch (\Exception $e) {
                                 Notification::make()
-                                    ->title('Generation Failed')
+                                    ->title('Queue Failed')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+
+                    Action::make('download_delivery_note')
+                        ->label('Download Note')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->color('success')
+                        ->visible(fn ($record) => $record->delivery_note_document_id)
+                        ->action(function ($record) {
+                            try {
+                                $document = $record->deliveryNoteDocument;
+
+                                if (! $document) {
+                                    throw new \Exception('Delivery note document not found');
+                                }
+
+                                $filePath = Storage::path($document->file_path);
+
+                                if (! file_exists($filePath)) {
+                                    throw new \Exception('Delivery note file not found on storage');
+                                }
+
+                                // Log the download
+                                $document->logAccess(
+                                    auth()->user(),
+                                    'downloaded',
+                                    ['ip' => request()->ip()]
+                                );
+
+                                return response()->download(
+                                    $filePath,
+                                    "Delivery_Note_{$record->delivery_number}.pdf",
+                                    [
+                                        'Content-Type' => 'application/pdf',
+                                    ]
+                                );
+                            } catch (\Exception $e) {
+                                Notification::make()
+                                    ->title('Download Failed')
                                     ->body($e->getMessage())
                                     ->danger()
                                     ->send();
@@ -289,24 +322,19 @@ class DeliveriesTable
                         ->visible(fn ($record) => $record->status === 'delivered' && $record->delivery_note_document_id)
                         ->requiresConfirmation()
                         ->modalHeading('Send Delivery Note')
-                        ->modalDescription(fn ($record) => "Send delivery note to {$record->order->prescription->patient->email}")
+                        ->modalDescription(fn ($record) => "Send delivery note to patient's email")
                         ->action(function ($record) {
                             try {
-                                $deliveryNoteService = app(DeliveryNoteService::class);
-                                $success = $deliveryNoteService->sendDeliveryNoteEmail($record);
+                                SendDeliveryNoteEmailJob::dispatch($record, auth()->user());
 
-                                if ($success) {
-                                    Notification::make()
-                                        ->title('Email Sent')
-                                        ->body('Delivery note sent successfully.')
-                                        ->success()
-                                        ->send();
-                                } else {
-                                    throw new \Exception('Failed to send email. Please check the logs.');
-                                }
+                                Notification::make()
+                                    ->title('Email Queued')
+                                    ->body('Delivery note email is being sent in the background. You\'ll be notified when it\'s sent.')
+                                    ->info()
+                                    ->send();
                             } catch (\Exception $e) {
                                 Notification::make()
-                                    ->title('Send Failed')
+                                    ->title('Queue Failed')
                                     ->body($e->getMessage())
                                     ->danger()
                                     ->send();
@@ -318,7 +346,6 @@ class DeliveriesTable
                         ->icon('heroicon-o-document-magnifying-glass')
                         ->color('gray')
                         ->visible(fn ($record) => $record->delivery_note_document_id)
-                        // ->url(fn ($record) => route('filament.Operation.resources.documents.view', ['record' => $record->delivery_note_document_id]))
                         ->openUrlInNewTab(),
 
                     Action::make('view_details')
@@ -409,46 +436,37 @@ class DeliveriesTable
                                 ->helperText('Delivery notes will be sent to each patient\'s email address'),
                         ])
                         ->action(function (Collection $records, array $data) {
-                            $deliveryNoteService = app(DeliveryNoteService::class);
-                            $deliveryIds = $records->where('status', 'delivered')->pluck('id')->toArray();
+                            $deliveryIds = $records
+                                ->where('status', 'delivered')
+                                ->whereNull('delivery_note_document_id')
+                                ->pluck('id')
+                                ->toArray();
 
                             if (empty($deliveryIds)) {
                                 Notification::make()
                                     ->title('No Eligible Deliveries')
-                                    ->body('None of the selected deliveries are in delivered status.')
+                                    ->body('None of the selected deliveries are eligible for note generation.')
                                     ->warning()
                                     ->send();
-
                                 return;
                             }
 
                             try {
-                                if ($data['send_emails'] ?? false) {
-                                    $results = $deliveryNoteService->bulkGenerateAndSendDeliveryNotes($deliveryIds, auth()->user());
-                                } else {
-                                    $results = $deliveryNoteService->bulkGenerateDeliveryNotes($deliveryIds, auth()->user());
-                                }
+                                // Dispatch bulk job
+                                BulkGenerateDeliveryNotesJob::dispatch(
+                                    $deliveryIds,
+                                    auth()->user(),
+                                    $data['send_emails'] ?? false
+                                );
 
-                                $successCount = count($results['success']);
-                                $failedCount = count($results['failed']);
-
-                                if ($successCount > 0) {
-                                    Notification::make()
-                                        ->title('Bulk Generation Complete')
-                                        ->body("{$successCount} delivery notes generated.".
-                                              ($failedCount > 0 ? " {$failedCount} failed." : ''))
-                                        ->success()
-                                        ->send();
-                                } else {
-                                    Notification::make()
-                                        ->title('Generation Failed')
-                                        ->body('All delivery note generations failed. Please check the logs.')
-                                        ->danger()
-                                        ->send();
-                                }
+                                Notification::make()
+                                    ->title('Bulk Generation Started')
+                                    ->body(count($deliveryIds) . ' delivery notes are being generated in the background.')
+                                    ->info()
+                                    ->send();
                             } catch (\Exception $e) {
                                 Notification::make()
-                                    ->title('Bulk Generation Failed')
+                                    ->title('Queue Failed')
                                     ->body($e->getMessage())
                                     ->danger()
                                     ->send();

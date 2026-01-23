@@ -40,7 +40,6 @@ class DeliveryNoteService
             
             $pdf->save($tempPath);
             
-            // Create UploadedFile instance from the generated PDF
             $uploadedFile = new \Illuminate\Http\UploadedFile(
                 $tempPath,
                 $fileName,
@@ -49,7 +48,8 @@ class DeliveryNoteService
                 true
             );
             
-            // Upload document using DocumentService
+            $patient = $this->getPatientFromDelivery($delivery);
+            
             $document = $this->documentService->uploadDocument(
                 $uploadedFile,
                 $user,
@@ -57,9 +57,8 @@ class DeliveryNoteService
                     'category_id' => $this->getDeliveryNoteCategoryId(),
                     'document_type' => 'delivery_note',
                     'title' => "Delivery Note - {$delivery->delivery_number}",
-                    'description' => "Delivery note for order {$delivery->order->order_number}",
-                    'order_id' => $delivery->order_id,
-                    'patient_id' => $delivery->order->patient_id ?? null,
+                    'description' => "Delivery note for delivery {$delivery->delivery_number}",
+                    'patient_id' => $patient?->id,
                     'metadata' => [
                         'delivery_id' => $delivery->id,
                         'delivery_number' => $delivery->delivery_number,
@@ -83,13 +82,46 @@ class DeliveryNoteService
     }
 
     /**
+     * Get patient from delivery (handles different relationship structures)
+     */
+    protected function getPatientFromDelivery(Delivery $delivery)
+    {
+        // Try different relationship paths
+        if ($delivery->prescription && $delivery->prescription->patient) {
+            return $delivery->prescription->patient;
+        }
+        
+        if ($delivery->order && $delivery->order->patient) {
+            return $delivery->order->patient;
+        }
+        
+        if ($delivery->order && $delivery->order->prescription && $delivery->order->prescription->patient) {
+            return $delivery->order->prescription->patient;
+        }
+        
+        // If delivery has multiple orders, get patient from first order
+        $firstOrder = $delivery->orders()->with('prescription.patient')->first();
+        if ($firstOrder) {
+            if ($firstOrder->patient) {
+                return $firstOrder->patient;
+            }
+            if ($firstOrder->prescription && $firstOrder->prescription->patient) {
+                return $firstOrder->prescription->patient;
+            }
+        }
+        
+        return null;
+    }
+
+    /**
      * Create the PDF for delivery note
      */
     protected function createDeliveryNotePdf(Delivery $delivery): \Barryvdh\DomPDF\PDF
     {
         $data = $this->prepareDeliveryNoteData($delivery);
         
-        return Pdf::loadView('pdf.delivery-note', $data)
+        // Use pdf.delivery-note-pdf for PDF generation, or pdf.delivery-note if that's your preferred view
+        return Pdf::loadView('pdf.delivery-note-pdf', $data)
             ->setPaper('a4')
             ->setOption('margin-top', 10)
             ->setOption('margin-bottom', 10)
@@ -102,14 +134,18 @@ class DeliveryNoteService
      */
     protected function prepareDeliveryNoteData(Delivery $delivery): array
     {
-        $order = $delivery->order;
+        $patient = $this->getPatientFromDelivery($delivery);
+        
+        // Get orders - handle both single order and multiple orders
+        $orders = $delivery->orders ?? collect([$delivery->order])->filter();
         
         return [
             'delivery' => $delivery,
-            'order' => $order,
-            'patient' => $order->patient,
+            'orders' => $orders,
+            'patient' => $patient,
             'rider' => $delivery->rider,
-            'items' => $order->items,
+            'prescription' => $delivery->prescription,
+            'items' => $orders->flatMap->items ?? collect(),
             'generated_at' => now(),
             'company_info' => [
                 'name' => config('app.name'),
@@ -134,7 +170,7 @@ class DeliveryNoteService
                 );
             }
             
-            $patient = $delivery->order->prescription->patient;
+            $patient = $this->getPatientFromDelivery($delivery);
             
             if (!$patient || !$patient->email) {
                 throw new \Exception('Patient email not found');
@@ -142,6 +178,10 @@ class DeliveryNoteService
             
             // Get PDF path
             $pdfPath = Storage::path($document->file_path);
+            
+            if (!file_exists($pdfPath)) {
+                throw new \Exception('Delivery note PDF file not found');
+            }
             
             // Send email
             Mail::to($patient->email)
@@ -159,6 +199,7 @@ class DeliveryNoteService
             logger()->error('Failed to send delivery note email', [
                 'delivery_id' => $delivery->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
             
             return false;
@@ -180,6 +221,12 @@ class DeliveryNoteService
                 'email_sent' => $emailSent,
             ];
         } catch (\Exception $e) {
+            logger()->error('Failed to generate and send delivery note', [
+                'delivery_id' => $delivery->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
             return [
                 'success' => false,
                 'error' => $e->getMessage(),
