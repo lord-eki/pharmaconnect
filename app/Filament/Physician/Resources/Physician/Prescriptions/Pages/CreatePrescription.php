@@ -47,7 +47,7 @@ class CreatePrescription extends CreateRecord
     {
         return [
             Action::make('back')
-                ->url($this->getResource()::getUrl('index'))
+                ->url($this->getResource()::getUrl('index'))->outlined()
                 ->color('gray'),
         ];
     }
