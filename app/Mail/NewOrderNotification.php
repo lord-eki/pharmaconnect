@@ -40,9 +40,9 @@ class NewOrderNotification extends Mailable
             with: [
                 'order' => $this->order,
                 'items' => $this->order->items,
-                'prescription' => $this->order->prescription,
-                'patient' => $this->order->prescription->patient,
-                'physician' => $this->order->prescription->physician,
+                'prescription' => $this->order->prescription ?? 'N/A',
+                'patient' => $this->order->prescription->patient ?? 'N/A',
+                'physician' => $this->order->prescription->physician ?? 'N/A',
             ]
         );
     }

@@ -219,8 +219,8 @@ class ExternalOrder extends Model
                 'order_number' => Order::generateOrderNumber(),
                 'supplier_id' => $supplierId,
                 'external_order_id' => $this->id,
-                'quotation_id' => null, 
-                'prescription_id' => null, 
+                'quotation_id' => null, // External orders don't have quotations
+                'prescription_id' => null, // External orders don't have prescriptions
                 'status' => 'pending_review',
                 'ordered_at' => now(),
                 'expected_delivery' => now()->addHours(24),
@@ -238,6 +238,7 @@ class ExternalOrder extends Model
                     'order_id' => $order->id,
                     'medicine_id' => $item->medicine_id,
                     'supplier_medicine_id' => $supplierMedicine->id,
+                    'quotation_item_id' => null, // External orders don't have quotation items
                     'quantity' => $item->quantity,
                     'unit_price' => $item->unit_price,
                     'supplier_price' => $supplierMedicine->unit_price,

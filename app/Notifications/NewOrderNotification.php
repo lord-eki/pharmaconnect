@@ -66,7 +66,7 @@ class NewOrderNotification extends Notification implements ShouldQueue
         return [
             'order_id' => $this->order->id,
             'order_number' => $this->order->order_number,
-            'prescription_number' => $this->order->prescription->prescription_number,
+            'prescription_number' => $this->order->prescription->prescription_number ?? 'N/A',
             'total_amount' => $this->order->total_amount,
             'items_count' => $this->order->items->count(),
             'expected_delivery' => $this->order->expected_delivery,
