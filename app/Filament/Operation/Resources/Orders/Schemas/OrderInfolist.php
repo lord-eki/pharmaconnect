@@ -166,9 +166,7 @@ class OrderInfolist
                                     ->badge()
                                     ->color('info'),
                                 
-                               TextEntry::make('supplier_price')
-                                    ->label('Supplier Price')
-                                    ->money('KES'),
+                 
                                 
                                TextEntry::make('unit_price')
                                     ->label('Unit Price')

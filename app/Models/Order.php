@@ -62,14 +62,26 @@ class Order extends Model
 
         static::saved(function ($order) {
             // Update prescription status when order delivered
-            if ($order->status === 'delivered' && $order->prescription) {
-                // Check if all orders are delivered
-                $allDelivered = $order->prescription->orders()
-                    ->where('status', '!=', 'delivered')
-                    ->doesntExist();
+            if ($order->status === 'delivered') {
+                if ($order->prescription) {
+                    $allDelivered = $order->prescription->orders()
+                        ->where('status', '!=', 'delivered')
+                        ->doesntExist();
 
-                if ($allDelivered) {
-                    $order->prescription->markFulfilled();
+                    if ($allDelivered) {
+                        $order->prescription->markFulfilled();
+                    }
+                }
+
+                // Handle external order
+                if ($order->externalOrder) {
+                    $allDelivered = $order->externalOrder->orders()
+                        ->where('status', '!=', 'delivered')
+                        ->doesntExist();
+
+                    if ($allDelivered) {
+                        $order->externalOrder->update(['status' => 'fulfilled']);
+                    }
                 }
             }
         });
@@ -114,59 +126,92 @@ class Order extends Model
     }
 
     /**
-     * NEW: Handle delivery creation on first order confirmation
+     *  Handle delivery creation on first order confirmation
      */
     protected static function handleOrderConfirmation(Order $order): void
     {
+        // Handle prescription-based orders
         $prescription = $order->prescription;
+        if ($prescription) {
+            if (! $prescription->delivery) {
+                try {
+                    $allOrders = $prescription->orders()->with('supplier')->get();
+                    $delivery = $prescription->createConsolidatedDelivery($allOrders);
 
-        if (! $prescription) {
-            return;
-        }
+                    Log::info('Delivery created on first order confirmation', [
+                        'prescription_id' => $prescription->id,
+                        'delivery_id' => $delivery->id,
+                        'trigger_order' => $order->order_number,
+                        'total_orders' => $allOrders->count(),
+                    ]);
 
-        // Create delivery on first confirmation
-        if (! $prescription->delivery) {
-            try {
-                // Get all orders for this prescription 
-                $allOrders = $prescription->orders()->with('supplier')->get();
+                    dispatch(function () use ($prescription) {
+                        static::checkPrescriptionOrderCompletion($prescription);
+                    })->delay(now()->addHours(24));
 
-                $delivery = $prescription->createConsolidatedDelivery($allOrders);
+                } catch (\Exception $e) {
+                    Log::error('Failed to create delivery on order confirmation', [
+                        'order_id' => $order->id,
+                        'prescription_id' => $prescription->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
 
-                Log::info('Delivery created on first order confirmation', [
-                    'prescription_id' => $prescription->id,
-                    'delivery_id' => $delivery->id,
-                    'trigger_order' => $order->order_number,
-                    'total_orders' => $allOrders->count(),
-                    'confirmed_orders' => $prescription->orders()->where('status', 'confirmed')->count(),
-                ]);
+            if ($prescription->delivery) {
+                $allConfirmed = $prescription->orders()
+                    ->whereNotIn('status', ['confirmed', 'delivered'])
+                    ->doesntExist();
 
-                // Schedule a check for other orders 
-                dispatch(function () use ($prescription) {
-                    static::checkPrescriptionOrderCompletion($prescription);
-                })->delay(now()->addHours(24));
-
-            } catch (\Exception $e) {
-                Log::error('Failed to create delivery on order confirmation', [
-                    'order_id' => $order->id,
-                    'prescription_id' => $prescription->id,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
+                if ($allConfirmed) {
+                    Log::info('All prescription orders confirmed - delivery ready', [
+                        'delivery_id' => $prescription->delivery->id,
+                        'prescription_id' => $prescription->id,
+                        'order_count' => $prescription->orders()->count(),
+                    ]);
+                }
             }
         }
 
-        // Update delivery status when ALL orders confirmed
-        if ($prescription->delivery) {
-            $allConfirmed = $prescription->orders()
-                ->whereNotIn('status', ['confirmed', 'delivered'])
-                ->doesntExist();
+        // Handle external orders
+        $externalOrder = $order->externalOrder;
+        if ($externalOrder) {
+            if (! $externalOrder->delivery) {
+                try {
+                    $allOrders = $externalOrder->orders()->with('supplier')->get();
+                    $delivery = $externalOrder->createConsolidatedDelivery($allOrders);
 
-            if ($allConfirmed) {
-                Log::info('All prescription orders confirmed - delivery ready', [
-                    'delivery_id' => $prescription->delivery->id,
-                    'prescription_id' => $prescription->id,
-                    'order_count' => $prescription->orders()->count(),
-                ]);
+                    Log::info('Delivery created for external order on first confirmation', [
+                        'external_order_id' => $externalOrder->id,
+                        'delivery_id' => $delivery->id,
+                        'trigger_order' => $order->order_number,
+                        'total_orders' => $allOrders->count(),
+                    ]);
+
+                    // Update external order status
+                    $externalOrder->update(['status' => 'processing']);
+
+                } catch (\Exception $e) {
+                    Log::error('Failed to create delivery for external order', [
+                        'order_id' => $order->id,
+                        'external_order_id' => $externalOrder->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            if ($externalOrder->delivery) {
+                $allConfirmed = $externalOrder->orders()
+                    ->whereNotIn('status', ['confirmed', 'delivered'])
+                    ->doesntExist();
+
+                if ($allConfirmed) {
+                    Log::info('All external order supplier orders confirmed - delivery ready', [
+                        'delivery_id' => $externalOrder->delivery->id,
+                        'external_order_id' => $externalOrder->id,
+                        'order_count' => $externalOrder->orders()->count(),
+                    ]);
+                }
             }
         }
     }
@@ -334,6 +379,11 @@ class Order extends Model
     public function payables(): HasMany
     {
         return $this->hasMany(Payable::class);
+    }
+
+    public function externalOrder(): BelongsTo
+    {
+        return $this->belongsTo(ExternalOrder::class);
     }
 
     public function receivables(): HasMany
@@ -590,82 +640,89 @@ class Order extends Model
     }
 
     // Mark as delivered
-    public function markDelivered(array $deliveryData = []): bool
+    public function markDelivered(): bool
     {
-        return DB::transaction(function () use ($deliveryData) {
+        return DB::transaction(function () {
             $this->status = 'delivered';
             $this->delivered_at = now();
             $this->save();
 
-            // Update delivery record
-            if ($this->delivery) {
-                $this->delivery->update([
-                    'status' => 'delivered',
-                    'actual_delivery' => now(),
-                    'proof_of_delivery' => $deliveryData['proof'] ?? null,
-                ]);
+            // Handle prescription-based delivery
+            if ($this->prescription) {
+                $prescription = $this->prescription;
+
+                if ($prescription->insurance_covered && ! $prescription->insuranceClaim) {
+                    $patient = $prescription->patient;
+
+                    if ($patient->insurance_provider_id && $patient->insurance_number) {
+                        try {
+                            $prescription->createInsuranceClaim();
+                            $prescription->load('insuranceClaim');
+                        } catch (\Exception $e) {
+                            Log::error('Failed to create insurance claim during delivery', [
+                                'order_id' => $this->id,
+                                'prescription_id' => $prescription->id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+                }
+
+                // Process payments and commissions
+                $paymentService = app(PaymentService::class);
+                try {
+                    $paymentService->processOrderPayments($this);
+                } catch (\Exception $e) {
+                    Log::error('Failed to process order payments', [
+                        'order_id' => $this->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+
+                $commissionService = app(CommissionService::class);
+                try {
+                    $commissionService->calculateCommissionForOrder($this);
+                } catch (\Exception $e) {
+                    Log::error('Failed to calculate commission', [
+                        'order_id' => $this->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+
+                $this->prescription->markFulfilled();
             }
 
-            $prescription = $this->prescription;
+            // Handle external order delivery
+            if ($this->externalOrder) {
+                $externalOrder = $this->externalOrder;
 
-            // Only attempt insurance claim if insurance is covered AND patient has complete info
-            if ($prescription->insurance_covered && ! $prescription->insuranceClaim) {
-                $patient = $prescription->patient;
+                // Check if all orders are delivered
+                $allDelivered = $externalOrder->orders()
+                    ->where('status', '!=', 'delivered')
+                    ->doesntExist();
 
-                if ($patient->insurance_provider_id && $patient->insurance_number) {
-                    try {
-                        Log::info('Creating insurance claim during delivery', [
-                            'order_id' => $this->id,
-                            'prescription_id' => $prescription->id,
-                        ]);
+                if ($allDelivered) {
+                    $externalOrder->update(['status' => 'fulfilled']);
 
-                        $prescription->createInsuranceClaim();
-                        $prescription->load('insuranceClaim');
+                    Log::info('External order fulfilled - all orders delivered', [
+                        'external_order_id' => $externalOrder->id,
+                        'order_number' => $externalOrder->order_number,
+                    ]);
+                }
 
-                    } catch (\Exception $e) {
-                        Log::error('Failed to create insurance claim during delivery', [
-                            'order_id' => $this->id,
-                            'prescription_id' => $prescription->id,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
-                } else {
-                    Log::info('Skipping insurance claim - patient has incomplete insurance info', [
+                // Process payments
+                $paymentService = app(PaymentService::class);
+                try {
+                    $paymentService->processOrderPayments($this);
+                } catch (\Exception $e) {
+                    Log::error('Failed to process external order payments', [
                         'order_id' => $this->id,
-                        'prescription_id' => $prescription->id,
-                        'patient_id' => $patient->id,
-                        'has_provider' => ! empty($patient->insurance_provider_id),
-                        'has_number' => ! empty($patient->insurance_number),
+                        'external_order_id' => $externalOrder->id,
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
 
-            // Process payments
-            $paymentService = app(PaymentService::class);
-            try {
-                $paymentService->processOrderPayments($this);
-            } catch (\Exception $e) {
-                Log::error('Failed to process order payments', [
-                    'order_id' => $this->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            // Calculate commission
-            $commissionService = app(CommissionService::class);
-            try {
-                $commissionService->calculateCommissionForOrder($this);
-            } catch (\Exception $e) {
-                Log::error('Failed to calculate commission', [
-                    'order_id' => $this->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            // Update prescription status
-            $this->prescription->markFulfilled();
-
-            // Notify stakeholders
             $this->notifyStakeholders('delivered');
 
             return true;

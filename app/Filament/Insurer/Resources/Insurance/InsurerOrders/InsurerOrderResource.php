@@ -25,7 +25,6 @@ class InsurerOrderResource extends Resource
 
     protected static ?string $navigationLabel = 'Order Prescriptions';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Claims Management';
 
     public static function getEloquentQuery(): Builder
     {

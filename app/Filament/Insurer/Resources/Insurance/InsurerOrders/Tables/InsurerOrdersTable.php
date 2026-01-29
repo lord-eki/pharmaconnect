@@ -40,12 +40,6 @@ class InsurerOrdersTable
                     ->searchable()
                     ->sortable(),
 
-                TextColumn::make('supplier.name')
-                    ->label('Supplier')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(),
-
                 TextColumn::make('total_amount')
                     ->label('Total')
                     ->money('KES')
