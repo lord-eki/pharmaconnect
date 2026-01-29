@@ -23,6 +23,8 @@ class DocumentResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
+    protected static ?string $navigationLabel = 'Documents Management';
+
     public static function form(Schema $schema): Schema
     {
         return DocumentForm::configure($schema);
@@ -46,7 +48,7 @@ class DocumentResource extends Resource
             'index' => ListDocuments::route('/'),
             'create' => CreateDocument::route('/create'),
             'edit' => EditDocument::route('/{record}/edit'),
-            'view' =>ViewDocument::route('/{record}'),
+            'view' => ViewDocument::route('/{record}'),
         ];
     }
 

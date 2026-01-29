@@ -25,6 +25,8 @@ class DocumentResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup = 'Manage Documents ';
 
+    protected static ?string $navigationLabel = 'Doc Management';
+
     public static function form(Schema $schema): Schema
     {
         return DocumentForm::configure($schema);
