@@ -85,16 +85,7 @@ class CreateExternalOrder extends CreateRecord
                         ])
                         ->columns(2),
 
-                    Section::make('Additional Notes')
-                        ->schema([
-                            Textarea::make('notes')
-                                ->label('Order Notes')
-                                ->rows(3)
-                                ->columnSpanFull()
-                                ->placeholder('Any special instructions or notes for this order'),
-                        ])
-                        ->collapsible()
-                        ->collapsed(),
+                  
                 ])
                 ->columns(2),
 
@@ -174,17 +165,14 @@ class CreateExternalOrder extends CreateRecord
                                                 ->columnSpan(1),
 
                                             TextInput::make('unit_price')
-                                                ->label('Unit Price')
-                                                ->prefix('KES')
+                                                ->label('Unit Price (Ksh)')
                                                 ->numeric()
                                                 ->disabled()
                                                 ->dehydrated()
-                                                ->helperText('Lowest supplier price')
                                                 ->columnSpan(1),
 
                                             TextInput::make('total_price')
-                                                ->label('Line Total')
-                                                ->prefix('KES')
+                                                ->label('Line Total (Ksh)')
                                                 ->numeric()
                                                 ->disabled()
                                                 ->dehydrated()
@@ -217,7 +205,6 @@ class CreateExternalOrder extends CreateRecord
                                 ])
                                 ->columnSpan(8),
 
-                            // Sidebar summary area - 4 columns
                             Section::make('Order Summary')
                                 ->schema([
                                     Placeholder::make('order_summary')
