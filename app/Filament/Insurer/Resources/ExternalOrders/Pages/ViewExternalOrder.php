@@ -196,9 +196,7 @@ class ViewExternalOrder extends ViewRecord
                             ->body('Your order has been submitted and sent to suppliers for processing.')
                             ->send();
 
-                        return redirect()->route('filament.insurance.resources.external-orders.view', ['record' => $record->id]);
                     } catch (\Exception $e) {
-                        dd($e);
                         Notification::make()
                             ->danger()
                             ->title('Submission Failed')
@@ -234,7 +232,6 @@ class ViewExternalOrder extends ViewRecord
                             ->body('The order has been cancelled successfully.')
                             ->send();
 
-                        return redirect()->route('filament.insurance.resources.external-orders.view', ['record' => $record->id]);
                     } catch (\Exception $e) {
                         Notification::make()
                             ->danger()
