@@ -318,7 +318,7 @@ class ExternalOrder extends Model
             'delivery_address' => $this->delivery_address,
             'delivery_latitude' => $this->delivery_latitude,
             'delivery_longitude' => $this->delivery_longitude,
-            'estimated_distance_km' => 10, // Default, calculate based on actual locations
+            'estimated_distance_km' => 10, 
             'delivery_fee' => $deliveryFee,
             'status' => 'pending',
             'recipient_name' => $this->recipient_name,
@@ -346,7 +346,7 @@ class ExternalOrder extends Model
     }
 
     /**
-     * Get primary pickup address (first supplier)
+     * Get primary pickup address 
      */
     protected function getPrimaryPickupAddress(array $pickupLocations): string
     {
@@ -363,8 +363,8 @@ class ExternalOrder extends Model
      */
     protected function calculateDeliveryFee(array $pickupLocations): float
     {
-        $baseDeliveryFee = 200.00; // Base fee
-        $perPickupFee = 50.00; // Additional fee per pickup point
+        $baseDeliveryFee = 200.00; 
+        $perPickupFee = 50.00; 
 
         $numberOfPickups = count($pickupLocations);
         $totalFee = $baseDeliveryFee + (($numberOfPickups - 1) * $perPickupFee);

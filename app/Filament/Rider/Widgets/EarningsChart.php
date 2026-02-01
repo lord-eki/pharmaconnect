@@ -7,17 +7,19 @@ use Illuminate\Support\Facades\DB;
 
 class EarningsChart extends ChartWidget
 {
-    protected  ?string $heading = 'Weekly Deliveries';
+    protected ?string $heading = 'Weekly Deliveries';
+
+    protected ?string $maxHeight = '250px';
 
     protected static ?int $sort = 4;
 
-    protected int | string | array $columnSpan = 1;
+    protected int|string|array $columnSpan = 'full';
 
     protected function getData(): array
     {
         $rider = auth()->user()->rider;
 
-        if (!$rider) {
+        if (! $rider) {
             return [
                 'datasets' => [
                     [
@@ -34,11 +36,12 @@ class EarningsChart extends ChartWidget
             ->where('status', 'delivered')
             ->whereBetween('actual_delivery', [now()->subDays(6)->startOfDay(), now()->endOfDay()])
             ->select(
-                columns: DB::raw('DATE(actual_delivery) as date')
-               
+                DB::raw('DATE(actual_delivery) as date'),
+                DB::raw('COUNT(*) as count')
             )
-            ->groupBy('date')
-            ->orderBy('created_at')->count();
+            ->groupBy(DB::raw('DATE(actual_delivery)'))
+            ->orderBy('date')
+            ->pluck('count', 'date');
 
         // Fill in missing days with 0
         $data = [];
