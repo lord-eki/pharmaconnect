@@ -22,7 +22,7 @@ class ActiveDeliveryWidget extends Widget
         }
 
         return $rider->deliveries()
-            ->with(['order.prescription', 'order.customer'])
+            ->with(['orders.prescription.patient', 'orders.supplier'])
             ->whereIn('status', ['assigned', 'picked_up', 'in_transit'])
             ->latest()
             ->first();
@@ -37,8 +37,7 @@ class ActiveDeliveryWidget extends Widget
         }
 
         return \App\Models\Delivery::where('status', 'pending')
-        
-            ->with(['order.prescription', 'order.customer'])
+            ->with(['orders.prescription.patient', 'orders.supplier'])
             ->latest()
             ->limit(5)
             ->get();

@@ -17,6 +17,7 @@ class Order extends Model
     protected $fillable = [
         'order_number',
         'quotation_id',
+        'external_order_id',
         'supplier_id',
         'prescription_id',
         'total_amount',

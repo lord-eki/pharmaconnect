@@ -58,16 +58,6 @@ class RiderStatsOverview extends StatsOverviewWidget
         $onTimePercentage = round(($onTimeDeliveries / $totalCompleted) * 100, 1);
 
         return [
-            Stat::make('Total Deliveries', $rider->total_deliveries)
-                ->description('All time deliveries')
-                ->descriptionIcon('heroicon-m-truck')
-                ->color('success')
-                ->chart([7, 12, 15, 20, 18, 25, $rider->total_deliveries]),
-
-            Stat::make('Rating', number_format($rider->rating, 1) . ' ★')
-                ->description('Your average rating')
-                ->descriptionIcon('heroicon-m-star')
-                ->color($rider->rating >= 4.5 ? 'success' : ($rider->rating >= 4.0 ? 'warning' : 'danger')),
 
             Stat::make('Today', $todayDeliveries)
                 ->description('Deliveries completed today')
