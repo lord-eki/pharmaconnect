@@ -53,6 +53,6 @@ class OperationPanelProvider extends PanelProvider
 
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])->viteTheme('resources/css/filament/Operation/theme.css');
     }
 }
