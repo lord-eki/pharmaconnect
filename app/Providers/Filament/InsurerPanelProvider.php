@@ -53,6 +53,6 @@ class InsurerPanelProvider extends PanelProvider
 
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])->viteTheme('resources/css/filament/Insurer/theme.css');
     }
 }
