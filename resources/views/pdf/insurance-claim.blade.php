@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Insurance Claim - {{ $claim->claim_number }}</title>
+    <title>Insurance Claim Form - {{ $claim->claim_number }}</title>
     <style>
         * {
             margin: 0;
@@ -12,465 +12,486 @@
         
         body {
             font-family: 'DejaVu Sans', Arial, sans-serif;
-            font-size: 10px;
-            line-height: 1.6;
-            color: #1a1a1a;
-            background: #ffffff;
+            font-size: 9pt;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
         }
 
-        .page-container {
-            padding: 15px 25px;
-            max-width: 100%;
+        .page {
+            padding: 20px 30px;
+            max-width: 210mm;
+            margin: 0 auto;
         }
 
-        /* Header Styling */
+        /* Header Section */
         .header {
-            background: linear-gradient(135deg, {{ $branding['primary_color'] }} 0%, {{ $branding['secondary_color'] }} 100%);
-            padding: 25px 30px;
-            margin: -15px -25px 25px -25px;
-            color: white;
-            position: relative;
-            overflow: hidden;
+            border-bottom: 3px solid {{ $branding['primary_color'] }};
+            padding-bottom: 15px;
+            margin-bottom: 15px;
         }
 
-        .header::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -10%;
-            width: 400px;
-            height: 400px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 50%;
-        }
-
-        .header-content {
-            position: relative;
-            z-index: 1;
+        .header-top {
             display: table;
             width: 100%;
+            margin-bottom: 10px;
         }
 
         .header-left {
             display: table-cell;
             vertical-align: middle;
-            width: 70%;
+            width: 50%;
         }
 
         .header-right {
             display: table-cell;
             vertical-align: middle;
             text-align: right;
-            width: 30%;
+            width: 50%;
         }
 
         .logo {
-            max-width: 180px;
-            max-height: 70px;
-            margin-bottom: 12px;
-            filter: brightness(0) invert(1);
+            max-width: 120px;
+            max-height: 60px;
+            margin-bottom: 5px;
         }
 
-        .header-text {
-            font-size: 22px;
+        .company-name {
+            font-size: 18pt;
             font-weight: bold;
-            margin-bottom: 6px;
-            letter-spacing: 0.5px;
-        }
-
-        .header-subtitle {
-            font-size: 11px;
-            opacity: 0.95;
-            font-weight: normal;
-        }
-
-        .claim-badge {
-            background: rgba(255, 255, 255, 0.95);
             color: {{ $branding['primary_color'] }};
-            padding: 12px 20px;
-            border-radius: 8px;
-            display: inline-block;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        .claim-badge-label {
-            font-size: 9px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: bold;
-            opacity: 0.7;
             margin-bottom: 3px;
         }
 
-        .claim-badge-number {
-            font-size: 16px;
+        .document-title {
+            font-size: 14pt;
             font-weight: bold;
-            letter-spacing: 1px;
+            color: #000;
+            margin-top: 5px;
+        }
+
+        .claim-number-box {
+            border: 2px solid {{ $branding['primary_color'] }};
+            background: #f8f9fa;
+            padding: 8px 15px;
+            display: inline-block;
+            margin-bottom: 5px;
+        }
+
+        .claim-number-label {
+            font-size: 8pt;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .claim-number-value {
+            font-size: 12pt;
+            font-weight: bold;
+            color: {{ $branding['primary_color'] }};
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Form Instructions */
+        .instructions {
+            background: #f8f9fa;
+            border-left: 4px solid {{ $branding['primary_color'] }};
+            padding: 10px 12px;
+            margin-bottom: 15px;
+            font-size: 8pt;
+            line-height: 1.5;
+        }
+
+        .instructions-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .instructions ul {
+            margin-left: 15px;
+            margin-top: 5px;
+        }
+
+        .instructions li {
+            margin-bottom: 3px;
         }
 
         /* Section Headers */
-        .section-title {
-            font-size: 13px;
+        .section-header {
+            background: {{ $branding['primary_color'] }};
+            color: white;
+            padding: 8px 12px;
             font-weight: bold;
-            color: {{ $branding['primary_color'] }};
-            margin: 25px 0 12px 0;
-            padding: 10px 15px;
-            background: linear-gradient(90deg, {{ $branding['primary_color'] }}15 0%, transparent 100%);
-            border-left: 4px solid {{ $branding['primary_color'] }};
+            font-size: 10pt;
             text-transform: uppercase;
+            margin-top: 15px;
+            margin-bottom: 10px;
             letter-spacing: 0.5px;
         }
 
-        /* Info Cards */
-        .info-card {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            padding: 18px;
+        /* Form Fields */
+        .form-section {
             margin-bottom: 15px;
         }
 
-        .info-grid {
+        .form-row {
             display: table;
             width: 100%;
+            margin-bottom: 8px;
         }
 
-        .info-row {
-            display: table-row;
-        }
-
-        .info-label {
+        .form-group {
             display: table-cell;
+            padding-right: 15px;
+            vertical-align: top;
+        }
+
+        .form-group.full-width {
+            display: block;
+            width: 100%;
+        }
+
+        .form-group.half-width {
+            width: 50%;
+        }
+
+        .form-group.third-width {
+            width: 33.33%;
+        }
+
+        .form-label {
+            font-size: 8pt;
+            color: #333;
             font-weight: 600;
-            width: 38%;
-            padding: 6px 15px 6px 0;
-            color: {{ $branding['secondary_color'] }};
-            font-size: 10px;
+            margin-bottom: 3px;
+            display: block;
         }
 
-        .info-value {
-            display: table-cell;
-            padding: 6px 0;
-            color: #1a1a1a;
-            font-size: 10px;
+        .form-value {
+            border-bottom: 1px solid #000;
+            padding: 4px 0 2px 0;
+            min-height: 20px;
+            font-size: 9pt;
+            color: #000;
         }
 
-        /* Status Badge */
-        .status-badge {
-            display: inline-block;
-            padding: 6px 16px;
-            border-radius: 20px;
+        .form-value.bold {
             font-weight: bold;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
-        .status-submitted { 
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
-            color: white; 
-            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-        }
-        .status-under_review { 
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
-            color: white;
-            box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
-        }
-        .status-approved { 
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
-            color: white;
-            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
-        }
-        .status-rejected { 
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); 
-            color: white;
-            box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
-        }
-        .status-paid { 
-            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); 
-            color: white;
-            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+        .checkbox-group {
+            display: inline-block;
+            margin-right: 20px;
         }
 
-        /* Modern Table */
-        .table-container {
-            margin: 15px 0;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        .checkbox {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid #000;
+            margin-right: 5px;
+            vertical-align: middle;
+            position: relative;
         }
 
-        .table {
+        .checkbox.checked::after {
+            content: '✓';
+            position: absolute;
+            top: -3px;
+            left: 2px;
+            font-size: 14pt;
+            font-weight: bold;
+        }
+
+        /* Table Styles */
+        .claim-table {
             width: 100%;
             border-collapse: collapse;
-            background: white;
+            margin: 10px 0;
+            font-size: 8.5pt;
         }
 
-        .table thead {
-            background: linear-gradient(135deg, {{ $branding['primary_color'] }} 0%, {{ $branding['secondary_color'] }} 100%);
-        }
-
-        .table th {
-            color: white;
-            padding: 12px 10px;
+        .claim-table th {
+            background: #e9ecef;
+            border: 1px solid #000;
+            padding: 6px 8px;
             text-align: left;
             font-weight: bold;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            font-size: 8pt;
         }
 
-        .table td {
-            padding: 10px;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 9px;
+        .claim-table td {
+            border: 1px solid #000;
+            padding: 6px 8px;
+            vertical-align: top;
         }
 
-        .table tbody tr {
-            transition: background-color 0.2s;
+        .claim-table .medicine-name {
+            font-weight: 600;
         }
 
-        .table tbody tr:hover {
-            background-color: #f8f9fa;
-        }
-
-        .table tbody tr:last-child td {
-            border-bottom: none;
+        .claim-table .medicine-details {
+            font-size: 7.5pt;
+            color: #555;
+            margin-top: 2px;
         }
 
         /* Amount Summary Box */
-        .amount-box {
-            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-            border: 2px solid {{ $branding['primary_color'] }};
-            border-radius: 10px;
-            padding: 20px;
-            margin: 25px 0;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        .amount-summary {
+            border: 2px solid #000;
+            padding: 12px;
+            margin: 15px 0;
+            background: #f8f9fa;
         }
 
         .amount-row {
             display: table;
             width: 100%;
-            padding: 8px 0;
+            margin-bottom: 6px;
         }
 
         .amount-label {
             display: table-cell;
             font-weight: 600;
-            color: {{ $branding['secondary_color'] }};
-            font-size: 11px;
-            width: 60%;
+            width: 70%;
+            font-size: 9pt;
         }
 
         .amount-value {
             display: table-cell;
-            font-size: 13px;
-            font-weight: bold;
             text-align: right;
-            width: 40%;
+            font-weight: bold;
+            font-size: 10pt;
+            font-family: 'Courier New', monospace;
         }
 
-        .total-row {
-            border-top: 3px solid {{ $branding['primary_color'] }};
-            padding-top: 12px;
-            margin-top: 8px;
+        .amount-total {
+            border-top: 2px solid #000;
+            padding-top: 6px;
+            margin-top: 6px;
         }
 
-        .total-row .amount-label {
-            font-size: 13px;
+        .amount-total .amount-label {
+            font-size: 10pt;
+            font-weight: bold;
+        }
+
+        .amount-total .amount-value {
+            font-size: 12pt;
             color: {{ $branding['primary_color'] }};
         }
 
-        .total-row .amount-value {
-            font-size: 18px;
-            color: {{ $branding['primary_color'] }};
-        }
-
-        /* Alert Boxes */
-        .alert-box {
-            padding: 15px 18px;
-            border-radius: 8px;
+        /* Declaration Box */
+        .declaration-box {
+            border: 2px solid #000;
+            padding: 12px;
             margin: 15px 0;
-            border-left: 4px solid;
+            background: #fffef8;
         }
 
-        .alert-info {
-            background: #e0f2fe;
-            border-left-color: #0284c7;
-            color: #075985;
+        .declaration-title {
+            font-weight: bold;
+            font-size: 9pt;
+            margin-bottom: 8px;
+            text-transform: uppercase;
         }
 
-        .alert-danger {
-            background: #fee2e2;
-            border-left-color: #dc2626;
-            color: #991b1b;
+        .declaration-text {
+            font-size: 8pt;
+            line-height: 1.5;
+            margin-bottom: 6px;
         }
 
-        /* Order Section */
-        .order-header {
-            background: linear-gradient(90deg, #f8f9fa 0%, #e9ecef 100%);
-            padding: 10px 15px;
-            margin: 15px 0 8px 0;
-            border-radius: 6px;
-            border-left: 3px solid {{ $branding['secondary_color'] }};
-            font-size: 10px;
+        /* Signature Section */
+        .signature-section {
+            display: table;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .signature-block {
+            display: table-cell;
+            width: 48%;
+            padding: 10px;
+        }
+
+        .signature-line {
+            border-bottom: 1px solid #000;
+            margin: 20px 0 5px 0;
+            min-height: 40px;
+        }
+
+        .signature-label {
+            font-size: 8pt;
+            color: #333;
+            font-weight: 600;
         }
 
         /* Footer */
         .footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(180deg, transparent 0%, #f8f9fa 30%);
-            border-top: 2px solid {{ $branding['secondary_color'] }};
-            padding: 12px 25px;
-            font-size: 8px;
-            color: {{ $branding['secondary_color'] }};
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 2px solid {{ $branding['primary_color'] }};
+            font-size: 7.5pt;
             text-align: center;
+            color: #666;
+            line-height: 1.6;
         }
 
-        .footer-line {
-            margin: 3px 0;
-        }
-
-        /* Decorative Elements */
-        .divider {
-            height: 2px;
-            background: linear-gradient(90deg, {{ $branding['primary_color'] }} 0%, transparent 100%);
-            margin: 15px 0;
-        }
-
-        /* Medicine Badge */
-        .medicine-name {
+        .footer-bold {
             font-weight: bold;
-            color: #1a1a1a;
+            color: #000;
+            margin-bottom: 5px;
         }
 
-        .medicine-brand {
-            color: #6b7280;
-            font-size: 8px;
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 8pt;
+            text-transform: uppercase;
         }
 
-        .medicine-strength {
-            color: {{ $branding['secondary_color'] }};
-            font-size: 8px;
-            font-weight: 600;
-        }
+        .status-submitted { background: #3b82f6; color: white; }
+        .status-under_review { background: #f59e0b; color: white; }
+        .status-approved { background: #10b981; color: white; }
+        .status-rejected { background: #ef4444; color: white; }
+        .status-paid { background: #6366f1; color: white; }
 
-        /* Utility Classes */
+        /* Helper Classes */
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        .font-bold { font-weight: bold; }
-        .mt-10 { margin-top: 10px; }
+        .bold { font-weight: bold; }
+        .small-text { font-size: 7.5pt; }
     </style>
 </head>
 <body>
-    <div class="page-container">
+    <div class="page">
         {{-- Header --}}
         <div class="header">
-            <div class="header-content">
+            <div class="header-top">
                 <div class="header-left">
                     @if($branding['logo_url'])
                         <img src="{{ $branding['logo_url'] }}" alt="Logo" class="logo">
                     @endif
-                    <div class="header-text">{{ $branding['header_text'] }}</div>
-                    <div class="header-subtitle">Generated on {{ now()->format('F d, Y \a\t H:i') }}</div>
+                    <div class="company-name">{{ $claim->insuranceProvider->company_name }}</div>
                 </div>
                 <div class="header-right">
-                    <div class="claim-badge">
-                        <div class="claim-badge-label">Claim Number</div>
-                        <div class="claim-badge-number">{{ $claim->claim_number }}</div>
+                    <div class="claim-number-box">
+                        <div class="claim-number-label">Claim Number</div>
+                        <div class="claim-number-value">{{ $claim->claim_number }}</div>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Claim Status Overview --}}
-        <div class="info-card">
-            <div class="info-grid">
-                <div class="info-row">
-                    <div class="info-label">Current Status:</div>
-                    <div class="info-value">
+                    <div style="margin-top: 5px;">
                         <span class="status-badge status-{{ str_replace(' ', '_', strtolower($claim->status)) }}">
                             {{ ucwords(str_replace('_', ' ', $claim->status)) }}
                         </span>
                     </div>
                 </div>
-                <div class="info-row">
-                    <div class="info-label">Submission Date:</div>
-                    <div class="info-value">{{ $claim->submitted_at?->format('F d, Y') ?? 'Not submitted' }}</div>
-                </div>
-                @if($claim->reviewed_at)
-                <div class="info-row">
-                    <div class="info-label">Review Date:</div>
-                    <div class="info-value">{{ $claim->reviewed_at->format('F d, Y') }}</div>
-                </div>
-                @endif
+            </div>
+            <div class="document-title">INSURANCE CLAIM FORM</div>
+        </div>
+
+        {{-- Instructions --}}
+        <div class="instructions">
+            <div class="instructions-title">Please help us to help you by:</div>
+            <ul>
+                <li>Completing all relevant questions in full as this can avoid the need for further correspondence with you and/or your physician and can delay us settling your claim</li>
+                <li>Printing clearly or typing using BLOCK LETTERS</li>
+                <li>Enclosing original receipts and prescription forms</li>
+            </ul>
+            <div style="margin-top: 8px; font-weight: bold; color: {{ $branding['primary_color'] }};">
+                INSURANCE FRAUD IS A CRIME – PLEASE ENSURE ALL INFORMATION IS CORRECT
             </div>
         </div>
 
-        {{-- Patient Information --}}
-        <div class="section-title">Patient Information</div>
-        <div class="info-card">
-            <div class="info-grid">
-                <div class="info-row">
-                    <div class="info-label">Patient Name:</div>
-                    <div class="info-value font-bold">{{ $claim->patient->first_name }} {{ $claim->patient->last_name }}</div>
+        {{-- Patient Details Section --}}
+        <div class="section-header">1. Patient Details</div>
+        <div class="form-section">
+            <div class="form-row">
+                <div class="form-group half-width">
+                    <div class="form-label">Full Name</div>
+                    <div class="form-value bold">{{ $claim->patient->first_name }} {{ $claim->patient->last_name }}</div>
                 </div>
-                <div class="info-row">
-                    <div class="info-label">Patient Number:</div>
-                    <div class="info-value">{{ $claim->patient->patient_number }}</div>
+                <div class="form-group" style="width: 25%;">
+                    <div class="form-label">Patient Number</div>
+                    <div class="form-value">{{ $claim->patient->patient_number }}</div>
                 </div>
-                <div class="info-row">
-                    <div class="info-label">Policy Number:</div>
-                    <div class="info-value font-bold">{{ $claim->policy_number }}</div>
-                </div>
-                <div class="info-row">
-                    <div class="info-label">Date of Birth:</div>
-                    <div class="info-value">{{ $claim->patient->date_of_birth?->format('F d, Y') }}</div>
-                </div>
-                <div class="info-row">
-                    <div class="info-label">Contact Phone:</div>
-                    <div class="info-value">{{ $claim->patient->phone }}</div>
+                <div class="form-group" style="width: 25%;">
+                    <div class="form-label">Date of Birth</div>
+                    <div class="form-value">{{ $claim->patient->date_of_birth?->format('d/m/Y') ?? 'N/A' }}</div>
                 </div>
             </div>
-        </div>
 
-        {{-- Prescription Details --}}
-        <div class="section-title">Prescription Details</div>
-        <div class="info-card">
-            <div class="info-grid">
-                <div class="info-row">
-                    <div class="info-label">Prescription Number:</div>
-                    <div class="info-value font-bold">{{ $claim->prescription->prescription_number }}</div>
+            <div class="form-row">
+                <div class="form-group half-width">
+                    <div class="form-label">Policy Number</div>
+                    <div class="form-value bold">{{ $claim->policy_number }}</div>
                 </div>
-                <div class="info-row">
-                    <div class="info-label">Prescribing Physician:</div>
-                    <div class="info-value">{{ $claim->prescription->physician->name }}</div>
+                <div class="form-group half-width">
+                    <div class="form-label">Contact Phone</div>
+                    <div class="form-value">{{ $claim->patient->phone ?? 'N/A' }}</div>
                 </div>
-                <div class="info-row">
-                    <div class="info-label">Prescribed Date:</div>
-                    <div class="info-value">{{ $claim->prescription->prescribed_at?->format('F d, Y') }}</div>
-                </div>
-                <div class="info-row">
-                    <div class="info-label">Diagnosis:</div>
-                    <div class="info-value">{{ $claim->prescription->diagnosis }}</div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group full-width">
+                    <div class="form-label">Physical Address</div>
+                    <div class="form-value">{{ $claim->patient->address ?? 'N/A' }}</div>
                 </div>
             </div>
         </div>
 
-        {{-- Prescribed Medicines --}}
-        <div class="section-title">Prescribed Medicines</div>
-        <div class="table-container">
-            <table class="table">
+        {{-- Claim Details Section --}}
+        <div class="section-header">2. Details of Claim (complete in all cases)</div>
+        <div class="form-section">
+            <div class="form-row">
+                <div class="form-group third-width">
+                    <div class="form-label">Date of  Illness</div>
+                    <div class="form-value">{{ $claim->prescription->prescribed_at?->format('d/m/Y') ?? 'N/A' }}</div>
+                </div>
+                <div class="form-group third-width">
+                    <div class="form-label">Time of First Illness Visit</div>
+                    <div class="form-value">{{ $claim->prescription->prescribed_at?->format('H:i') ?? 'N/A' }}</div>
+                </div>
+                <div class="form-group third-width">
+                    <div class="form-label">Submitted Date</div>
+                    <div class="form-value">{{ $claim->submitted_at?->format('d/m/Y') ?? 'N/A' }}</div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group full-width">
+                    <div class="form-label">Diagnosis / Condition</div>
+                    <div class="form-value bold">{{ $claim->prescription->diagnosis ?? 'N/A' }}</div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group half-width">
+                    <div class="form-label">Prescribing Physician</div>
+                    <div class="form-value">{{ $claim->prescription->physician->name ?? 'N/A' }}</div>
+                </div>
+                <div class="form-group half-width">
+                    <div class="form-label">Prescription Number</div>
+                    <div class="form-value">{{ $claim->prescription->prescription_number ?? 'N/A' }}</div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Medication / Treatment Details --}}
+        <div class="section-header">3. Claim Breakdown</div>
+        <div class="form-section">
+            <div class="form-label" style="margin-bottom: 5px;">Itemized list of treatment/medicines and costs:</div>
+            <table class="claim-table">
                 <thead>
                     <tr>
                         <th style="width: 5%;">#</th>
-                        <th style="width: 35%;">Medicine Details</th>
-                        <th style="width: 12%;">Quantity</th>
-                        <th style="width: 28%;">Dosage Instructions</th>
-                        <th style="width: 20%; text-align: right;">Amount (KES)</th>
+                        <th style="width: 45%;">Description (Medicine Name, Strength, Form, etc.)</th>
+                        <th style="width: 15%; text-align: center;">Quantity</th>
+                        <th style="width: 20%; text-align: center;">Position (Dose, Frequency, etc.)</th>
+                        <th style="width: 15%; text-align: right;">Amount (KES)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -479,64 +500,39 @@
                         <td class="text-center">{{ $index + 1 }}</td>
                         <td>
                             <div class="medicine-name">{{ $item->medicine->generic_name }}</div>
-                            @if($item->medicine->brand_name)
-                                <div class="medicine-brand">({{ $item->medicine->brand_name }})</div>
-                            @endif
-                            <div class="medicine-strength">{{ $item->medicine->strength }} • {{ $item->medicine->dosage_form }}</div>
+                            <div class="medicine-details">
+                                @if($item->medicine->brand_name)
+                                    Brand: {{ $item->medicine->brand_name }} •
+                                @endif
+                                {{ $item->medicine->strength }} • {{ $item->medicine->dosage_form }}
+                            </div>
                         </td>
                         <td class="text-center">{{ $item->quantity }}</td>
-                        <td><small>{{ $item->dosage_instructions }}</small></td>
-                        <td class="text-right font-bold">{{ number_format($item->total_price, 2) }}</td>
+                        <td class="small-text">{{ $item->dosage_instructions ?? 'As prescribed' }}</td>
+                        <td class="text-right bold">{{ number_format($item->total_price, 2) }}</td>
                     </tr>
                     @endforeach
+                    @if($claim->prescription->items->count() == 0)
+                    <tr>
+                        <td colspan="5" class="text-center" style="padding: 15px; color: #666;">
+                            No prescription items recorded
+                        </td>
+                    </tr>
+                    @endif
                 </tbody>
             </table>
         </div>
 
-        {{-- Order Details --}}
-        @if($claim->prescription->orders->isNotEmpty())
-        <div class="section-title">Order Details</div>
-        @foreach($claim->prescription->orders as $order)
-        <div class="order-header">
-            <strong>Order: {{ $order->order_number }}</strong> • 
-            Supplier: {{ $order->supplier->name ?? 'N/A' }} • 
-            Status: <strong>{{ ucfirst($order->status) }}</strong>
-        </div>
-        <div class="table-container">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th style="width: 45%;">Medicine</th>
-                        <th style="width: 18%; text-align: center;">Quantity</th>
-                        <th style="width: 18%; text-align: right;">Unit Price</th>
-                        <th style="width: 19%; text-align: right;">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($order->items as $item)
-                    <tr>
-                        <td>{{ $item->medicine->generic_name ?? 'N/A' }}</td>
-                        <td class="text-center">{{ $item->quantity }}</td>
-                        <td class="text-right">{{ number_format($item->unit_price, 2) }}</td>
-                        <td class="text-right font-bold">{{ number_format($item->total_price, 2) }}</td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
-        @endforeach
-        @endif
-
-        {{-- Claim Amount Summary --}}
-        <div class="section-title">Claim Amount Summary</div>
-        <div class="amount-box">
+        {{-- Amount Summary --}}
+        <div class="section-header">4. Claim Amount Summary</div>
+        <div class="amount-summary">
             <div class="amount-row">
                 <div class="amount-label">Total Claimed Amount:</div>
                 <div class="amount-value">KES {{ number_format($claim->claimed_amount, 2) }}</div>
             </div>
             <div class="amount-row">
-                <div class="amount-label">Deductible Amount:</div>
-                <div class="amount-value">KES {{ number_format($claim->deductible_amount, 2) }}</div>
+                <div class="amount-label">Less: Deductible Amount:</div>
+                <div class="amount-value">(KES {{ number_format($claim->deductible_amount ?? 0, 2) }})</div>
             </div>
             @if($claim->approved_amount)
             <div class="amount-row">
@@ -544,33 +540,74 @@
                 <div class="amount-value" style="color: #10b981;">KES {{ number_format($claim->approved_amount, 2) }}</div>
             </div>
             @endif
-            <div class="amount-row total-row">
-                <div class="amount-label">Net Claim Amount:</div>
+            <div class="amount-row amount-total">
+                <div class="amount-label">NET PAYABLE AMOUNT:</div>
                 <div class="amount-value">KES {{ number_format($claim->getNetAmountAttribute(), 2) }}</div>
             </div>
         </div>
 
-        {{-- Notes --}}
-        @if($claim->notes)
-        <div class="section-title">Additional Notes</div>
-        <div class="alert-box alert-info">
-            {{ $claim->notes }}
+        {{-- Additional Information --}}
+        @if($claim->notes || ($claim->status === 'rejected' && $claim->rejection_reason))
+        <div class="section-header">5. Additional Notes / Remarks</div>
+        <div class="form-section">
+            @if($claim->notes)
+            <div class="form-group full-width">
+                <div class="form-label">Claim Notes:</div>
+                <div class="form-value">{{ $claim->notes }}</div>
+            </div>
+            @endif
+
+            @if($claim->status === 'rejected' && $claim->rejection_reason)
+            <div class="form-group full-width" style="margin-top: 10px;">
+                <div class="form-label" style="color: #ef4444;">Rejection Reason:</div>
+                <div class="form-value" style="color: #ef4444; font-weight: bold;">{{ $claim->rejection_reason }}</div>
+            </div>
+            @endif
+
+            @if($claim->reviewed_at)
+            <div class="form-group full-width" style="margin-top: 10px;">
+                <div class="form-label">Review Date:</div>
+                <div class="form-value">{{ $claim->reviewed_at->format('F d, Y \a\t H:i') }}</div>
+            </div>
+            @endif
         </div>
         @endif
 
-        {{-- Rejection Reason --}}
-        @if($claim->status === 'rejected' && $claim->rejection_reason)
-        <div class="section-title">Rejection Reason</div>
-        <div class="alert-box alert-danger">
-            <strong>Reason:</strong> {{ $claim->rejection_reason }}
+        {{-- Declaration --}}
+        <div class="declaration-box">
+            <div class="declaration-title">Declaration</div>
+            <div class="declaration-text">
+                I declare that the information provided in this claim form is true and accurate to the best of my knowledge. 
+                I understand that providing false or misleading information may result in the rejection of my claim and/or 
+                legal action. I authorize {{ $claim->insuranceProvider->company_name }} to obtain any medical information 
+                necessary to process this claim.
+            </div>
         </div>
-        @endif
+
+        {{-- Signature Section --}}
+        <div class="signature-section">
+            <div class="signature-block">
+                <div class="signature-label">Claimant Signature:</div>
+                <div class="signature-line"></div>
+                <div class="signature-label">Date: {{ now()->format('d/m/Y') }}</div>
+            </div>
+            <div class="signature-block" style="border-left: 1px solid #ddd; padding-left: 20px;">
+                <div class="signature-label">Insurance Company Officer:</div>
+                <div class="signature-line"></div>
+                <div class="signature-label">Date: _____________________</div>
+            </div>
+        </div>
 
         {{-- Footer --}}
         <div class="footer">
-            <div class="footer-line">{{ $branding['footer_text'] }}</div>
-            <div class="footer-line"><strong>PRIVATE AND CONFIDENTIAL</strong> • This document contains sensitive medical and financial information</div>
-            <div class="footer-line">This is a computer-generated document and requires no signature for validity</div>
+            <div class="footer-bold">{{ $branding['footer_text'] }}</div>
+            <div style="margin: 8px 0;">
+                <strong>PRIVATE AND CONFIDENTIAL</strong> • This document contains sensitive medical and financial information
+            </div>
+            <div>
+                Generated on {{ now()->format('F d, Y \a\t H:i') }} • 
+                This is a computer-generated document and requires no signature for validity
+            </div>
         </div>
     </div>
 </body>

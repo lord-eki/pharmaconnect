@@ -17,6 +17,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use App\Services\InsuranceClaimPDFService;
 
 class ClaimVerificationsTable
 {
@@ -113,10 +114,22 @@ class ClaimVerificationsTable
             ])
             ->recordActions([
                 ActionGroup::make([
-                    // ViewAction::make(),
+                   // Download Claim Form PDF
+                    Action::make('download_claim')
+                        ->label('Download Claim Form')
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->color('success')
+                        ->action(function ($record) {
+                            return InsuranceClaimPDFService::download($record);
+                        }),
 
-                    // EditAction::make()
-                    //     ->visible(fn ($record) => $record->canBeApproved() || $record->canBeRejected()),
+                    // View Claim Form PDF (in browser)
+                    Action::make('view_claim')
+                        ->label('View Claim Form')
+                        ->icon('heroicon-o-eye')
+                        ->color('info')
+                        ->url(fn ($record) => route('insurance-claims.pdf', $record))
+                        ->openUrlInNewTab(),
 
                     Action::make('approve')
                         ->icon('heroicon-o-check-circle')

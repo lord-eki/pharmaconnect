@@ -23,7 +23,7 @@ class ClaimVerificationResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShieldCheck;
 
-    protected static ?string $navigationLabel = 'Verify Claims';
+    protected static ?string $navigationLabel = 'Claims';
 
     protected static string|UnitEnum|null $navigationGroup = 'Claim Management';
 
