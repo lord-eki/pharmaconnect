@@ -16,6 +16,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class DeliveryResource extends Resource
 {
@@ -28,10 +29,6 @@ class DeliveryResource extends Resource
         return DeliveryForm::configure($schema);
     }
 
-    public static function infolist(Schema $schema): Schema
-    {
-        return DeliveryInfolist::configure($schema);
-    }
 
     public static function table(Table $table): Table
     {
@@ -56,8 +53,9 @@ class DeliveryResource extends Resource
         return [
             'index' => ListDeliveries::route('/'),
             'create' => CreateDelivery::route('/create'),
-            'view' => ViewDelivery::route('/{record}'),
-            'edit' => EditDelivery::route('/{record}/edit'),
+            // 'view' => ViewDelivery::route('/{record}'),
+            // 'edit' => EditDelivery::route('/{record}/edit'),
         ];
     }
+
 }

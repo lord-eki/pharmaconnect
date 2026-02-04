@@ -60,13 +60,7 @@ class InsurerDashboardWidget extends StatsOverviewWidget
                 ->color('success')
                 ->url(route('filament.Insurer.resources.insurance.insurer-reports.index')),
 
-            Stat::make('Active Orders', $activeOrders)
-                ->description('In transit')
-                ->descriptionIcon('heroicon-o-truck')
-                ->color('primary')
-                ->url(route('filament.Insurer.resources.insurance.insurer-orders.index', [
-                    'tableFilters' => ['pending_delivery' => true],
-                ])),
+           
 
             Stat::make('Approval Rate', $approvalRate.'%')
                 ->description('This month')
