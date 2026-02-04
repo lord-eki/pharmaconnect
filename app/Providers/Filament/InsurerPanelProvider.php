@@ -48,7 +48,7 @@ class InsurerPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
-            ->spa()->font('Lato')->databaseNotifications()->sidebarWidth('230px')
+            ->spa()->font('Roboto')->databaseNotifications()->sidebarWidth('230px')
             ->favicon(asset('images/favicon.png'))
 
             ->authMiddleware([

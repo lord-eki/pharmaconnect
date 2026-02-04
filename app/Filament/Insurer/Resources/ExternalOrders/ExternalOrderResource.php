@@ -25,6 +25,8 @@ class ExternalOrderResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'Claim Management';
 
+    protected static ?string $modelLabel = 'Orders';
+
     public static function form(Schema $schema): Schema
     {
         return ExternalOrderForm::configure($schema);

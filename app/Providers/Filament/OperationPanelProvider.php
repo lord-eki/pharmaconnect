@@ -49,7 +49,7 @@ class OperationPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')->spa()
             ->sidebarWidth('14rem')->databaseNotifications()
-            ->font('Lato')
+            ->font('Roboto')
 
             ->authMiddleware([
                 Authenticate::class,

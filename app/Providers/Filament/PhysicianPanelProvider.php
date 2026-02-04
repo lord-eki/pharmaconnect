@@ -52,7 +52,7 @@ class PhysicianPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')
             ->sidebarWidth('17rem')->spa()->topNavigation()
-            ->font('Lato')->databaseNotifications()
+            ->font('Roboto')->databaseNotifications()
             ->authMiddleware([
                 Authenticate::class,
             ]);
