@@ -173,26 +173,87 @@ class DeliveriesTable
                         ])
                         ->action(function (Delivery $record, array $data) {
                             try {
+                                // Update delivery status
                                 $record->update([
                                     'status' => 'picked_up',
                                     'actual_pickup' => $data['actual_pickup'],
-                                    'delivery_notes' => $record->delivery_notes
-                                        ? $record->delivery_notes."\n\nPickup: ".($data['pickup_notes'] ?? 'Picked up successfully')
-                                        : 'Pickup: '.($data['pickup_notes'] ?? 'Picked up successfully'),
+                                    'delivery_notes' => $data['pickup_notes'] ?? null,
                                 ]);
 
-                                // Update order status
-                                $record->order->update(['status' => 'shipped']);
-
-                                auth()->user()->notify(new DeliveryStatusUpdatedNotification($record, 'assigned', 'picked_up'));
+                              
+                                $orders = $record->orders;
+                                foreach ($orders as $order) {
+                                    // Only update if order is in a status that can be shipped
+                                    if (in_array($order->status, ['confirmed', 'processing'])) {
+                                        $order->update(['status' => 'shipped']);
+                                        
+                                        Log::info('Order marked as shipped', [
+                                            'order_id' => $order->id,
+                                            'delivery_id' => $record->id,
+                                        ]);
+                                    }
+                                }
 
                                 Notification::make()
                                     ->success()
-                                    ->title('Marked as Picked Up')
-                                    ->body('Delivery has been marked as picked up.')
+                                    ->title('Pickup Confirmed')
+                                    ->body('The delivery has been marked as picked up.')
                                     ->send();
 
-                                Log::info('Delivery marked as picked up', [
+                                auth()->user()->notify(new DeliveryStatusUpdatedNotification(
+                                    $record,
+                                    'assigned',
+                                    'picked_up'
+                                ));
+
+                                Log::info('Delivery picked up by rider', [
+                                    'delivery_id' => $record->id,
+                                    'rider_id' => auth()->id(),
+                                    'orders_count' => $orders->count(),
+                                ]);
+                            } catch (\Exception $e) {
+                                Notification::make()
+                                    ->danger()
+                                    ->title('Error')
+                                    ->body('Failed to mark as picked up: '.$e->getMessage())
+                                    ->send();
+
+                                Log::error('Failed to mark delivery as picked up', [
+                                    'delivery_id' => $record->id,
+                                    'error' => $e->getMessage(),
+                                ]);
+                            }
+                        }),
+
+                    // Mark as In Transit
+                    Action::make('mark_in_transit')
+                        ->icon('heroicon-o-truck')
+                        ->color('primary')
+                        ->label('Mark In Transit')
+                        ->visible(fn (Delivery $record) => $record->status === 'picked_up')
+                        ->requiresConfirmation()
+                        ->modalHeading('Mark as In Transit')
+                        ->modalDescription('Confirm that you are now en route to the delivery destination.')
+                        ->action(function (Delivery $record) {
+                            try {
+                                // Update delivery status
+                                $record->update([
+                                    'status' => 'in_transit',
+                                ]);
+
+                                Notification::make()
+                                    ->success()
+                                    ->title('In Transit')
+                                    ->body('The delivery status has been updated to in transit.')
+                                    ->send();
+
+                                auth()->user()->notify(new DeliveryStatusUpdatedNotification(
+                                    $record,
+                                    'picked_up',
+                                    'in_transit'
+                                ));
+
+                                Log::info('Delivery marked as in transit', [
                                     'delivery_id' => $record->id,
                                     'rider_id' => auth()->id(),
                                 ]);
@@ -200,8 +261,13 @@ class DeliveriesTable
                                 Notification::make()
                                     ->danger()
                                     ->title('Error')
-                                    ->body('Failed to update delivery: '.$e->getMessage())
+                                    ->body('Failed to update status: '.$e->getMessage())
                                     ->send();
+
+                                Log::error('Failed to mark delivery as in transit', [
+                                    'delivery_id' => $record->id,
+                                    'error' => $e->getMessage(),
+                                ]);
                             }
                         }),
 
@@ -210,7 +276,7 @@ class DeliveriesTable
                         ->icon('heroicon-o-check-circle')
                         ->color('success')
                         ->label('Mark Delivered')
-                        ->visible(fn (Delivery $record) => in_array($record->status, ['assigned', 'picked_up', 'in_transit']))
+                        ->visible(fn (Delivery $record) => in_array($record->status, ['picked_up', 'in_transit']))
                         ->form([
                             DateTimePicker::make('actual_delivery')
                                 ->label('Delivery Time')
@@ -221,10 +287,9 @@ class DeliveriesTable
                                 ->label('Proof of Delivery')
                                 ->image()
                                 ->maxSize(5120)
-                                ->imageEditor()
-                                ->hint('Photo of signature, delivered package, or recipient')
                                 ->directory('proof-of-delivery')
-                                ->visibility('private'),
+                                ->visibility('private')
+                                ->helperText('Upload a photo of the delivered items or recipient signature.'),
                             Textarea::make('delivery_notes')
                                 ->label('Delivery Notes')
                                 ->rows(3)
@@ -241,24 +306,52 @@ class DeliveriesTable
                                     'delivery_notes' => $data['delivery_notes'] ?? null,
                                 ]);
 
-                                // Mark order as delivered
-                                $record->order->markDelivered([
-                                    'proof' => $data['proof_of_delivery'] ?? null,
-                                ]);
+                                // Mark all related orders as delivered
+                                $orders = $record->orders;
+                                $deliveredCount = 0;
+                                
+                                foreach ($orders as $order) {
+                                    // Only mark as delivered if the order can be delivered
+                                    if (in_array($order->status, ['confirmed', 'processing', 'shipped'])) {
+                                        if (method_exists($order, 'markDelivered')) {
+                                            $order->markDelivered([
+                                                'proof' => $data['proof_of_delivery'] ?? null,
+                                            ]);
+                                        } else {
+                                            // Fallback to simple status update
+                                            $order->update([
+                                                'status' => 'delivered',
+                                                'delivered_at' => $data['actual_delivery'],
+                                            ]);
+                                        }
+                                        
+                                        $deliveredCount++;
+                                        
+                                        Log::info('Order marked as delivered', [
+                                            'order_id' => $order->id,
+                                            'order_number' => $order->order_number,
+                                            'delivery_id' => $record->id,
+                                        ]);
+                                    }
+                                }
 
                                 Notification::make()
                                     ->success()
                                     ->title('Delivery Completed')
-                                    ->body('The delivery has been marked as delivered successfully.')
+                                    ->body("The delivery has been marked as delivered. {$deliveredCount} order(s) completed.")
                                     ->send();
 
-                                auth()->user()->notify(new DeliveryStatusUpdatedNotification($record, $record->getOriginal('status'),
-                                    'delivered'));
+                                auth()->user()->notify(new DeliveryStatusUpdatedNotification(
+                                    $record,
+                                    $record->getOriginal('status'),
+                                    'delivered'
+                                ));
 
                                 Log::info('Delivery completed by rider', [
                                     'delivery_id' => $record->id,
-                                    'order_id' => $record->order_id,
                                     'rider_id' => auth()->id(),
+                                    'orders_delivered' => $deliveredCount,
+                                    'total_orders' => $orders->count(),
                                 ]);
                             } catch (\Exception $e) {
                                 Notification::make()
@@ -270,6 +363,7 @@ class DeliveriesTable
                                 Log::error('Failed to complete delivery', [
                                     'delivery_id' => $record->id,
                                     'error' => $e->getMessage(),
+                                    'trace' => $e->getTraceAsString(),
                                 ]);
                             }
                         }),
@@ -379,7 +473,6 @@ class DeliveriesTable
                             }
                         }),
 
-                    // View Details
                 
                 ])
                     ->label('Actions')
