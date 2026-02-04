@@ -52,7 +52,7 @@ class SupplierPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')->spa()
             ->sidebarWidth('17rem')->topNavigation()
-            ->font('Lato')->databaseNotifications()
+            ->font('Roboto')->databaseNotifications()
             ->authMiddleware([
                 Authenticate::class,
             ]);

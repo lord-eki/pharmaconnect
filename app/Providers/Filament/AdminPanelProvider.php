@@ -62,7 +62,7 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')->spa()
             ->sidebarCollapsibleOnDesktop()->sidebarWidth('17rem')
-            ->font('Lato')->databaseNotifications()
+            ->font('Roboto')->databaseNotifications()
             ->authMiddleware([
                 Authenticate::class,
             ])->viteTheme('resources/css/filament/Admin/theme.css');

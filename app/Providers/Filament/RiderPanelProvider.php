@@ -53,6 +53,6 @@ class RiderPanelProvider extends PanelProvider
                 Authenticate::class,
             ])->resourceCreatePageRedirect('index')->resourceEditPageRedirect('index')->spa()
             ->sidebarWidth('17rem')->topNavigation()->viteTheme('resources/css/filament/Rider/theme.css')
-            ->font('Lato')->databaseNotifications();
+            ->font('Roboto')->databaseNotifications();
     }
 }
