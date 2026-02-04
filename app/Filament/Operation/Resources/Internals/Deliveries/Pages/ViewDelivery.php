@@ -242,7 +242,7 @@ class ViewDelivery extends ViewRecord
                     Select::make('rider_id')
                         ->label('Select Rider')
                         ->options(
-                            Rider::active()
+                            Rider::available()
                                 ->available()
                                 ->get()
                                 ->mapWithKeys(fn ($rider) => [$rider->id => "{$rider->full_name} - {$rider->phone}"])

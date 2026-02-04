@@ -2,9 +2,7 @@
 
 namespace App\Filament\Resources\Patients\Tables;
 
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
+use App\Models\InsuranceProvider;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -21,7 +19,14 @@ class PatientsTable
                 TextColumn::make('email')->searchable(),
                 TextColumn::make('county')->searchable(),
                 TextColumn::make('insurance_number')->searchable(),
-                TextColumn::make('insurance_provider')->searchable()
+                TextColumn::make('insurance_provider')->searchable()->formatStateUsing(function ($state) {
+                    if (is_numeric($state)){
+                        $provider = InsuranceProvider::find($state);
+                        return $provider ? $provider->company_name : $state;
+                    } 
+
+                    return $state;
+                }),
 
             ])
             ->filters([
@@ -30,7 +35,7 @@ class PatientsTable
             ->recordActions([
             ])
             ->toolbarActions([
-              
+
             ]);
     }
 }
