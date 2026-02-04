@@ -2,18 +2,20 @@
 
 namespace App\Services;
 
-use App\Models\Order;
 use App\Models\Delivery;
+use App\Models\Order;
 use App\Models\Rider;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
 
 class OrderFulfillmentService
 {
-   protected RiderAssignmentService $riderService;
+    protected RiderAssignmentService $riderService;
+
     protected DeliveryTrackingService $trackingService;
+
     protected PaymentService $paymentService;
+
     protected CommissionService $commissionService;
 
     public function __construct(
@@ -67,7 +69,7 @@ class OrderFulfillmentService
             $prescription = $order->prescription;
             if ($prescription->delivery) {
                 $results['delivery_exists'] = true;
-                
+
                 // Check if all orders confirmed
                 $allConfirmed = $prescription->orders()
                     ->whereNotIn('status', ['confirmed', 'delivered'])
@@ -89,7 +91,7 @@ class OrderFulfillmentService
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Error processing order confirmation', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
@@ -108,7 +110,7 @@ class OrderFulfillmentService
             DB::beginTransaction();
 
             // Verify order belongs to this delivery
-            if (!$delivery->orders->contains($order)) {
+            if (! $delivery->orders->contains($order)) {
                 throw new \Exception('Order does not belong to this delivery');
             }
 
@@ -139,7 +141,7 @@ class OrderFulfillmentService
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Error handling order pickup', [
                 'delivery_id' => $delivery->id,
                 'order_id' => $order->id,
@@ -156,6 +158,7 @@ class OrderFulfillmentService
     public function handleDeliveryCompletion(Delivery $delivery, array $data): array
     {
         try {
+
             DB::beginTransaction();
 
             $results = [
@@ -167,11 +170,12 @@ class OrderFulfillmentService
             ];
 
             foreach ($delivery->orders as $order) {
-            $pivot = $delivery->orders->find($order->id)?->pivot;
-            if ($pivot && $pivot->pickup_status !== 'picked_up') {
-                $delivery->markOrderPickedUp($order->id, 'Auto-marked during delivery completion');
+
+                $pivot = $delivery->orders->find($order->id)?->pivot;
+                if ($pivot && $pivot->pickup_status !== 'picked_up') {
+                    $delivery->markOrderPickedUp($order->id, 'Auto-marked during delivery completion');
+                }
             }
-        }
 
             // Update delivery status
             $this->riderService->updateDeliveryStatus($delivery, 'delivered', [
@@ -189,7 +193,7 @@ class OrderFulfillmentService
 
             $results['delivery_completed'] = true;
 
-            // Process payments and commissions for ALL orders
+            // Process payments and commissions for all orders
             $totalPaymentsProcessed = 0;
             $totalCommissionsCreated = 0;
 
@@ -200,15 +204,17 @@ class OrderFulfillmentService
                     if ($paymentResults) {
                         $totalPaymentsProcessed++;
                     }
-                    
+
                     // Calculate commission
-                    $commission = $this->commissionService->calculateCommissionForOrder($order);
-                    if ($commission) {
-                        $totalCommissionsCreated++;
+                    if (! $order->external_order_id) {
+                        $commission = $this->commissionService->calculateCommissionForOrder($order);
+                        if ($commission) {
+                            $totalCommissionsCreated++;
+                        }
                     }
-                    
+
                     $results['orders_processed']++;
-                    
+
                 } catch (\Exception $e) {
                     $results['errors'][] = "Order {$order->order_number}: {$e->getMessage()}";
                     Log::error('Error processing order in delivery', [
@@ -223,7 +229,9 @@ class OrderFulfillmentService
             $results['commission_created'] = ($totalCommissionsCreated === $delivery->orders->count());
 
             // Update prescription status
-            $delivery->prescription->markFulfilled();
+            if ($delivery->prescription) {
+                $delivery->prescription->markFulfilled();
+            }
 
             // Update rider
             if ($delivery->rider) {
@@ -236,8 +244,8 @@ class OrderFulfillmentService
             Log::info('Prescription delivery completed', [
                 'delivery_id' => $delivery->id,
                 'delivery_number' => $delivery->delivery_number,
-                'prescription_id' => $delivery->prescription_id,
-                'prescription_number' => $delivery->prescription->prescription_number,
+                'prescription_id' => $delivery->prescription_id ?? 'External Order',
+                'prescription_number' => $delivery->prescription->prescription_number ?? 'External Order',
                 'orders_processed' => $results['orders_processed'],
                 'total_orders' => $delivery->orders->count(),
                 'payments_processed' => $totalPaymentsProcessed,
@@ -251,7 +259,7 @@ class OrderFulfillmentService
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Error handling delivery completion', [
                 'delivery_id' => $delivery->id,
                 'error' => $e->getMessage(),
@@ -284,7 +292,7 @@ class OrderFulfillmentService
             foreach ($delivery->orders as $order) {
                 $order->update([
                     'status' => 'processing',
-                    'notes' => ($order->notes ?? '') . "\n\nDelivery failed: {$reason}",
+                    'notes' => ($order->notes ?? '')."\n\nDelivery failed: {$reason}",
                 ]);
             }
 
@@ -304,7 +312,7 @@ class OrderFulfillmentService
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Error handling delivery failure', [
                 'delivery_id' => $delivery->id,
                 'error' => $e->getMessage(),
@@ -320,10 +328,10 @@ class OrderFulfillmentService
     public function getDeliveryProgress(Delivery $delivery): array
     {
         $orderDetails = [];
-        
+
         foreach ($delivery->orders as $order) {
             $pivot = $order->pivot;
-            
+
             $orderDetails[] = [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
@@ -399,11 +407,11 @@ class OrderFulfillmentService
             'patient',
         ])->findOrFail($prescriptionId);
 
-        if (!$prescription->delivery) {
+        if (! $prescription->delivery) {
             return [
                 'status' => 'no_delivery',
                 'message' => 'No delivery created yet. Waiting for order confirmation.',
-                'orders' => $prescription->orders->map(fn($o) => [
+                'orders' => $prescription->orders->map(fn ($o) => [
                     'order_number' => $o->order_number,
                     'status' => $o->status,
                     'supplier' => $o->supplier->company_name,

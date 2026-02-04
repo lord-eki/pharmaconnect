@@ -33,11 +33,9 @@ class DeliveriesTable
         return $table
             ->columns([
                 TextColumn::make('delivery_number')
-                    ->searchable()
-                    ->sortable(),
+                    ->sortable()->searchable(),
 
                 TextColumn::make('rider.full_name')
-                    ->searchable()
                     ->sortable()
                     ->default('Not Assigned')
                     ->badge()
@@ -67,8 +65,7 @@ class DeliveriesTable
                     ->tooltip(fn ($record) => $record->delivery_note_document_id ? 'Delivery note generated' : 'No delivery note'),
 
                 TextColumn::make('delivery_address')
-                    ->limit(30)
-                    ->searchable(),
+                    ->limit(30),
 
                 TextColumn::make('estimated_delivery')
                     ->dateTime('M d, Y H:i')
@@ -97,7 +94,6 @@ class DeliveriesTable
 
                 SelectFilter::make('rider')
                     ->relationship('rider', 'last_name')
-                    ->searchable()
                     ->preload(),
 
                 Filter::make('unassigned')
@@ -136,7 +132,6 @@ class DeliveriesTable
                                             $rider->id => "{$rider->full_name} - {$rider->phone}",
                                         ]);
                                 })
-                                ->searchable()
                                 ->required()
                                 ->native(false)
                                 ->placeholder('Choose a rider')
@@ -187,7 +182,6 @@ class DeliveriesTable
                                             $rider->id => "{$rider->full_name} - {$rider->phone}",
                                         ]);
                                 })
-                                ->searchable()
                                 ->required()
                                 ->native(false)
                                 ->helperText('This will change the assigned rider'),

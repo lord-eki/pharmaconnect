@@ -42,7 +42,7 @@ class CommissionService
             // Get commission rate
             $commissionRate = $this->getCommissionRate($physician, $order);
 
-            // IMPORTANT: Calculate commission on MARKUP amount 
+            // Calculate commission on markup amount 
             $markupAmount = $order->markup_total; 
             $commissionAmount = $markupAmount * ($commissionRate / 100);
 

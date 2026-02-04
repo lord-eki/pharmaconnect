@@ -16,7 +16,6 @@ class PaymentService
 {
     /**
      * Process all payments when order is delivered
-  
      */
     public function processOrderPayments(Order $order): array
     {
@@ -76,106 +75,106 @@ class PaymentService
 
     /**
      * Create receivable from patient/insurance
-     * 
      */
     protected function createReceivableForOrder(Order $order): ?Receivable
-{
-    try {
-        // Eager load necessary relationships to avoid null values
-        $order->load(['prescription.patient.insuranceProvider']);
-        
-        $prescription = $order->prescription;
-        
-        if (!$prescription) {
-            Log::error('Cannot create receivable - order has no prescription', [
-                'order_id' => $order->id,
-            ]);
-            return null;
-        }
-        
-        $patient = $prescription->patient;
-        
-        if (!$patient) {
-            Log::error('Cannot create receivable - prescription has no patient', [
+    {
+        try {
+            // Eager load necessary relationships to avoid null values
+            $order->load(['prescription.patient.insuranceProvider']);
+
+            $prescription = $order->prescription;
+
+            if (! $prescription) {
+                Log::error('Cannot create receivable - order has no prescription', [
+                    'order_id' => $order->id,
+                ]);
+
+                return null;
+            }
+
+            $patient = $prescription->patient;
+
+            if (! $patient) {
+                Log::error('Cannot create receivable - prescription has no patient', [
+                    'order_id' => $order->id,
+                    'prescription_id' => $prescription->id,
+                ]);
+
+                return null;
+            }
+
+            $paymentSource = 'patient';
+
+            // Determine if insurance will pay
+            // Check BOTH prescription flag AND patient has complete insurance info
+            if ($prescription->insurance_covered &&
+                $patient->insurance_provider_id &&
+                $patient->insurance_number) {
+                $paymentSource = 'insurance';
+
+                Log::info('Receivable will be from insurance', [
+                    'order_id' => $order->id,
+                    'patient_id' => $patient->id,
+                    'insurance_provider_id' => $patient->insurance_provider_id,
+                    'insurance_number' => $patient->insurance_number,
+                ]);
+            } else {
+                Log::info('Receivable will be from patient', [
+                    'order_id' => $order->id,
+                    'patient_id' => $patient->id,
+                    'prescription_insurance_covered' => $prescription->insurance_covered,
+                    'patient_has_provider' => ! empty($patient->insurance_provider_id),
+                    'patient_has_number' => ! empty($patient->insurance_number),
+                ]);
+            }
+
+            // Total amount includes order total + delivery fee
+            $totalAmount = $order->total_amount;
+            if ($order->delivery) {
+                $totalAmount += $order->delivery->delivery_fee;
+            }
+
+            // Create receivable record
+            $receivable = Receivable::create([
+                'reference' => $this->generateReceivableReference(),
                 'order_id' => $order->id,
                 'prescription_id' => $prescription->id,
-            ]);
-            return null;
-        }
-
-        $paymentSource = 'patient'; 
-
-        // Determine if insurance will pay
-        // Check BOTH prescription flag AND patient has complete insurance info
-        if ($prescription->insurance_covered && 
-            $patient->insurance_provider_id && 
-            $patient->insurance_number) {
-            $paymentSource = 'insurance';
-            
-            Log::info('Receivable will be from insurance', [
-                'order_id' => $order->id,
                 'patient_id' => $patient->id,
-                'insurance_provider_id' => $patient->insurance_provider_id,
-                'insurance_number' => $patient->insurance_number,
+                'insurance_provider_id' => $paymentSource === 'insurance' ? $patient->insurance_provider_id : null,
+                'amount' => $totalAmount,
+                'payment_source' => $paymentSource,
             ]);
-        } else {
-            Log::info('Receivable will be from patient', [
+
+            // Create transaction for tracking
+            $this->createTransaction($receivable, 'receivable', 'pending');
+
+            Log::info('Receivable created successfully', [
+                'receivable_id' => $receivable->id,
                 'order_id' => $order->id,
-                'patient_id' => $patient->id,
-                'prescription_insurance_covered' => $prescription->insurance_covered,
-                'patient_has_provider' => !empty($patient->insurance_provider_id),
-                'patient_has_number' => !empty($patient->insurance_number),
+                'amount' => $totalAmount,
+                'payment_source' => $paymentSource,
+                'insurance_provider_id' => $receivable->insurance_provider_id,
             ]);
+
+            return $receivable;
+
+        } catch (\Exception $e) {
+            Log::error('Error creating receivable', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
         }
-
-        // Total amount includes order total + delivery fee
-        $totalAmount = $order->total_amount;
-        if ($order->delivery) {
-            $totalAmount += $order->delivery->delivery_fee;
-        }
-
-        // Create receivable record
-        $receivable = Receivable::create([
-            'reference' => $this->generateReceivableReference(),
-            'order_id' => $order->id,
-            'prescription_id' => $prescription->id,
-            'patient_id' => $patient->id,
-            'insurance_provider_id' => $paymentSource === 'insurance' ? $patient->insurance_provider_id : null,
-            'amount' => $totalAmount,
-            'payment_source' => $paymentSource,
-        ]);
-
-        // Create transaction for tracking
-        $this->createTransaction($receivable, 'receivable', 'pending');
-
-        Log::info('Receivable created successfully', [
-            'receivable_id' => $receivable->id,
-            'order_id' => $order->id,
-            'amount' => $totalAmount,
-            'payment_source' => $paymentSource,
-            'insurance_provider_id' => $receivable->insurance_provider_id,
-        ]);
-
-        return $receivable;
-
-    } catch (\Exception $e) {
-        Log::error('Error creating receivable', [
-            'order_id' => $order->id,
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]);
-        throw $e;
     }
-}
 
     /**
      * Create payable to supplier
-     * 
      */
     protected function createPayableToSupplier(Order $order): ?Payable
     {
         try {
-            // Supplier gets the supplier_total 
+            // Supplier gets the supplier_total
             $supplierAmount = $order->supplier_total;
 
             $payable = Payable::create([
@@ -184,7 +183,7 @@ class PaymentService
                 'vendor_id' => $order->supplier->user_id,
                 'vendor_type' => 'supplier',
                 'amount' => $supplierAmount,
-                'due_date' => now()->addDays(30), 
+                'due_date' => now()->addDays(30),
                 'description' => "Payment to supplier for order {$order->order_number}",
             ]);
 
@@ -212,59 +211,67 @@ class PaymentService
 
     /**
      * Create payable for physician commission
-     * 
      */
     protected function createCommissionPayable(Order $order): ?Payable
     {
         try {
-            $prescription = $order->prescription;
-            $physician = $prescription->physician;
 
-            // Get physician commission rate
-            $commissionRate = $this->getPhysicianCommissionRate($physician, $order);
+            if ($order->prescription != null) {
 
-            // Calculate commission on MARKUP amount
-            $markupAmount = $order->markup_total; // This is the profit margin
-            $commissionAmount = $markupAmount * ($commissionRate / 100);
+                $prescription = $order->prescription;
+                $physician = $prescription->physician;
 
-            // Don't create payable if commission is zero or negative
-            if ($commissionAmount <= 0) {
-                Log::info('Commission amount is zero or negative, skipping payable creation', [
+                // Get physician commission rate
+                $commissionRate = $this->getPhysicianCommissionRate($physician, $order);
+
+                // Calculate commission on markup amount
+                $markupAmount = $order->markup_total;
+                $commissionAmount = $markupAmount * ($commissionRate / 100);
+
+                // Don't create payable if commission is zero or negative
+                if ($commissionAmount <= 0) {
+                    Log::info('Commission amount is zero or negative, skipping payable creation', [
+                        'order_id' => $order->id,
+                        'markup_amount' => $markupAmount,
+                        'commission_rate' => $commissionRate,
+                    ]);
+
+                    return null;
+                }
+
+                $payable = Payable::create([
+                    'reference' => $this->generatePayableReference(),
                     'order_id' => $order->id,
+                    'vendor_id' => $physician->id,
+                    'vendor_type' => 'physician',
+                    'amount' => $commissionAmount,
+                    'due_date' => now()->addDays(15), 
+                    'description' => "Commission for Dr. {$physician->name} - Order {$order->order_number}",
+                    'metadata' => [
+                        'commission_rate' => $commissionRate,
+                        'markup_amount' => $markupAmount,
+                        'calculation' => "{$markupAmount} × {$commissionRate}% = {$commissionAmount}",
+                    ],
+                ]);
+
+                // Create transaction for tracking
+                $this->createTransaction($payable, 'payable', 'pending');
+
+                Log::info('Commission payable created successfully', [
+                    'payable_id' => $payable->id,
+                    'order_id' => $order->id,
+                    'physician_id' => $physician->id,
                     'markup_amount' => $markupAmount,
                     'commission_rate' => $commissionRate,
+                    'commission_amount' => $commissionAmount,
                 ]);
+
+                return $payable;
+            } else {
+                Log::info(message: 'The order is an external one , therefore no need for commission calculation');
+
                 return null;
             }
-
-            $payable = Payable::create([
-                'reference' => $this->generatePayableReference(),
-                'order_id' => $order->id,
-                'vendor_id' => $physician->id,
-                'vendor_type' => 'physician',
-                'amount' => $commissionAmount,
-                'due_date' => now()->addDays(15), // Pay physicians faster (Net 15)
-                'description' => "Commission for Dr. {$physician->name} - Order {$order->order_number}",
-                'metadata' => [
-                    'commission_rate' => $commissionRate,
-                    'markup_amount' => $markupAmount,
-                    'calculation' => "{$markupAmount} × {$commissionRate}% = {$commissionAmount}",
-                ],
-            ]);
-
-            // Create transaction for tracking
-            $this->createTransaction($payable, 'payable', 'pending');
-
-            Log::info('Commission payable created successfully', [
-                'payable_id' => $payable->id,
-                'order_id' => $order->id,
-                'physician_id' => $physician->id,
-                'markup_amount' => $markupAmount,
-                'commission_rate' => $commissionRate,
-                'commission_amount' => $commissionAmount,
-            ]);
-
-            return $payable;
 
         } catch (\Exception $e) {
             Log::error('Error creating commission payable', [
@@ -287,7 +294,7 @@ class PaymentService
         }
 
         // Default rate
-        $defaultRate = 5.00; // 5% of markup
+        $defaultRate = 5.00;
 
         Log::info('Using default commission rate', [
             'physician_id' => $physician->id,

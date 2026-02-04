@@ -15,6 +15,7 @@ class Delivery extends Model
    protected $fillable = [
         'delivery_number',
         'prescription_id',  
+        'external_order_id',
         'order_id',         
         'rider_id',
         'pickup_address',
