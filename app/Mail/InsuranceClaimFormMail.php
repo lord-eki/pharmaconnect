@@ -42,7 +42,7 @@ class InsuranceClaimFormMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.insurance-claim-form',
+            view: 'emails.insurance-claim-form-email',
             with: [
                 'claim' => $this->claim,
                 'provider' => $this->claim->insuranceProvider,

@@ -3,7 +3,6 @@
 namespace App\Filament\Physician\Resources\Physician\Prescriptions\Pages;
 
 use App\Filament\Physician\Resources\Physician\Prescriptions\PrescriptionResource;
-use App\Models\InsuranceProvider;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
@@ -150,17 +149,8 @@ class ViewPrescription extends ViewRecord
                                     ->label('Gender')
                                     ->badge(),
 
-                                TextEntry::make('patient.insurance_provider_id')
-                                    ->label('Insurance Provider')
-                                    ->formatStateUsing(function ($state, $record) {
-                                        if (! $state) {
-                                            return 'None';
-                                        }
-
-                                        $provider = InsuranceProvider::find($state);
-
-                                        return $provider ? $provider->company_name : 'None';
-                                    })
+                                TextEntry::make('patient.insurance_provider')
+                                    ->label('Insurance')
                                     ->icon('heroicon-o-shield-check'),
                             ]),
 
@@ -201,41 +191,44 @@ class ViewPrescription extends ViewRecord
                         RepeatableEntry::make('items')
                             ->label('')
                             ->schema([
+                              
+                                        TextEntry::make('medicine.generic_name')
+                                            ->label('Medicine')
+                                            ->weight('bold'),
 
-                                TextEntry::make('medicine.generic_name')
-                                    ->label('Medicine')
-                                    ->weight('bold'),
+                                        TextEntry::make('quantity')
+                                            ->suffix(' units'),
 
-                                TextEntry::make('quantity')
-                                    ->suffix(' units'),
+                                        TextEntry::make('total_price')
+                                            ->label('Est. Cost')
+                                            ->money('KES'),
+                                    TextEntry::make('medicine.strength')
+                                        ->label('Strength')
+                                        ->badge()
+                                        ->color('gray'),
 
-                                TextEntry::make('total_price')
-                                    ->label('Est. Cost')
-                                    ->money('KES'),
-                                TextEntry::make('medicine.strength')
-                                    ->label('Strength')
-                                    ->badge()
-                                    ->color('gray'),
+                                    TextEntry::make('medicine.dosage_form')
+                                        ->label('Form')
+                                        ->badge()
+                                        ->color('gray'),
 
-                                TextEntry::make('medicine.dosage_form')
-                                    ->label('Form')
-                                    ->badge()
-                                    ->color('gray'),
+                                    TextEntry::make('dosage_instructions')
+                                        ->label('Dosage Instructions')
+                                        ->icon('heroicon-o-information-circle'),
+                               
 
-                                TextEntry::make('dosage_instructions')
-                                    ->label('Dosage Instructions')
-                                    ->icon('heroicon-o-information-circle'),
+                              
+                                        TextEntry::make('frequency')
+                                            ->label('Frequency'),
 
-                                TextEntry::make('frequency')
-                                    ->label('Frequency'),
-
-                                TextEntry::make('duration_days')
-                                    ->label('Duration')
-                                    ->suffix(' days'),
-                                TextEntry::make('notes')
-                                    ->label('Special Instructions')
-                                    ->default('None')
-                                    ->color('warning'),
+                                        TextEntry::make('duration_days')
+                                            ->label('Duration')
+                                            ->suffix(' days'),
+                                        TextEntry::make('notes')
+                                            ->label('Special Instructions')
+                                            ->default('None')
+                                            ->color('warning'),
+                                 
 
                             ])->columns(8),
                     ])->collapsible()->columnSpanFull(),

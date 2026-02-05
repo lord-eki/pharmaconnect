@@ -312,7 +312,9 @@ class Order extends Model
                     // Check if patient has insurance setup
                     $patient = $prescription->patient;
 
-                    if (! $patient->insurance_provider_id) {
+                    $hasInsuranceProvider = ! empty($patient->insurance_provider_id) || ! empty($patient->insurance_provider);
+
+                    if (! $hasInsuranceProvider) {
                         Log::error('Cannot create insurance claim - patient has no insurance provider', [
                             'prescription_id' => $prescription->id,
                             'patient_id' => $patient->id,

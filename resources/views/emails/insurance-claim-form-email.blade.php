@@ -5,62 +5,6 @@
     <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #1e40af; color: white; padding: 20px; text-align: center; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .info-box { background-color: white; padding: 15px; margin: 15px 0; border-left: 4px solid #1e40af; }
-        .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Insurance Claim Form</h1>
-            <p>{{ $claim->claim_number }}</p>
-        </div>
-        
-        <div class="content">
-            @if($customMessage)
-            <p>{{ $customMessage }}</p>
-            @else
-            <p>Please find attached the insurance claim form for your review.</p>
-            @endif
-
-            <div class="info-box">
-                <h3>Claim Details</h3>
-                <p><strong>Claim Number:</strong> {{ $claim->claim_number }}</p>
-                <p><strong>Patient:</strong> {{ $claim->patient->first_name }} {{ $claim->patient->last_name }}</p>
-                <p><strong>Policy Number:</strong> {{ $claim->policy_number }}</p>
-                <p><strong>Claimed Amount:</strong> KES {{ number_format($claim->claimed_amount, 2) }}</p>
-                <p><strong>Submission Date:</strong> {{ $claim->submitted_at->format('F d, Y') }}</p>
-                <p><strong>Status:</strong> {{ ucwords(str_replace('_', ' ', $claim->status)) }}</p>
-            </div>
-
-            <div class="info-box">
-                <h3>Prescription Information</h3>
-                <p><strong>Prescription Number:</strong> {{ $claim->prescription->prescription_number }}</p>
-                <p><strong>Physician:</strong> {{ $claim->prescription->physician->name }}</p>
-                <p><strong>Diagnosis:</strong> {{ $claim->prescription->diagnosis }}</p>
-            </div>
-
-            <p>The complete claim form with all details is attached to this email as a PDF document.</p>
-        </div>
-
-        <div class="footer">
-            <p>This is an automated email from {{ config('app.name') }}</p>
-            <p>{{ now()->format('F d, Y') }}</p>
-        </div>
-    </div>
-</body>
-</html>
-
-{{-- resources/views/emails/new-insurance-claim.blade.php --}}
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
         .header { background-color: #10b981; color: white; padding: 20px; text-align: center; }
         .content { padding: 20px; background-color: #f9f9f9; }
         .alert { background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 15px 0; }

@@ -173,7 +173,7 @@ class Prescription extends Model
                     Log::warning('No quotation items generated', [
                         'prescription_id' => $this->id,
                     ]);
-                    $this->status = 'pending';
+                    $this->status = 'draft';
                     $this->save();
                 }
             } catch (\Exception $e) {
@@ -182,7 +182,7 @@ class Prescription extends Model
                     'error' => $e->getMessage(),
                 ]);
 
-                $this->status = 'pending';
+                $this->status = 'draft';
                 $this->save();
 
                 throw $e;
@@ -653,14 +653,96 @@ class Prescription extends Model
             $this->load('patient');
         }
 
-        if (! $this->patient->insurance_provider_id || ! $this->patient->insurance_number) {
+        // Check if patient has insurance info (either FK or text field)
+        if ((! $this->patient->insurance_provider_id && ! $this->patient->insurance_provider) || ! $this->patient->insurance_number) {
             Log::error('Patient missing insurance information', [
                 'prescription_id' => $this->id,
                 'patient_id' => $this->patient_id,
-                'has_provider' => ! empty($this->patient->insurance_provider_id),
+                'has_provider_id' => ! empty($this->patient->insurance_provider_id),
+                'has_provider_text' => ! empty($this->patient->insurance_provider),
                 'has_number' => ! empty($this->patient->insurance_number),
             ]);
             throw new \Exception('Patient does not have complete insurance information');
+        }
+
+        // AUTO-LINK: If patient only has text provider, try to find and link the provider record
+        if (! $this->patient->insurance_provider_id && $this->patient->insurance_provider) {
+            Log::info('Patient has text insurance provider but no FK, attempting to link', [
+                'patient_id' => $this->patient_id,
+                'insurance_provider_text' => $this->patient->insurance_provider,
+            ]);
+
+            $provider = null;
+
+            // Check if the text field contains a numeric ID
+            if (is_numeric($this->patient->insurance_provider)) {
+                // Try to find provider by ID
+                $provider = InsuranceProvider::find((int) $this->patient->insurance_provider);
+
+                if ($provider) {
+                    Log::info('Found insurance provider by numeric ID in text field', [
+                        'patient_id' => $this->patient->id,
+                        'provider_id' => $provider->id,
+                        'provider_name' => $provider->company_name,
+                    ]);
+                }
+            }
+
+            // If not found by ID, try to find by name
+            if (! $provider) {
+                $provider = InsuranceProvider::where('company_name', 'LIKE', "%{$this->patient->insurance_provider}%")
+                    ->orWhere('company_name', $this->patient->insurance_provider)
+                    ->first();
+
+                if ($provider) {
+                    Log::info('Found insurance provider by name match', [
+                        'patient_id' => $this->patient->id,
+                        'provider_id' => $provider->id,
+                        'provider_name' => $provider->company_name,
+                    ]);
+                }
+            }
+
+            if ($provider) {
+                // Link the patient to the found provider
+                $this->patient->update(['insurance_provider_id' => $provider->id]);
+
+                Log::info('Successfully linked patient to existing insurance provider', [
+                    'patient_id' => $this->patient->id,
+                    'provider_id' => $provider->id,
+                    'provider_name' => $provider->company_name,
+                    'original_text_value' => $this->patient->insurance_provider,
+                ]);
+
+                // Reload patient to get the updated insurance_provider_id
+                $this->load('patient');
+            } else {
+                // No matching provider found in system
+                $availableProviders = InsuranceProvider::active()
+                    ->pluck('company_name', 'id')
+                    ->toArray();
+
+                Log::error('Insurance provider not found in system', [
+                    'prescription_id' => $this->id,
+                    'patient_id' => $this->patient_id,
+                    'insurance_provider_text' => $this->patient->insurance_provider,
+                    'available_providers' => $availableProviders,
+                ]);
+
+                $providersList = implode(', ', $availableProviders);
+                throw new \Exception("Insurance provider '{$this->patient->insurance_provider}' not found in system. Available providers: {$providersList}. Please link the patient to a valid insurance provider.");
+            }
+        }
+
+        // Final validation - ensure we have insurance_provider_id at this point
+        if (! $this->patient->insurance_provider_id) {
+            Log::error('Patient still missing insurance_provider_id after linking attempt', [
+                'prescription_id' => $this->id,
+                'patient_id' => $this->patient_id,
+                'has_text_provider' => ! empty($this->patient->insurance_provider),
+            ]);
+
+            throw new \Exception('Unable to determine insurance provider. Please ensure the patient is linked to a valid insurance provider.');
         }
 
         // Check if claim already exists
@@ -696,7 +778,7 @@ class Prescription extends Model
             $ordersTotal = $this->total_amount;
         }
 
-        // Create the claim
+        // Create the claim - insurance_provider_id is now guaranteed to be set
         $claim = InsuranceClaim::create([
             'prescription_id' => $this->id,
             'insurance_provider_id' => $this->patient->insurance_provider_id,
