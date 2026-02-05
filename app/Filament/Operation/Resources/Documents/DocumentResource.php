@@ -23,7 +23,7 @@ class DocumentResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Manage Documents ';
+    protected static UnitEnum|string|null $navigationGroup = 'Documents Management';
 
     protected static ?string $navigationLabel = 'Doc Management';
 
