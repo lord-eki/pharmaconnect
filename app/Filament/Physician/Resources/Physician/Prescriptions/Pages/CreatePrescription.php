@@ -70,7 +70,9 @@ class CreatePrescription extends CreateRecord
                                             TextInput::make('county')->maxLength(255),
                                             TextInput::make('city')->maxLength(255),
                                             Textarea::make('address')->columnSpanFull(),
-                                            Select::make('insurance_provider')->options(InsuranceProvider::query()->pluck('company_name', 'id')),
+                                            Select::make('insurance_provider_id')
+                                                ->label('Insurance Provider')
+                                                ->options(InsuranceProvider::query()->pluck('company_name', 'id')),
                                             TextInput::make('insurance_number')->maxLength(255),
                                             Textarea::make('allergies')->columnSpanFull()->placeholder('List any known allergies'),
                                             Textarea::make('medical_conditions')->columnSpanFull()->placeholder('List any existing medical conditions'),
@@ -82,12 +84,14 @@ class CreatePrescription extends CreateRecord
                                     $patient = Cache::remember(
                                         "patient_info_{$state}",
                                         3600,
-                                        fn () => Patient::select('id', 'allergies', 'medical_conditions', 'insurance_provider_id', 'insurance_number')
+                                        fn () => Patient::select('id', 'allergies', 'medical_conditions', 'insurance_provider_id', 'insurance_provider', 'insurance_number')
                                             ->find($state)
                                     );
 
                                     if ($patient) {
-                                        $hasInsurance = ! empty($patient->insurance_number) && ! empty($patient->insurance_provider_id);
+                                        // Check both insurance_provider_id (FK) and insurance_provider (text field)
+                                        $hasInsurance = ! empty($patient->insurance_number) && 
+                                                       (! empty($patient->insurance_provider_id) || ! empty($patient->insurance_provider));
                                         $set('patient_has_insurance', $hasInsurance);
 
                                         if ($hasInsurance) {
