@@ -151,7 +151,7 @@ class ViewPrescription extends ViewRecord
 
                                 TextEntry::make('patient.insuranceProvider.company_name')
                                     ->label('Insurance Provider')
-                                    ->default('None')
+                                    
                                     ->icon('heroicon-o-shield-check'),
                             ]),
 
