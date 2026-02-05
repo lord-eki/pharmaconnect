@@ -3,6 +3,7 @@
 namespace App\Filament\Physician\Resources\Physician\Prescriptions\Pages;
 
 use App\Filament\Physician\Resources\Physician\Prescriptions\PrescriptionResource;
+use App\Models\InsuranceProvider;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
@@ -149,9 +150,17 @@ class ViewPrescription extends ViewRecord
                                     ->label('Gender')
                                     ->badge(),
 
-                                TextEntry::make('patient.insuranceProvider.company_name')
+                                TextEntry::make('patient.insurance_provider_id')
                                     ->label('Insurance Provider')
-                                    
+                                    ->formatStateUsing(function ($state, $record) {
+                                        if (! $state) {
+                                            return 'None';
+                                        }
+
+                                        $provider = InsuranceProvider::find($state);
+
+                                        return $provider ? $provider->company_name : 'None';
+                                    })
                                     ->icon('heroicon-o-shield-check'),
                             ]),
 
