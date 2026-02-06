@@ -25,10 +25,8 @@ class InsuranceProviderForm
                 Section::make('Basic Information')
                     ->schema([
                    
-                        TextInput::make('company_name')
-                            ->required()
-                            ->maxLength(255)
-                            ->live(onBlur: true)
+                        Select::make('company_name')
+                            ->required()->options(User::role('insurer')->whereDoesntHave('insuranceProvider')->pluck('name','name'))
                             ->helperText('Official registered company name'),
 
                         TextInput::make('registration_number')
@@ -46,15 +44,13 @@ class InsuranceProviderForm
                             ->tel()
                             ->required()
                             ->maxLength(255)
-                            ->placeholder('+254-XXX-XXXXXX')
-                            ->live(onBlur: true),
+                            ->placeholder('+254-XXX-XXXXXX'),
 
                         TextInput::make('email')
                             ->label('Email Address')
                             ->email()
                             ->required()
-                            ->maxLength(255)
-                            ->live(onBlur: true),
+                            ->maxLength(255),
 
                         Textarea::make('address')
                             ->required()

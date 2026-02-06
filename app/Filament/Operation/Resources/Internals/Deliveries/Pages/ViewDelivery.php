@@ -14,15 +14,15 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Infolists\Components\TextEntry;
+use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Colors\Color;
-use Illuminate\Support\Facades\Log;
 
 class ViewDelivery extends ViewRecord
 {
@@ -77,7 +77,7 @@ class ViewDelivery extends ViewRecord
 
                         TextEntry::make('prescription.patient.full_name')
                             ->label('Patient'),
-                        
+
                         TextEntry::make('total_amount')
                             ->label('Total Orders Amount')
                             ->state(fn ($record) => $record->orders->sum('total_amount'))
@@ -114,7 +114,7 @@ class ViewDelivery extends ViewRecord
                                             ->money('KES')
                                             ->weight('bold'),
                                     ]),
-                                
+
                                 Grid::make(2)
                                     ->schema([
                                         TextEntry::make('pivot.pickup_status')
@@ -127,7 +127,7 @@ class ViewDelivery extends ViewRecord
                                                 default => 'gray',
                                             })
                                             ->formatStateUsing(fn ($state): string => ucfirst($state ?? 'pending')),
-                                        
+
                                         TextEntry::make('pivot.picked_up_at')
                                             ->label('Picked Up At')
                                             ->dateTime('M d, Y H:i')
@@ -232,12 +232,12 @@ class ViewDelivery extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            // Assign Rider - visible when delivery is pending and no rider assigned
+            // Assign Rider 
             Action::make('assign_rider')
                 ->label('Assign Rider')
                 ->icon('heroicon-o-user-plus')
                 ->color('success')
-                ->visible(fn ($record) => $record->status === 'pending' && !$record->rider_id)
+                ->visible(fn ($record) => $record->status === 'pending' && ! $record->rider_id)
                 ->form([
                     Select::make('rider_id')
                         ->label('Select Rider')
@@ -250,22 +250,31 @@ class ViewDelivery extends ViewRecord
                         ->required()
                         ->searchable()
                         ->helperText('Only available riders are shown'),
+
+                   TextInput::make('delivery_fee')
+                        ->label('Delivery Fee (KES)')
+                        ->numeric()
+                        ->minValue(0)
+                        ->required()
+                        ->prefix('KES')
+                        ->helperText('Enter the delivery fee for this order'),
                 ])
                 ->action(function ($record, array $data) {
                     try {
                         $rider = Rider::findOrFail($data['rider_id']);
-                        
+
                         $record->update([
                             'rider_id' => $data['rider_id'],
                             'status' => 'assigned',
+                            'delivery_fee' => $data['delivery_fee'],
                         ]);
-                        
+
                         $rider->update(['is_available' => false]);
 
                         if ($rider->user) {
                             $rider->user->notify(new DeliveryAssignedNotification($record));
                         }
-                        
+
                         Notification::make()
                             ->success()
                             ->title('Rider Assigned')
@@ -285,7 +294,7 @@ class ViewDelivery extends ViewRecord
                 ->label('Reassign Rider')
                 ->icon('heroicon-o-arrow-path')
                 ->color('warning')
-                ->visible(fn ($record) => $record->rider_id && !in_array($record->status, ['delivered', 'cancelled']))
+                ->visible(fn ($record) => $record->rider_id && ! in_array($record->status, ['delivered', 'cancelled']))
                 ->form([
                     Select::make('rider_id')
                         ->label('Select New Rider')
@@ -297,6 +306,15 @@ class ViewDelivery extends ViewRecord
                         )
                         ->required()
                         ->searchable(),
+
+                    \Filament\Forms\Components\TextInput::make('delivery_fee')
+                        ->label('Delivery Fee (KES)')
+                        ->numeric()
+                        ->minValue(0)
+                        ->default(fn ($record) => $record->delivery_fee)
+                        ->required()
+                        ->prefix('KES')
+                        ->helperText('Update the delivery fee if needed'),
 
                     Textarea::make('reason')
                         ->label('Reason for Reassignment')
@@ -317,13 +335,14 @@ class ViewDelivery extends ViewRecord
 
                         $record->update([
                             'rider_id' => $data['rider_id'],
+                            'delivery_fee' => $data['delivery_fee'],
                             'delivery_notes' => ($record->delivery_notes ?? '').
                                 "\n\nRider reassigned: ".now()->toDateTimeString().
                                 "\nReason: ".$data['reason'],
                         ]);
-                        
+
                         $newRider->update(['is_available' => false]);
-                        
+
                         if ($newRider->user) {
                             $newRider->user->notify(new RiderReassignedNotification($record, $data['reason']));
                         }
@@ -437,13 +456,13 @@ class ViewDelivery extends ViewRecord
                         // Notify physician for all commissions created
                         if ($results['orders_processed'] > 0) {
                             $physician = $record->prescription->physician;
-                            
+
                             if ($physician && $physician->user) {
                                 // Get all commissions for this delivery
                                 $commissions = $record->prescription->commissions()
                                     ->whereIn('order_id', $record->orders->pluck('id'))
                                     ->get();
-                                    
+
                                 foreach ($commissions as $commission) {
                                     $physician->user->notify(new CommissionEarnedNotification($commission));
                                 }
@@ -452,8 +471,8 @@ class ViewDelivery extends ViewRecord
 
                         $message = "Delivery completed! {$results['orders_processed']} order(s) processed.";
 
-                        if (!empty($results['errors'])) {
-                            $message .= ' However, some errors occurred: ' . implode(', ', $results['errors']);
+                        if (! empty($results['errors'])) {
+                            $message .= ' However, some errors occurred: '.implode(', ', $results['errors']);
                         }
 
                         Notification::make()
@@ -465,7 +484,7 @@ class ViewDelivery extends ViewRecord
                         Notification::make()
                             ->danger()
                             ->title('Error')
-                            ->body('Failed to complete delivery: ' . $e->getMessage())
+                            ->body('Failed to complete delivery: '.$e->getMessage())
                             ->send();
                     }
                 }),

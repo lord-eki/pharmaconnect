@@ -54,17 +54,15 @@ class ExternalOrderResource extends Resource
         ];
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
 
-    //   public static function getEloquentQuery(): Builder
-    // {
-    //     $query = parent::getEloquentQuery();
 
-    //     if (auth()->user()->insuranceProvider) {
-    //         $query->where('insurance_provider_id', auth()->user()->insuranceProvider->id);
-    //     }
+        if (auth()->user()->insuranceProvider) {
+            $query->where('insurance_provider_id', auth()->user()->insuranceProvider->id);
+        }
 
-    //     return $query;
-    // }
-
-    
+        return $query;
+    }
 }
