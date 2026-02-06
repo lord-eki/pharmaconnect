@@ -31,64 +31,6 @@ class CreateExternalOrder extends CreateRecord
     protected function getSteps(): array
     {
         return [
-            Step::make('Recipient & Delivery')
-                ->icon('heroicon-o-user')
-                ->description('Enter recipient and delivery details')
-                ->schema([
-                    Section::make('Recipient Information')
-                        ->schema([
-                            TextInput::make('recipient_name')
-                                ->label('Recipient Name')
-                                ->required()
-                                ->maxLength(255)
-                                ->columnSpan(1),
-
-                            TextInput::make('recipient_phone')
-                                ->label('Phone Number')
-                                ->tel()
-                                ->required()
-                                ->maxLength(255)
-                                ->columnSpan(1),
-
-                            TextInput::make('recipient_email')
-                                ->label('Email (Optional)')
-                                ->email()
-                                ->maxLength(255)
-                                ->columnSpan(1),
-
-                            TextInput::make('reference_number')
-                                ->label('Reference Number')
-                                ->helperText('Your internal reference number')
-                                ->maxLength(255)
-                                ->columnSpan(1),
-                        ])
-                        ->columns(2),
-
-                    Section::make('Delivery Address')
-                        ->schema([
-                            Textarea::make('delivery_address')
-                                ->label('Delivery Address')
-                                ->required()
-                                ->rows(3)
-                                ->columnSpanFull()
-                                ->placeholder('Enter the complete delivery address'),
-
-                            TextInput::make('delivery_county')
-                                ->label('County')
-                                ->maxLength(255)
-                                ->columnSpan(1),
-
-                            TextInput::make('delivery_city')
-                                ->label('City')
-                                ->maxLength(255)
-                                ->columnSpan(1),
-                        ])
-                        ->columns(2),
-
-                  
-                ])
-                ->columns(2),
-
             Step::make('Select Medicines')
                 ->icon('heroicon-o-beaker')
                 ->schema([
@@ -211,7 +153,7 @@ class CreateExternalOrder extends CreateRecord
                                         ->label('')
                                         ->content(function ($get) {
                                             $items = $get('items') ?? [];
-                                            
+
                                             if (empty($items)) {
                                                 return new \Illuminate\Support\HtmlString('
                                                     <div class="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -226,7 +168,7 @@ class CreateExternalOrder extends CreateRecord
                                             $totalQuantity = 0;
 
                                             $html = '<div class="space-y-4">';
-                                            
+
                                             // Items list
                                             $html .= '<div class="space-y-3">';
                                             foreach ($items as $item) {
@@ -257,22 +199,22 @@ class CreateExternalOrder extends CreateRecord
 
                                             // Summary statistics
                                             $html .= '<div class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4 space-y-2">';
-                                            
+
                                             $html .= '<div class="flex justify-between text-sm">';
                                             $html .= '<span class="text-gray-600 dark:text-gray-400">Total Items:</span>';
                                             $html .= '<span class="font-medium text-gray-900 dark:text-gray-100">'.$itemCount.'</span>';
                                             $html .= '</div>';
-                                            
+
                                             $html .= '<div class="flex justify-between text-sm">';
                                             $html .= '<span class="text-gray-600 dark:text-gray-400">Total Quantity:</span>';
                                             $html .= '<span class="font-medium text-gray-900 dark:text-gray-100">'.$totalQuantity.'</span>';
                                             $html .= '</div>';
-                                            
+
                                             $html .= '<div class="flex justify-between items-center pt-2 border-t border-gray-200 dark:border-gray-700">';
                                             $html .= '<span class="font-semibold text-gray-900 dark:text-gray-100">Order Total:</span>';
                                             $html .= '<span class="font-bold text-xl text-primary-600 dark:text-primary-400">KES '.number_format($subtotal, 2).'</span>';
                                             $html .= '</div>';
-                                            
+
                                             $html .= '</div>';
 
                                             $html .= '</div>';
@@ -285,6 +227,63 @@ class CreateExternalOrder extends CreateRecord
                                 ->extraAttributes(['class' => 'sticky top-4']),
                         ]),
                 ]),
+            Step::make('Recipient & Delivery')
+                ->icon('heroicon-o-user')
+                ->description('Enter recipient and delivery details')
+                ->schema([
+                    Section::make('Recipient Information')
+                        ->schema([
+                            TextInput::make('recipient_name')
+                                ->label('Recipient Name')
+                                ->required()
+                                ->maxLength(255)
+                                ->columnSpan(1),
+
+                            TextInput::make('recipient_phone')
+                                ->label('Phone Number')
+                                ->tel()
+                                ->required()
+                                ->maxLength(255)
+                                ->columnSpan(1),
+
+                            TextInput::make('recipient_email')
+                                ->label('Email (Optional)')
+                                ->email()
+                                ->maxLength(255)
+                                ->columnSpan(1),
+
+                            TextInput::make('reference_number')
+                                ->label('Reference Number')
+                                ->helperText('Your internal reference number')
+                                ->maxLength(255)
+                                ->columnSpan(1),
+                        ])
+                        ->columns(2),
+
+                    Section::make('Delivery Address')
+                        ->schema([
+                            Textarea::make('delivery_address')
+                                ->label('Delivery Address')
+                                ->required()
+                                ->rows(3)
+                                ->columnSpanFull()
+                                ->placeholder('Enter the complete delivery address'),
+
+                            TextInput::make('delivery_county')
+                                ->label('County')
+                                ->maxLength(255)
+                                ->columnSpan(1),
+
+                            TextInput::make('delivery_city')
+                                ->label('City')
+                                ->maxLength(255)
+                                ->columnSpan(1),
+                        ])
+                        ->columns(2),
+
+                ])
+                ->columns(2),
+
         ];
     }
 
@@ -343,7 +342,7 @@ class CreateExternalOrder extends CreateRecord
             return Medicine::query()
                 ->select(['id', 'generic_name', 'brand_name', 'strength', 'dosage_form'])
                 ->where('is_active', true)
-                ->withStock(1) 
+                ->withStock(1)
                 ->orderBy('generic_name')
                 ->limit(1000)
                 ->get()
@@ -457,6 +456,4 @@ class CreateExternalOrder extends CreateRecord
     {
         return false;
     }
-
-
 }
