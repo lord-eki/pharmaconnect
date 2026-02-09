@@ -20,6 +20,9 @@ class Medicine extends Model
         'brand_name',
         'strength',
         'dosage_form',
+        'measurement_type',
+        'volume_per_unit',
+        'unit_of_measurement',
         'pack_size',
         'manufacturer',
         'active_ingredients',
@@ -38,9 +41,63 @@ class Medicine extends Model
         'prescription_required' => 'boolean',
         'controlled_substance' => 'boolean',
         'is_active' => 'boolean',
+        'volume_per_unit' => 'decimal:2',
     ];
 
     protected $with = [];
+
+    public function isVolumeBased(): bool
+    {
+        return $this->measurement_type === 'volume';
+    }
+
+    public function isDiscrete(): bool
+    {
+        return $this->measurement_type === 'discrete';
+    }
+
+    /**
+     * Get the display unit (ml for volume , tablets/capsule for discrete)
+     */
+    public function getDisplayUnit(): string
+    {
+        if ($this->isVolumeBased()) {
+            return 'ml';
+        }
+
+        return $this->unit_of_measurement ?? 'unit(s)';
+    }
+
+    /**
+     * Calculate required quantity based on dosage
+     *
+     * @param  float  $doseAmount  Amount per dose (ml or tablets)
+     * @param  int  $frequencyPerDay  Times per day
+     * @param  int  $durationDays  Treatment duration
+     * @return array ['total_required' => float, 'quantity_needed' => int]
+     */
+    public function calculateRequiredQuantity(
+        float $doseAmount,
+        int $frequencyPerDay,
+        int $durationDays
+    ): array {
+        // Calculate total amount needed
+        $totalRequired = $doseAmount * $frequencyPerDay * $durationDays;
+
+        if ($this->isVolumeBased() && $this->volume_per_unit) {
+            // For volume-based: calculate how many bottles needed
+            // Example: 240ml needed, 100ml per bottle = 3 bottles
+            $quantityNeeded = ceil($totalRequired / $this->volume_per_unit);
+        } else {
+            // For discrete: total is the quantity
+            $quantityNeeded = (int) ceil($totalRequired);
+        }
+
+        return [
+            'total_required' => $totalRequired,
+            'quantity_needed' => $quantityNeeded,
+        ];
+    }
 
     public function category(): BelongsTo
     {
@@ -75,11 +132,11 @@ class Medicine extends Model
     }
 
     /**
-     * Get cheapest supplier price 
+     * Get cheapest supplier price
      */
     public function getCheapestSupplierPrice(?int $quantity = 1): ?float
     {
-        if (!$quantity || $quantity <= 0) {
+        if (! $quantity || $quantity <= 0) {
             $quantity = 1;
         }
 
@@ -98,8 +155,9 @@ class Medicine extends Model
             \Log::error('Error fetching cheapest price', [
                 'medicine_id' => $this->id,
                 'quantity' => $quantity,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -110,7 +168,7 @@ class Medicine extends Model
     public function getAvailableSuppliers(int $quantity = 1)
     {
         $cacheKey = "medicine:{$this->id}:suppliers:{$quantity}_v2";
-        
+
         return Cache::remember($cacheKey, 600, function () use ($quantity) {
             return DB::table('supplier_medicines')
                 ->join('suppliers', 'suppliers.id', '=', 'supplier_medicines.supplier_id')
@@ -127,7 +185,7 @@ class Medicine extends Model
                     'supplier_medicines.batch_number',
                     'suppliers.name as supplier_name',
                     'suppliers.phone as supplier_phone',
-                    'suppliers.email as supplier_email'
+                    'suppliers.email as supplier_email',
                 ])
                 ->orderBy('supplier_medicines.unit_price', 'asc')
                 ->limit(10)
@@ -147,22 +205,22 @@ class Medicine extends Model
     {
         return $query->whereExists(function ($q) use ($minQuantity) {
             $q->select(DB::raw(1))
-              ->from('supplier_medicines')
-              ->whereColumn('supplier_medicines.medicine_id', 'medicines.id')
-              ->where('supplier_medicines.is_available', true)
-              ->where('supplier_medicines.stock_quantity', '>=', $minQuantity);
+                ->from('supplier_medicines')
+                ->whereColumn('supplier_medicines.medicine_id', 'medicines.id')
+                ->where('supplier_medicines.is_available', true)
+                ->where('supplier_medicines.stock_quantity', '>=', $minQuantity);
         });
     }
 
     /**
-     *  Get display name without cache 
+     *  Get display name without cache
      */
     public function getDisplayNameAttribute(): string
     {
         $brandInfo = $this->brand_name ? " ({$this->brand_name})" : '';
         $strength = $this->strength ?: '';
         $form = $this->dosage_form ?: '';
-        
+
         return trim("{$this->generic_name}{$brandInfo} - {$strength} - {$form}");
     }
 
@@ -182,8 +240,8 @@ class Medicine extends Model
         foreach ($patterns as $pattern) {
             // For Redis
             if (config('cache.default') === 'redis') {
-                $keys = Cache::getRedis()->keys(config('cache.prefix') . ':' . $pattern);
-                if (!empty($keys)) {
+                $keys = Cache::getRedis()->keys(config('cache.prefix').':'.$pattern);
+                if (! empty($keys)) {
                     Cache::getRedis()->del($keys);
                 }
             } else {
@@ -209,7 +267,7 @@ class Medicine extends Model
             $medicine->exists = true;
             $medicine->clearCaches();
         }
-        
+
         // Clear global medicine options
         Cache::forget('medicine_options_v2');
     }
@@ -259,7 +317,7 @@ class Medicine extends Model
                 ->selectRaw('MIN(unit_price)')
                 ->whereColumn('medicine_id', 'medicines.id')
                 ->where('is_available', true)
-                ->where('stock_quantity', '>', 0)
+                ->where('stock_quantity', '>', 0),
         ]);
     }
 }
