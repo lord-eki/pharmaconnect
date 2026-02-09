@@ -61,4 +61,11 @@ class ClaimVerificationResource extends Resource
 
         ];
     }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = static::getModel()::where('status', 'submitted')->where('insurance_provider_id', auth()->user()->insuranceProvider->id)->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
 }
