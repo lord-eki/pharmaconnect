@@ -19,7 +19,7 @@ class MarkupRuleResource extends Resource
 {
     protected static ?string $model = MarkupRule::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalculator;
+        protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalculator;
     protected static string|UnitEnum|null $navigationGroup = 'Settings';
 
 
