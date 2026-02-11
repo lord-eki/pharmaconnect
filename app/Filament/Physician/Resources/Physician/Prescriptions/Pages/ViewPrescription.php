@@ -225,7 +225,7 @@ class ViewPrescription extends ViewRecord
                                     ->label('Dosage Instructions')
                                     ->icon('heroicon-o-information-circle'),
 
-                                TextEntry::make('frequency')
+                                TextEntry::make('frequency_per_day')
                                     ->label('Frequency'),
 
                                 TextEntry::make('duration_days')

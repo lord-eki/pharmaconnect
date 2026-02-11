@@ -470,6 +470,7 @@ class CreatePrescription extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+
         $data['physician_id'] = auth()->id();
         $data['status'] = 'draft';
 

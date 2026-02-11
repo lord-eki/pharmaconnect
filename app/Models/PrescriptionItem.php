@@ -20,7 +20,6 @@ class PrescriptionItem extends Model
         'duration_days',
         'total_volume_required',
         'dosage_instructions',
-        'frequency',
         'unit_price',
         'total_price',
         'status',
@@ -41,14 +40,13 @@ class PrescriptionItem extends Model
     {
         parent::boot();
 
-        static::saving(function ($item, $prescriptionItem) {
+        static::saving(function ($item) {
             // Auto-calculate total price if unit price and quantity are set
             if ($item->quantity && $item->unit_price) {
                 $item->total_price = $item->quantity * $item->unit_price;
             }
 
-            $prescriptionItem->calculateQuantityAndPrice();
-
+            $item->calculateQuantityAndPrice();
         });
 
         static::saved(function ($item) {
