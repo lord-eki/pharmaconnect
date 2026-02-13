@@ -46,14 +46,41 @@ class PrescriptionItem extends Model
         parent::boot();
 
         static::saving(function ($item) {
+            // Load medicine if not already loaded
+            if (! $item->relationLoaded('medicine') && $item->medicine_id) {
+                $item->load('medicine');
+            }
 
-            dd($item);
+            // Set measurement type and volume per unit from medicine
+            if ($item->medicine) {
+                // Only set if not already set
+                if (! $item->measurement_type) {
+                    $item->measurement_type = $item->medicine->measurement_type ?? 'discrete';
+                }
+
+                if (! $item->volume_per_unit) {
+                    $item->volume_per_unit = $item->medicine->volume_per_unit;
+                }
+
+                // Set unit_of_measurement based on measurement_type
+                if (! $item->unit_of_measurement) {
+                    if ($item->measurement_type === 'volume') {
+                        $item->unit_of_measurement = 'ml';
+                    } else {
+                        $item->unit_of_measurement = $item->medicine->unit_of_measurement ?? 'unit';
+                    }
+                }
+            }
+
+            // Calculate quantity and price
+            $item->calculateQuantityAndPrice();
+
             // Auto-calculate total price if unit price and quantity are set
             if ($item->quantity && $item->unit_price) {
                 $item->total_price = $item->quantity * $item->unit_price;
             }
 
-            $item->calculateQuantityAndPrice();
+            dd($item); // Debugging line to check item state before saving
         });
 
         static::saved(function ($item) {
@@ -100,6 +127,7 @@ class PrescriptionItem extends Model
         if ($this->unit_price && $this->quantity) {
             $this->total_price = $this->unit_price * $this->quantity;
         }
+
     }
 
     /**

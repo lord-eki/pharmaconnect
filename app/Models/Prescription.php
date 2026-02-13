@@ -53,7 +53,6 @@ class Prescription extends Model
 
         static::creating(function ($prescription) {
 
-        dump($prescription);
 
             if (! $prescription->physician_id) {
                 $prescription->physician_id = auth()->id();
@@ -114,7 +113,7 @@ class Prescription extends Model
     }
 
     /**
-     * OPTIMIZED: Generate prescription number with better caching
+     * Generate prescription number with better caching
      */
     public static function generatePrescriptionNumber(): string
     {
@@ -668,7 +667,7 @@ class Prescription extends Model
             throw new \Exception('Patient does not have complete insurance information');
         }
 
-        // AUTO-LINK: If patient only has text provider, try to find and link the provider record
+        // If patient only has text provider, try to find and link the provider record
         if (! $this->patient->insurance_provider_id && $this->patient->insurance_provider) {
             Log::info('Patient has text insurance provider but no FK, attempting to link', [
                 'patient_id' => $this->patient_id,

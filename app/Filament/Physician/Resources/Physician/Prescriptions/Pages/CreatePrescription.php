@@ -19,6 +19,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Filament\Resources\Pages\CreateRecord\Concerns\HasWizard;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\Wizard\Step;
@@ -101,22 +102,25 @@ class CreatePrescription extends CreateRecord
             Step::make('Diagnosis & Details')
                 ->icon('heroicon-o-clipboard-document-list')
                 ->schema([
-                    Textarea::make('diagnosis')
-                        ->label('Diagnosis')
-                        ->rows(1)->required()
-                        ->columnSpanFull(),
+                    Section::make()->schema([
+                        Textarea::make('diagnosis')
+                            ->label('Diagnosis')
+                            ->rows(1)->required()
+                            ->columnSpanFull(),
 
-                    Textarea::make('notes')
-                        ->label('Prescription Notes')
-                        ->rows(2)->required()
-                        ->columnSpanFull()
-                        ->placeholder('Additional notes or instructions'),
+                        Textarea::make('notes')
+                            ->label('Prescription Notes')
+                            ->rows(2)->required()
+                            ->columnSpanFull()
+                            ->placeholder('Additional notes or instructions'),
 
-                    Toggle::make('insurance_covered')
-                        ->label('Insurance Coverage')
-                        ->helperText('Does this prescription have insurance coverage?')
-                        ->default(false)
-                        ->visible(fn (Get $get) => $get('patient_has_insurance') === true),
+                        Toggle::make('insurance_covered')
+                            ->label('Insurance Coverage')
+                            ->helperText('Does this prescription have insurance coverage?')
+                            ->default(false)
+                            ->visible(fn (Get $get) => $get('patient_has_insurance') === true),
+                    ])->columns(3),
+
                 ]),
 
             Step::make('Medicines')
@@ -125,6 +129,7 @@ class CreatePrescription extends CreateRecord
                     Repeater::make('items')
                         ->relationship('items')
                         ->schema([
+
                             Select::make('medicine_id')
                                 ->label('Medicine')
                                 ->options(function (Get $get) {
@@ -236,11 +241,10 @@ class CreatePrescription extends CreateRecord
                                 ->dehydrated()
                                 ->visible(fn (Get $get) => $get('unit_price')),
 
-                            TextInput::make('frequency_per_day')
+                            TextInput::make('frequency_per_day')->hidden()->dehydrated()
                                 ->numeric(),
 
-                            TextInput::make('quantity')
-                                ->numeric()
+                            TextInput::make('quantity')->numeric()
                                 ->disabled(),
 
                             TextInput::make('total_volume_required')
@@ -248,11 +252,14 @@ class CreatePrescription extends CreateRecord
 
                             TextInput::make('medicine_type'),
 
-                            TextInput::make('volume_per_unit'),
+                            TextInput::make('volume_per_unit')
+
+                                ->numeric(),
 
                             TextInput::make('unit_label'),
 
                             TextInput::make('supplier_price')
+
                                 ->numeric(),
 
                             TextInput::make('total_price')
@@ -269,7 +276,8 @@ class CreatePrescription extends CreateRecord
                                 ->helperText('Additional instructions for the patient')
                                 ->columns(3),
                         ])
-                        ->columns(2)
+
+                        ->columns(3)
                         ->defaultItems(1)
                         ->addActionLabel('Add Medicine')
                         ->collapsible()
