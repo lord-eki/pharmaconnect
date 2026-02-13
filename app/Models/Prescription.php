@@ -52,6 +52,9 @@ class Prescription extends Model
         parent::boot();
 
         static::creating(function ($prescription) {
+
+        dump($prescription);
+
             if (! $prescription->physician_id) {
                 $prescription->physician_id = auth()->id();
             }

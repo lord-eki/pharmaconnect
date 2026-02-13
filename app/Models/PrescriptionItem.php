@@ -16,11 +16,16 @@ class PrescriptionItem extends Model
         'medicine_id',
         'quantity',
         'dose_amount',
+        'frequency',
         'frequency_per_day',
         'duration_days',
         'total_volume_required',
         'dosage_instructions',
         'unit_price',
+        'supplier_price',
+        'measurement_type',
+        'volume_per_unit',
+        'markup_amount',
         'total_price',
         'status',
         'notes',
@@ -41,6 +46,8 @@ class PrescriptionItem extends Model
         parent::boot();
 
         static::saving(function ($item) {
+
+            dd($item);
             // Auto-calculate total price if unit price and quantity are set
             if ($item->quantity && $item->unit_price) {
                 $item->total_price = $item->quantity * $item->unit_price;
@@ -68,6 +75,11 @@ class PrescriptionItem extends Model
      */
     public function calculateQuantityAndPrice(): void
     {
+        // Load medicine if not already loaded
+        if (! $this->relationLoaded('medicine') && $this->medicine_id) {
+            $this->load('medicine');
+        }
+
         if (! $this->medicine) {
             return;
         }

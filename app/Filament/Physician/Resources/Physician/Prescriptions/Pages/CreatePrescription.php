@@ -148,7 +148,6 @@ class CreatePrescription extends CreateRecord
                                         return;
                                     }
 
-                                    // Get medicine details
                                     $medicine = self::getMedicineDetails($state);
 
                                     if ($medicine) {
@@ -156,21 +155,17 @@ class CreatePrescription extends CreateRecord
                                         $set('volume_per_unit', $medicine['volume_per_unit']);
                                         $set('unit_label', $medicine['unit_label']);
 
-                                        // Reset dosage fields
                                         $set('dose_amount', null);
                                         $set('frequency_per_day', null);
-                                        $set('frequency', null);
                                         $set('duration_days', null);
                                         $set('quantity', null);
                                         $set('total_volume_required', null);
                                     }
 
-                                    // Update pricing
                                     self::updatePricing($state, $get, $set);
                                 })
                                 ->columns(3),
 
-                            // Dosage amount field - label changes based on medicine type
                             TextInput::make('dose_amount')
                                 ->label(fn (Get $get) => $get('medicine_type') === 'volume'
                                         ? 'How many ml'
@@ -199,13 +194,12 @@ class CreatePrescription extends CreateRecord
                                     'TDS' => 'TDS (every 8 hours / 3x per day)',
                                     'QID' => 'QID (every 6 hours / 4x per day)',
                                     'Nocte' => 'Nocte (once at night)',
-                                    'Other' => 'Other',
                                 ])
                                 ->required()
                                 ->searchable()
                                 ->live()
+                                ->dehydrated(true)
                                 ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                                    // Map frequency codes to times per day
                                     $frequencyMap = [
                                         'OD' => 1,
                                         'Stat' => 1,
@@ -213,8 +207,7 @@ class CreatePrescription extends CreateRecord
                                         'TDS' => 3,
                                         'QID' => 4,
                                         'Nocte' => 1,
-                                        'PRN' => 1, // Default for PRN
-                                        'Other' => null,
+                                        'PRN' => 1,
                                     ];
 
                                     $timesPerDay = $frequencyMap[$state] ?? null;
@@ -223,17 +216,6 @@ class CreatePrescription extends CreateRecord
                                     // Recalculate quantity
                                     self::calculateQuantity($get, $set);
                                 }),
-
-                            // Custom frequency input (only shown when "Other" is selected)
-                            TextInput::make('frequency_per_day')
-                                ->label('Times per day')
-                                ->numeric()
-                                ->minValue(1)
-                                ->required(fn (Get $get) => $get('frequency') === 'Other')
-                                ->visible(fn (Get $get) => $get('frequency') === 'Other')
-                                ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, Get $get, Set $set) => self::calculateQuantity($get, $set)
-                                ),
 
                             // Duration in days
                             TextInput::make('duration_days')
@@ -254,70 +236,25 @@ class CreatePrescription extends CreateRecord
                                 ->dehydrated()
                                 ->visible(fn (Get $get) => $get('unit_price')),
 
-                            // // Calculated fields display - showing what was calculated
-                            // Grid::make(3)
-                            //     ->schema([
-                            //         Placeholder::make('total_volume_display')
-                            //             ->label(fn (Get $get) => $get('medicine_type') === 'volume'
-                            //                     ? 'Total ml Required'
-                            //                     : 'Total Required'
-                            //             )
-                            //             ->content(fn (Get $get) => $get('total_volume_required')
-                            //                     ? number_format($get('total_volume_required'), 1).' '.($get('unit_label') ?? 'units')
-                            //                     : 'N/A'
-                            //             )
-                            //             ->visible(fn (Get $get) => $get('dose_amount') && $get('frequency_per_day') && $get('duration_days')
-                            //             ),
+                            TextInput::make('frequency_per_day')
+                                ->numeric(),
 
-                            //         Placeholder::make('quantity_display')
-                            //             ->label(fn (Get $get) => $get('medicine_type') === 'volume'
-                            //                     ? 'Bottles Needed'
-                            //                     : 'Quantity'
-                            //             )
-                            //             ->content(fn (Get $get) => $get('quantity')
-                            //                     ? number_format($get('quantity')).' '.($get('medicine_type') === 'volume' ? 'bottle(s)' : 'unit(s)')
-                            //                     : 'N/A'
-                            //             )
-                            //             ->visible(fn (Get $get) => $get('quantity')),
-
-                            //     ])
-                            //     ->columnSpanFull(),
-
-                            // Hidden fields to store calculated values
                             TextInput::make('quantity')
                                 ->numeric()
-                                ->disabled() // Read-only, auto-calculated
-                                ->dehydrated(), // But still saved to database
+                                ->disabled(),
 
                             TextInput::make('total_volume_required')
-                                ->numeric()
-                                ->hidden()
-                                ->dehydrated(),
+                                ->numeric(),
 
-                            TextInput::make('frequency_per_day')
-                                ->numeric()
-                                ->hidden()
-                                ->dehydrated()
-                                ->visible(fn (Get $get) => $get('frequency') !== 'Other'),
+                            TextInput::make('medicine_type'),
 
-                            TextInput::make('medicine_type')
-                                ->hidden()
-                                ->dehydrated(false),
+                            TextInput::make('volume_per_unit'),
 
-                            TextInput::make('volume_per_unit')
-                                ->hidden()
-                                ->dehydrated(false),
-
-                            TextInput::make('unit_label')
-                                ->hidden()
-                                ->dehydrated(false),
+                            TextInput::make('unit_label'),
 
                             TextInput::make('supplier_price')
-                                ->numeric()
-                                ->hidden()
-                                ->dehydrated(false),
+                                ->numeric(),
 
-                            // Total Price - visible and editable
                             TextInput::make('total_price')
                                 ->label('Total Price')
                                 ->numeric()
