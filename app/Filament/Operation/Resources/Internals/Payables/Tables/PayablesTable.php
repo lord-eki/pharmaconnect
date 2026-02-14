@@ -4,11 +4,12 @@ namespace App\Filament\Operation\Resources\Internals\Payables\Tables;
 
 use App\Models\Commission;
 use App\Models\Payable;
+use App\Models\Payment;
+use Auth;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Forms\Components\Builder;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -19,6 +20,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class PayablesTable
@@ -96,7 +98,6 @@ class PayablesTable
             ])
             ->recordActions([
                 ActionGroup::make([
-
                     Action::make('mark_paid')
                         ->label('Mark as Paid')
                         ->icon('heroicon-o-check-circle')
@@ -119,36 +120,57 @@ class PayablesTable
                                 ->required(),
                         ])
                         ->action(function (Payable $record, array $data) {
-                            DB::transaction(function () use ($record, $data)
-                            {
+                            DB::transaction(function () use ($record, $data) {
 
-                            $record->update($data);
 
-                            if ($record->transaction) {
-                                $record->transaction()->update([
-                                    'status' => 'completed',
-                                    'completed_at' => $data['paid_at'],
-                                ]);
-                            }
+                                // Update the payable record
+                                $record->update($data);
 
-                            if ($record->vendor_type === 'physician' && $record->order_id) {
-                                Commission::where('order_id', $record->order_id)
-                                    ->where('physician_id', $record->vendor_id)
-                                    ->whereIn('status', ['pending', 'approved'])
-                                    ->update([
-                                        'status' => 'paid',
-                                        'paid_at' => $data['paid_at'],
-                                        'payment_reference' => $data['gateway_reference'] ?? null,
+                                // Update related transaction if exists
+                                if ($record->transaction) {
+                                    $record->transaction()->update([
+                                        'status' => 'completed',
+                                        'completed_at' => $data['paid_at'],
                                     ]);
-                            }
-                        });
+                                }
+
+                                // Handle physician commissions
+                                if ($record->vendor_type === 'physician' && $record->order_id) {
+                                    $commission = Commission::where('order_id', $record->order_id)
+                                        ->where('physician_id', $record->vendor_id)
+                                        ->whereIn('status', ['pending', 'approved'])
+                                        ->first();
+
+                                    if ($commission) {
+                                        if ($commission->status === 'pending') {
+                                            $commission->approve(auth()->id());
+                                        }
+
+                                        $commission->processPayout($data['gateway_reference'] ?? 'MANUAL-'.now()->timestamp);
+                                    }
+                                }
+
+                                if ($record->vendor_type === 'supplier') {
+                                    Payment::create([
+                                        'payment_reference' => $data['gateway_reference'] ?? 'MANUAL-'.now()->timestamp,
+                                        'payee_id' => $record->vendor_id,
+                                        'payer_id' => Auth::id(),
+                                        'order_id' => $record->order_id,
+                                        'amount' => $record->amount,
+                                        'currency' => 'KES',
+                                        'payment_method' => $data['payment_method'],
+                                        'status' => 'completed',
+                                        'processed_at' => $data['paid_at'],
+                                        'notes' => "Supplier payment for order {$record->order->order_number}",
+                                    ]);
+                                }
+                            });
 
                             Notification::make()
                                 ->success()
                                 ->title('Payment Recorded')
-                                ->body('The payable has been marked as paid.')
+                                ->body("The {$record->vendor_type} payable has been marked as paid.")
                                 ->send();
-
                         }),
                 ]),
             ])

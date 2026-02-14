@@ -16,7 +16,7 @@ class ListFinancials extends ListRecords
 
     public function getTabs(): array
     {
-        $supplierId = Auth::user()->supplier;
+        $supplierId = Auth::user()->supplier->user_id;
 
         return [
             'all' => Tab::make('All Payments')

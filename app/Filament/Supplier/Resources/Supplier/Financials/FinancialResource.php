@@ -31,11 +31,11 @@ class FinancialResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $supplierId = Auth::user()->userProfile->id ?? null;
+        $supplierId = Auth::user()->supplier->user_id;
 
         return parent::getEloquentQuery()
             ->where('payee_id', $supplierId)
-            ->with(['order.prescription.patient', 'order.prescription.physician']);
+            ->with(['order.prescription.patient', 'order.prescription.physician','order.deliveries']);
     }
 
     public static function form(Schema $schema): Schema

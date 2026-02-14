@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Auth;
 
 class Commission extends Model
 {
@@ -95,6 +96,8 @@ class Commission extends Model
         Payment::create([
             'payment_reference' => $paymentReference,
             'payee_id' => $this->physician_id,
+            'payer_id' =>Auth::id(),
+            'order_id' => $this->order_id,
             'amount' => $this->commission_amount,
             'currency' => 'KES',
             'payment_method' => 'bank_transfer',

@@ -429,6 +429,7 @@ class Order extends Model
         return $this->hasMany(Invoice::class);
     }
 
+
     public function commission(): HasOne
     {
         return $this->hasOne(Commission::class);
