@@ -2,12 +2,14 @@
 
 namespace App\Filament\Operation\Resources\Internals\Receivables\Tables;
 
+use App\Filament\Exports\ReceivableExporter;
 use App\Models\Receivable;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ExportAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
@@ -271,6 +273,13 @@ class ReceivablesTable
                                 ->send();
                         }),
                 ]),
+            ])
+            ->headerActions([
+               ExportAction::make()
+                    ->exporter(ReceivableExporter::class)
+                    ->label('Export')
+                    ->color('success')
+                    ->icon('heroicon-o-arrow-down-tray'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Operation\Resources\Internals\Payables\Tables;
 
+use App\Filament\Exports\PayableExporter;
 use App\Models\Commission;
 use App\Models\Payable;
 use App\Models\Payment;
@@ -10,6 +11,7 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -173,6 +175,13 @@ class PayablesTable
                                 ->send();
                         }),
                 ]),
+            ])
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(PayableExporter::class)
+                    ->label('Export')
+                    ->color('success')
+                    ->icon('heroicon-o-arrow-down-tray'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
