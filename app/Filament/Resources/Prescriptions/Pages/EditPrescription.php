@@ -3,17 +3,17 @@
 namespace App\Filament\Resources\Prescriptions\Pages;
 
 use App\Filament\Resources\Prescriptions\PrescriptionResource;
-use Filament\Actions\CreateAction;
-use Filament\Resources\Pages\ManageRecords;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
 
-class ManagePrescriptions extends ManageRecords
+class EditPrescription extends EditRecord
 {
     protected static string $resource = PrescriptionResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->icon('heroicon-o-plus-circle')->label('Add Prescription'),
+            DeleteAction::make(),
         ];
     }
 }
