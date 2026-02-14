@@ -156,12 +156,6 @@ class OrderReportsTable
                         ->whereNotIn('status', ['delivered', 'cancelled'])
                     )
                     ->toggle(),
-
-                SelectFilter::make('physician')
-                    ->relationship('quotation.prescription.physician', 'name')
-                    ->searchable()
-                    ->preload()
-                    ->multiple(),
             ])->actions([
                 Action::make('view')
                     ->url(fn (Order $record): string => OrderResource::getUrl('view', ['record' => $record]))
@@ -213,9 +207,6 @@ class OrderReportsTable
             fputcsv($file, [
                 'Order Number',
                 'Status',
-                'Prescription Number',
-                'Physician',
-                'Patient',
                 'Amount (KES)',
                 'Items Count',
                 'Ordered Date',
@@ -225,15 +216,9 @@ class OrderReportsTable
 
             // CSV Data
             foreach ($orders as $order) {
-                $prescription = $order->quotation->prescription;
-                $patient = $prescription->patient;
-
                 fputcsv($file, [
                     $order->order_number,
                     $order->status,
-                    $prescription->prescription_number,
-                    $prescription->physician->name ?? 'N/A',
-                    $patient ? "{$patient->first_name} {$patient->last_name}" : 'N/A',
                     number_format($order->supplier_total, 2),
                     $order->items->count(),
                     $order->ordered_at?->format('Y-m-d H:i:s'),
