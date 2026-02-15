@@ -278,7 +278,7 @@ class ReceivablesTable
                ExportAction::make()
                     ->exporter(ReceivableExporter::class)
                     ->label('Export')
-                    ->color('success')
+                    ->color('primary')
                     ->icon('heroicon-o-arrow-down-tray'),
             ])
             ->toolbarActions([

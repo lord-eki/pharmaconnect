@@ -15,11 +15,11 @@
         .header {
             text-align: center;
             margin-bottom: 30px;
-            border-bottom: 3px solid #2563eb;
+            border-bottom: 3px solid #ff6b35;
             padding-bottom: 20px;
         }
         .header h1 {
-            color: #2563eb;
+            color: #ff6b35;
             margin: 0;
             font-size: 24px;
         }
@@ -33,7 +33,7 @@
             margin-bottom: 20px;
         }
         .section-title {
-            background-color: #2563eb;
+            background-color: #ff6b35;
             color: white;
             padding: 8px 12px;
             font-weight: bold;
@@ -59,7 +59,7 @@
             background-color: #f3f4f6;
             padding: 8px;
             text-align: left;
-            border-bottom: 2px solid #2563eb;
+            border-bottom: 2px solid #ff6b35;
         }
         table.items-table td {
             padding: 8px;
@@ -70,7 +70,7 @@
             padding: 8px;
         }
         table.items-table tfoot tr:last-child {
-            border-top: 2px solid #2563eb;
+            border-top: 2px solid #ff6b35;
         }
         .order-section {
             margin-bottom: 20px;

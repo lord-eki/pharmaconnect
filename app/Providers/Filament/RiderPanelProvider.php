@@ -27,7 +27,7 @@ class RiderPanelProvider extends PanelProvider
             ->id('Rider')
             ->path('rider')->login()
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::Orange,
             ])->login()
             ->discoverResources(in: app_path('Filament/Rider/Resources'), for: 'App\Filament\Rider\Resources')
             ->discoverPages(in: app_path('Filament/Rider/Pages'), for: 'App\Filament\Rider\Pages')

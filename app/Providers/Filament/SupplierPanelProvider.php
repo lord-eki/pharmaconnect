@@ -29,7 +29,7 @@ class SupplierPanelProvider extends PanelProvider
             ->id('Supplier')
             ->path('supplier')
             ->colors([
-                'primary' => Color::Blue,
+                'primary' => Color::Orange,
             ])->login()
             ->discoverResources(in: app_path('Filament/Supplier/Resources'), for: 'App\Filament\Supplier\Resources')
             ->discoverPages(in: app_path('Filament/Supplier/Pages'), for: 'App\Filament\Supplier\Pages')

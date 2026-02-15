@@ -180,7 +180,7 @@ class PayablesTable
                 ExportAction::make()
                     ->exporter(PayableExporter::class)
                     ->label('Export')
-                    ->color('success')
+                    ->color(color: 'primary')
                     ->icon('heroicon-o-arrow-down-tray'),
             ])
             ->toolbarActions([

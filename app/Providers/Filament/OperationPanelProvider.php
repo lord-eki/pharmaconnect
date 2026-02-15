@@ -26,7 +26,7 @@ class OperationPanelProvider extends PanelProvider
             ->id('Operation')
             ->path('operation')
             ->colors([
-                'primary' => Color::Red,
+                'primary' => Color::Orange,
             ])->login()
             ->discoverResources(in: app_path('Filament/Operation/Resources'), for: 'App\Filament\Operation\Resources')
             ->discoverPages(in: app_path('Filament/Operation/Pages'), for: 'App\Filament\Operation\Pages')

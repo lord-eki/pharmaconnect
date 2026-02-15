@@ -164,7 +164,7 @@ class OrderReportsTable
             ])
             ->headerActions([
                 Action::make('export_csv')
-                    ->label('Export CSV')
+                    ->label('Export CSV')->outlined()
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('success')
                     ->action(function ($livewire) {
@@ -172,7 +172,7 @@ class OrderReportsTable
                     }),
 
                 Action::make('export_pdf')
-                    ->label('Export PDF')
+                    ->label('Export PDF')->outlined()
                     ->icon('heroicon-o-document-text')
                     ->color('danger')
                     ->action(function ($livewire) {

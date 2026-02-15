@@ -26,7 +26,7 @@ class InsurerPanelProvider extends PanelProvider
             ->id('Insurer')
             ->path('insurer')
             ->colors([
-                'primary' => Color::Indigo,
+                'primary' => Color::Orange,
             ])->login()
             ->discoverResources(in: app_path('Filament/Insurer/Resources'), for: 'App\Filament\Insurer\Resources')
             ->discoverPages(in: app_path('Filament/Insurer/Pages'), for: 'App\Filament\Insurer\Pages')

@@ -206,26 +206,6 @@ class ViewDelivery extends ViewRecord
                     ])
                     ->columns(3),
 
-                Section::make('Tracking')
-                    ->schema([
-                        TextEntry::make('tracking_count')
-                            ->label('Tracking Points')
-                            ->state(fn ($record) => $record->tracking()->count()),
-
-                        TextEntry::make('current_location')
-                            ->label('Last Known Location')
-                            ->state(function ($record) {
-                                $service = app(DeliveryTrackingService::class);
-                                $location = $service->getCurrentLocation($record);
-
-                                return $location ?
-                                    "Lat: {$location['lat']}, Lng: {$location['lng']} ({$location['time_ago']})" :
-                                    'No tracking data';
-                            })
-                            ->columnSpanFull(),
-                    ])
-                    ->columns(2)
-                    ->visible(fn ($record) => in_array($record->status, ['picked_up', 'in_transit', 'delivered'])),
             ]);
     }
 

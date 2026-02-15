@@ -7,7 +7,7 @@
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
     
-    <div style="background-color: #2563eb; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+    <div style="background-color: #ff6b35; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
         <h1 style="margin: 0; font-size: 28px;">Delivery Confirmed!</h1>
         <p style="margin: 10px 0 0 0; font-size: 16px;">Your order has been successfully delivered</p>
     </div>
@@ -23,7 +23,7 @@
         </p>
 
         <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e5e7eb;">
-            <h2 style="color: #2563eb; font-size: 18px; margin-top: 0;">Delivery Details</h2>
+            <h2 style="color: #ff6b35; font-size: 18px; margin-top: 0;">Delivery Details</h2>
             
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
@@ -59,7 +59,7 @@
 
         @if($orders && $orders->count() > 0)
         <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e5e7eb;">
-            <h2 style="color: #2563eb; font-size: 18px; margin-top: 0;">Order Summary</h2>
+            <h2 style="color: #ff6b35; font-size: 18px; margin-top: 0;">Order Summary</h2>
             
             @foreach($orders as $order)
                 @if($orders->count() > 1)
@@ -110,16 +110,16 @@
                         <td colspan="2" style="padding: 10px 0; text-align: right; font-weight: bold;">Delivery Fee:</td>
                         <td style="padding: 10px 0; text-align: right; font-weight: bold;">KES {{ number_format($delivery->delivery_fee, 2) }}</td>
                     </tr>
-                    <tr style="border-top: 2px solid #2563eb;">
+                    <tr style="border-top: 2px solid #ff6b35;">
                         <td colspan="2" style="padding: 10px 0; text-align: right; font-weight: bold; font-size: 16px;">Total:</td>
-                        <td style="padding: 10px 0; text-align: right; font-weight: bold; font-size: 16px; color: #2563eb;">KES {{ number_format($orders->sum('total_amount') + $delivery->delivery_fee, 2) }}</td>
+                        <td style="padding: 10px 0; text-align: right; font-weight: bold; font-size: 16px; color: #ff6b35;">KES {{ number_format($orders->sum('total_amount') + $delivery->delivery_fee, 2) }}</td>
                     </tr>
                 </tfoot>
             </table>
         </div>
         @endif
 
-        <div style="background-color: #dbeafe; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #2563eb;">
+        <div style="background-color: #fff5f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ff6b35;">
             <p style="margin: 0; font-size: 14px;">
                 <strong>📋 Attached:</strong> Your detailed delivery note is attached to this email as a PDF document for your records.
             </p>
