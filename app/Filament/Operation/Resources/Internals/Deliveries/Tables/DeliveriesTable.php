@@ -2,7 +2,6 @@
 
 namespace App\Filament\Operation\Resources\Internals\Deliveries\Tables;
 
-use App\Jobs\GenerateDeliveryNoteJob;
 use App\Jobs\BulkGenerateDeliveryNotesJob;
 use App\Jobs\SendDeliveryNoteEmailJob;
 use App\Models\Rider;
@@ -235,7 +234,7 @@ class DeliveriesTable
 
                     Action::make('generate_delivery_note')
                         ->label('Generate Note')
-                        ->icon('heroicon-o-document-text')
+                        ->icon('heroicon-o-document-plus')
                         ->color('success')
                         ->visible(fn ($record) => $record->status === 'delivered' && ! $record->delivery_note_document_id)
                         ->form([
@@ -244,23 +243,38 @@ class DeliveriesTable
                                 ->default(true)
                                 ->helperText('The delivery note will be sent to the patient\'s email address'),
                         ])
-                        ->action(function ($record, array $data) {
+                        ->action(function ($record, array $data, DeliveryNoteService $service) {
                             try {
-                                // Dispatch job to queue
-                                GenerateDeliveryNoteJob::dispatch(
-                                    $record,
-                                    auth()->user(),
-                                    $data['send_email'] ?? false
-                                );
+                                // Generate synchronously
+                                if ($data['send_email'] ?? false) {
+                                    $result = $service->generateAndSendDeliveryNote($record, auth()->user());
 
-                                Notification::make()
-                                    ->title('Generation Queued')
-                                    ->body('Delivery note is being generated in the background. You\'ll be notified when it\'s ready.')
-                                    ->info()
-                                    ->send();
+                                    if ($result['success']) {
+                                        $message = 'Delivery note generated successfully';
+                                        if ($result['email_sent']) {
+                                            $message .= ' and sent to patient';
+                                        }
+
+                                        Notification::make()
+                                            ->title('Success')
+                                            ->body($message)
+                                            ->success()
+                                            ->send();
+                                    } else {
+                                        throw new \Exception($result['error'] ?? 'Unknown error');
+                                    }
+                                } else {
+                                    $document = $service->generateDeliveryNote($record, auth()->user());
+
+                                    Notification::make()
+                                        ->title('Delivery Note Generated')
+                                        ->body('You can now view or download the delivery note')
+                                        ->success()
+                                        ->send();
+                                }
                             } catch (\Exception $e) {
                                 Notification::make()
-                                    ->title('Queue Failed')
+                                    ->title('Generation Failed')
                                     ->body($e->getMessage())
                                     ->danger()
                                     ->send();
@@ -426,17 +440,19 @@ class DeliveriesTable
                         ->form([
                             Checkbox::make('send_emails')
                                 ->label('Send emails to patients')
-                                ->default(true)
+                                ->default(false)
                                 ->helperText('Delivery notes will be sent to each patient\'s email address'),
+                            Checkbox::make('use_queue')
+                                ->label('Process in background (recommended for large batches)')
+                                ->default(true)
+                                ->helperText('Generate notes in the background to avoid timeouts'),
                         ])
-                        ->action(function (Collection $records, array $data) {
-                            $deliveryIds = $records
+                        ->action(function (Collection $records, array $data, DeliveryNoteService $service) {
+                            $deliveries = $records
                                 ->where('status', 'delivered')
-                                ->whereNull('delivery_note_document_id')
-                                ->pluck('id')
-                                ->toArray();
+                                ->whereNull('delivery_note_document_id');
 
-                            if (empty($deliveryIds)) {
+                            if ($deliveries->isEmpty()) {
                                 Notification::make()
                                     ->title('No Eligible Deliveries')
                                     ->body('None of the selected deliveries are eligible for note generation.')
@@ -445,22 +461,59 @@ class DeliveriesTable
                                 return;
                             }
 
-                            try {
-                                // Dispatch bulk job
-                                BulkGenerateDeliveryNotesJob::dispatch(
-                                    $deliveryIds,
-                                    auth()->user(),
-                                    $data['send_emails'] ?? false
-                                );
+                            $deliveryIds = $deliveries->pluck('id')->toArray();
 
-                                Notification::make()
-                                    ->title('Bulk Generation Started')
-                                    ->body(count($deliveryIds) . ' delivery notes are being generated in the background.')
-                                    ->info()
-                                    ->send();
+                            try {
+                                if ($data['use_queue'] ?? true) {
+                                    // Use queue for large batches
+                                    BulkGenerateDeliveryNotesJob::dispatch(
+                                        $deliveryIds,
+                                        auth()->user(),
+                                        $data['send_emails'] ?? false
+                                    );
+
+                                    Notification::make()
+                                        ->title('Bulk Generation Started')
+                                        ->body(count($deliveryIds) . ' delivery notes are being generated in the background.')
+                                        ->info()
+                                        ->send();
+                                } else {
+                                    // Generate synchronously
+                                    $successCount = 0;
+                                    $failCount = 0;
+                                    
+                                    foreach ($deliveries as $delivery) {
+                                        try {
+                                            if ($data['send_emails'] ?? false) {
+                                                $result = $service->generateAndSendDeliveryNote($delivery, auth()->user());
+                                                if ($result['success']) {
+                                                    $successCount++;
+                                                } else {
+                                                    $failCount++;
+                                                }
+                                            } else {
+                                                $service->generateDeliveryNote($delivery, auth()->user());
+                                                $successCount++;
+                                            }
+                                        } catch (\Exception $e) {
+                                            $failCount++;
+                                        }
+                                    }
+                                    
+                                    $message = "{$successCount} delivery notes generated successfully";
+                                    if ($failCount > 0) {
+                                        $message .= ", {$failCount} failed";
+                                    }
+                                    
+                                    Notification::make()
+                                        ->title('Bulk Generation Complete')
+                                        ->body($message)
+                                        ->success()
+                                        ->send();
+                                }
                             } catch (\Exception $e) {
                                 Notification::make()
-                                    ->title('Queue Failed')
+                                    ->title('Generation Failed')
                                     ->body($e->getMessage())
                                     ->danger()
                                     ->send();
