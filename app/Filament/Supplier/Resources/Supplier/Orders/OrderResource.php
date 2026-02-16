@@ -16,6 +16,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
@@ -75,26 +76,31 @@ class OrderResource extends Resource
                                     ->badge()
                                     ->color('primary')
                                     ->copyable(),
-
-                                TextEntry::make('status')
-                                    ->label('Status')
+                                TextColumn::make('status')
                                     ->badge()
                                     ->color(fn (string $state): string => match ($state) {
-                                        'pending' => 'warning',
-                                        'confirmed' => 'info',
+                                        'pending_review' => 'gray',
+                                        'sent_to_supplier' => 'info',
+                                        'confirmed' => 'success',
                                         'processing' => 'primary',
-                                        'shipped' => 'success',
+                                        'shipped' => 'indigo',
                                         'delivered' => 'success',
                                         'cancelled' => 'danger',
+                                        'pending_reassignment' => 'warning',      
+                                        'needs_manual_assignment' => 'danger',    
                                         default => 'gray',
-                                    })->formatStateUsing(fn (string $state): string => match ($state) {
-                                        'pending' => 'Pending',
+                                    })
+                                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                                        'pending_review' => 'Pending Review',
+                                        'sent_to_supplier' => 'Sent to Supplier',
                                         'confirmed' => 'Confirmed',
                                         'processing' => 'Processing',
                                         'shipped' => 'Shipped',
                                         'delivered' => 'Delivered',
                                         'cancelled' => 'Cancelled',
-                                        'sent_to_supplier' => 'Pending',
+                                        'pending_reassignment' => 'Pending Reassignment',          
+                                        'needs_manual_assignment' => 'Needs Manual Assignment',    
+                                        default => ucfirst(str_replace('_', ' ', $state)),
                                     }),
 
                                 TextEntry::make('supplier_total')
@@ -111,23 +117,23 @@ class OrderResource extends Resource
 
                         Grid::make(3)
                             ->schema([
-                                                TextEntry::make('expected_delivery')
-                                                    ->label('Expected Delivery')
-                                                    ->dateTime()
-                                                    ->color(fn ($state, $record) => $state && $state->isPast() && $record->status !== 'delivered'
-                                                            ? 'danger'
-                                                            : 'success'
-                                                    ),
+                                TextEntry::make('expected_delivery')
+                                    ->label('Expected Delivery')
+                                    ->dateTime()
+                                    ->color(fn ($state, $record) => $state && $state->isPast() && $record->status !== 'delivered'
+                                            ? 'danger'
+                                            : 'success'
+                                    ),
 
-                                                TextEntry::make('delivered_at')
-                                                    ->label('Delivered At')
-                                                    ->dateTime()
-                                                    ->placeholder('Not delivered yet'),
+                                TextEntry::make('delivered_at')
+                                    ->label('Delivered At')
+                                    ->dateTime()
+                                    ->placeholder('Not delivered yet'),
 
-                                                TextEntry::make('updated_at')
-                                                    ->label('Last Updated')
-                                                    ->since(),
-                                            ]),
+                                TextEntry::make('updated_at')
+                                    ->label('Last Updated')
+                                    ->since(),
+                            ]),
                     ]),
 
                 Section::make('Order Items')
@@ -136,44 +142,44 @@ class OrderResource extends Resource
                             ->label('')
                             ->schema([
                                 Grid::make(4)
-                                                    ->schema([
-                                                        TextEntry::make('medicine.generic_name')
-                                                            ->label('Medicine')
-                                                            ->formatStateUsing(fn ($record) => $record->medicine
-                                                                    ? "{$record->medicine->generic_name} - {$record->medicine->brand_name} ({$record->medicine->strength})"
-                                                                    : 'N/A'
-                                                            )
-                                                            ->columnSpan(2),
+                                    ->schema([
+                                        TextEntry::make('medicine.generic_name')
+                                            ->label('Medicine')
+                                            ->formatStateUsing(fn ($record) => $record->medicine
+                                                    ? "{$record->medicine->generic_name} - {$record->medicine->brand_name} ({$record->medicine->strength})"
+                                                    : 'N/A'
+                                            )
+                                            ->columnSpan(2),
 
-                                                        TextEntry::make('quantity')
-                                                            ->label('Quantity')
-                                                            ->numeric()
-                                                            ->badge(),
+                                        TextEntry::make('quantity')
+                                            ->label('Quantity')
+                                            ->numeric()
+                                            ->badge(),
 
-                                                        TextEntry::make('supplier_price')
-                                                            ->label('Unit Price')
-                                                            ->money('KES'),
-                                                    ]),
+                                        TextEntry::make('supplier_price')
+                                            ->label('Unit Price')
+                                            ->money('KES'),
+                                    ]),
 
                                 Grid::make(2)
-                                                    ->schema([
+                                    ->schema([
                                         TextEntry::make('total_price')
-                                                            ->label('Total Price')
-                                                            ->money('KES')
-                                                            ->size('lg')
-                                                            ->weight('bold')
-                                                            ->formatStateUsing(fn (string $state, $record): string => 'KES '.$record->supplier_price * $record->quantity),
+                                            ->label('Total Price')
+                                            ->money('KES')
+                                            ->size('lg')
+                                            ->weight('bold')
+                                            ->formatStateUsing(fn (string $state, $record): string => 'KES '.$record->supplier_price * $record->quantity),
 
                                         TextEntry::make('status')
-                                                            ->label('Item Status')
-                                                            ->badge()
-                                                            ->color(fn (string $state): string => match ($state) {
-                                                                'pending' => 'warning',
-                                                                'confirmed' => 'info',
-                                                                'shipped' => 'success',
-                                                                'delivered' => 'success',
-                                                                default => 'gray',
-                                                            }),
+                                            ->label('Item Status')
+                                            ->badge()
+                                            ->color(fn (string $state): string => match ($state) {
+                                                'pending' => 'warning',
+                                                'confirmed' => 'info',
+                                                'shipped' => 'success',
+                                                'delivered' => 'success',
+                                                default => 'gray',
+                                            }),
                                     ]),
                             ])
                             ->columns(1)
@@ -190,8 +196,6 @@ class OrderResource extends Resource
         $pending = Order::where('supplier_id', $supplier->id)
             ->where('status', 'pending')
             ->count();
-
-
 
         return $pending > 0 ? (string) $pending : null;
     }

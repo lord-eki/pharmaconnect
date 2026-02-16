@@ -5,6 +5,7 @@ namespace App\Filament\Operation\Resources\Orders;
 use App\Filament\Operation\Resources\Orders\Pages\CreateOrder;
 use App\Filament\Operation\Resources\Orders\Pages\EditOrder;
 use App\Filament\Operation\Resources\Orders\Pages\ListOrders;
+use App\Filament\Operation\Resources\Orders\Pages\ManageRejectedOrder;
 use App\Filament\Operation\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Operation\Resources\Orders\Schemas\OrderForm;
 use App\Filament\Operation\Resources\Orders\Schemas\OrderInfolist;
@@ -51,6 +52,7 @@ class OrderResource extends Resource
             'create' => CreateOrder::route('/create'),
             'view' => ViewOrder::route('/{record}'),
             'edit' => EditOrder::route('/{record}/edit'),
+            'manage-rejected' => ManageRejectedOrder::route('/{record}/manage-rejected'),
         ];
     }
 

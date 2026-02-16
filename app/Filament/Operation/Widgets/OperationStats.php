@@ -73,16 +73,16 @@ class OperationStats extends StatsOverviewWidget
 
         return [
             // REVENUE METRICS
-            Stat::make('Today\'s Gross Revenue', 'KES '.number_format($todayMetrics['gross_revenue'], 2))
-                ->description($revenueChange >= 0
-                    ? 'Up '.number_format(abs($revenueChange), 1).'% from yesterday'
-                    : 'Down '.number_format(abs($revenueChange), 1).'% from yesterday')
-                ->descriptionIcon($revenueChange >= 0 ? 'heroicon-o-arrow-trending-up' : 'heroicon-o-arrow-trending-down')
-                ->color($revenueChange >= 0 ? 'success' : 'danger')
-                ->chart($this->getRevenueTrend())
-                ->url(route('filament.Operation.resources.orders.index', [
-                    'tableFilters' => ['status' => ['value' => 'delivered']],
-                ])),
+            // Stat::make('Today\'s Gross Revenue', 'KES '.number_format($todayMetrics['gross_revenue'], 2))
+            //     ->description($revenueChange >= 0
+            //         ? 'Up '.number_format(abs($revenueChange), 1).'% from yesterday'
+            //         : 'Down '.number_format(abs($revenueChange), 1).'% from yesterday')
+            //     ->descriptionIcon($revenueChange >= 0 ? 'heroicon-o-arrow-trending-up' : 'heroicon-o-arrow-trending-down')
+            //     ->color($revenueChange >= 0 ? 'success' : 'danger')
+            //     ->chart($this->getRevenueTrend())
+            //     ->url(route('filament.Operation.resources.orders.index', [
+            //         'tableFilters' => ['status' => ['value' => 'delivered']],
+            //     ])),
 
             Stat::make('Collected Revenue', 'KES '.number_format($todayMetrics['collected_revenue'], 2))
                 ->description('Payment received today ('.$todayMetrics['collection_rate'].'% collection rate)')
@@ -120,13 +120,13 @@ class OperationStats extends StatsOverviewWidget
                 ->chart($this->getOrderTrend(['confirmed', 'processing', 'shipped']))
                 ->url(route('filament.Operation.resources.orders.index')),
 
-            Stat::make('Delivered Today', $deliveredToday)
-                ->description('Successfully completed today')
-                ->descriptionIcon('heroicon-o-check-circle')
-                ->color('success')
-                ->url(route('filament.Operation.resources.orders.index', [
-                    'tableFilters' => ['status' => ['value' => 'delivered']],
-                ])),
+            // Stat::make('Delivered Today', $deliveredToday)
+            //     ->description('Successfully completed today')
+            //     ->descriptionIcon('heroicon-o-check-circle')
+            //     ->color('success')
+            //     ->url(route('filament.Operation.resources.orders.index', [
+            //         'tableFilters' => ['status' => ['value' => 'delivered']],
+            //     ])),
 
             // DELIVERY OVERVIEW
             Stat::make('Pending Deliveries', $pendingDeliveries)
@@ -157,35 +157,35 @@ class OperationStats extends StatsOverviewWidget
                 ->color($overduePayables > 0 ? 'danger' : 'success'),
 
             // PRESCRIPTIONS
-            Stat::make('Pending Prescriptions', $pendingPrescriptions)
-                ->description('Need quotation')
-                ->descriptionIcon('heroicon-o-document-text')
-                ->color($pendingPrescriptions > 15 ? 'danger' : 'warning')
-                ->url(route('filament.Admin.resources.prescriptions.index', [
-                    'tableFilters' => ['status' => ['value' => 'pending']],
-                ])),
+            // Stat::make('Pending Prescriptions', $pendingPrescriptions)
+            //     ->description('Need quotation')
+            //     ->descriptionIcon('heroicon-o-document-text')
+            //     ->color($pendingPrescriptions > 15 ? 'danger' : 'warning')
+            //     ->url(route('filament.Admin.resources.prescriptions.index', [
+            //         'tableFilters' => ['status' => ['value' => 'pending']],
+            //     ])),
 
-            Stat::make('Quoted Prescriptions', $quotedPrescriptions)
-                ->description('Awaiting approval')
-                ->descriptionIcon('heroicon-o-banknotes')
-                ->color('info')
-                ->url(route('filament.Admin.resources.prescriptions.index', [
-                    'tableFilters' => ['status' => ['value' => 'quoted']],
-                ])),
+            // Stat::make('Quoted Prescriptions', $quotedPrescriptions)
+            //     ->description('Awaiting approval')
+            //     ->descriptionIcon('heroicon-o-banknotes')
+            //     ->color('info')
+            //     ->url(route('filament.Admin.resources.prescriptions.index', [
+            //         'tableFilters' => ['status' => ['value' => 'quoted']],
+            //     ])),
 
             // INSURANCE CLAIMS
-            Stat::make('Pending Claims', $pendingClaims)
-                ->description('Require insurance review')
-                ->descriptionIcon('heroicon-o-shield-check')
-                ->color($pendingClaims > 20 ? 'warning' : 'success')
-                ->url(route('filament.Admin.resources.insurance-claims.index')),
+            // Stat::make('Pending Claims', $pendingClaims)
+            //     ->description('Require insurance review')
+            //     ->descriptionIcon('heroicon-o-shield-check')
+            //     ->color($pendingClaims > 20 ? 'warning' : 'success')
+            //     ->url(route('filament.Admin.resources.insurance-claims.index')),
 
             // RIDERS
-            Stat::make('Available Riders', $availableRiders.' / '.$totalActiveRiders)
-                ->description('Ready for dispatch')
-                ->descriptionIcon('heroicon-o-user-group')
-                ->color($availableRiders < 3 ? 'danger' : 'success')
-                ->url(route('filament.Operation.resources.internals.riders.index')),
+            // Stat::make('Available Riders', $availableRiders.' / '.$totalActiveRiders)
+            //     ->description('Ready for dispatch')
+            //     ->descriptionIcon('heroicon-o-user-group')
+            //     ->color($availableRiders < 3 ? 'danger' : 'success')
+            //     ->url(route('filament.Operation.resources.internals.riders.index')),
         ];
     }
 

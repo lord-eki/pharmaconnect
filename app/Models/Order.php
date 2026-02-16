@@ -29,6 +29,13 @@ class Order extends Model
         'delivered_at',
         'sent_to_supplier_at',
         'notes',
+        'is_rejected',
+        'rejection_reason',
+        'rejected_at',
+        'rejected_by',
+        'reassignment_count',
+        'original_supplier_id',
+        'reassignment_history',
     ];
 
     protected $casts = [
@@ -37,6 +44,9 @@ class Order extends Model
         'expected_delivery' => 'datetime',
         'delivered_at' => 'datetime',
         'sent_to_supplier_at' => 'datetime',
+        'is_rejected' => 'boolean',
+        'rejected_at' => 'datetime',
+        'reassignment_history' => 'array',
     ];
 
     protected static function boot()
@@ -429,7 +439,6 @@ class Order extends Model
         return $this->hasMany(Invoice::class);
     }
 
-
     public function commission(): HasOne
     {
         return $this->hasOne(Commission::class);
@@ -448,6 +457,80 @@ class Order extends Model
     public function getPrescriptionDelivery(): ?Delivery
     {
         return $this->prescription->delivery;
+    }
+
+    /**
+     * Reject order and prepare for reassignment
+     */
+    public function reject(string $reason, ?int $rejectedBy = null): bool
+    {
+        $reassignmentService = app(\App\Services\OrderReassignmentService::class);
+
+        return $reassignmentService->rejectOrder($this, $reason, $rejectedBy);
+    }
+
+    /**
+     * Check if order can be rejected
+     */
+    public function canBeRejected(): bool
+    {
+        return in_array($this->status, ['pending', 'sent_to_supplier', 'pending_review']);
+    }
+
+    /**
+     * Check if order needs manual reassignment
+     */
+    public function needsManualReassignment(): bool
+    {
+        return in_array($this->status, ['pending_reassignment', 'needs_manual_assignment']);
+    }
+
+    /**
+     * Get rejection history count
+     */
+    public function getRejectionCountAttribute(): int
+    {
+        return count($this->reassignment_history ?? []);
+    }
+
+    /**
+     * Check if order has been rejected before
+     */
+    public function hasBeenRejected(): bool
+    {
+        return $this->is_rejected || ! empty($this->reassignment_history);
+    }
+
+    /**
+     * Get all suppliers that have rejected this order
+     */
+    public function getRejectedSupplierIds(): array
+    {
+        $rejected = collect($this->reassignment_history ?? [])
+            ->pluck('rejected_supplier_id')
+            ->toArray();
+
+        if ($this->is_rejected && $this->supplier_id) {
+            $rejected[] = $this->supplier_id;
+        }
+
+        return array_unique($rejected);
+    }
+
+    /**
+     * Scope for orders pending reassignment
+     */
+    public function scopePendingReassignment($query)
+    {
+        return $query->whereIn('status', ['pending_reassignment', 'needs_manual_assignment']);
+    }
+
+    /**
+     * Scope for rejected orders
+     */
+    public function scopeRejected($query)
+    {
+        return $query->where('is_rejected', true);
     }
 
     /**
