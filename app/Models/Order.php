@@ -839,6 +839,76 @@ class Order extends Model
 
     }
 
+    /**
+     * Update order items before sending to supplier.
+     * Accepts an array of item data with optional 'remove' flag and updated 'quantity'.
+     * Recalculates total_amount after changes.
+     *
+     * @throws \Exception if order is not in pending_review status or all items are removed
+     */
+    public function updateOrderItems(array $items): bool
+    {
+        if ($this->status !== 'pending_review') {
+            throw new \Exception('Order items can only be edited while the order is in "Pending Review" status.');
+        }
+
+        return DB::transaction(function () use ($items) {
+            $itemsToKeep = collect($items)->where('remove', false);
+
+            if ($itemsToKeep->isEmpty()) {
+                throw new \Exception('Cannot remove all items from an order. Cancel the order instead.');
+            }
+
+            foreach ($items as $itemData) {
+                $orderItem = OrderItem::find($itemData['order_item_id']);
+
+                if (! $orderItem || $orderItem->order_id !== $this->id) {
+                    continue;
+                }
+
+                if (! empty($itemData['remove'])) {
+                    $orderItem->delete();
+
+                    Log::info('Order item removed during edit', [
+                        'order_id'      => $this->id,
+                        'order_item_id' => $orderItem->id,
+                        'medicine_id'   => $orderItem->medicine_id,
+                    ]);
+                } else {
+                    $newQty = (int) $itemData['quantity'];
+
+                    if ($newQty < 1) {
+                        throw new \Exception("Quantity for item {$orderItem->id} must be at least 1.");
+                    }
+
+                    $orderItem->update([
+                        'quantity'    => $newQty,
+                        'total_price' => $newQty * $orderItem->unit_price,
+                    ]);
+
+                    Log::info('Order item quantity updated', [
+                        'order_id'      => $this->id,
+                        'order_item_id' => $orderItem->id,
+                        'new_quantity'  => $newQty,
+                    ]);
+                }
+            }
+
+            // Recalculate order totals from remaining items
+            $this->refresh();
+            $newTotal = $this->items()->sum(DB::raw('quantity * unit_price'));
+
+            $this->update(['total_amount' => $newTotal]);
+
+            Log::info('Order total recalculated after item edit', [
+                'order_id'   => $this->id,
+                'new_total'  => $newTotal,
+            ]);
+
+            return true;
+        });
+    }
+
     // Cancel order
     public function cancel(string $reason): bool
     {

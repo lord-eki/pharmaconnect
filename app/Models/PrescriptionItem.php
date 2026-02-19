@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PrescriptionItem extends Model
 {
@@ -32,65 +34,66 @@ class PrescriptionItem extends Model
     ];
 
     protected $casts = [
-        'quantity' => 'integer',
-        'dose_amount' => 'decimal:2',
-        'frequency_per_day' => 'integer',
-        'duration_days' => 'integer',
+        'quantity'              => 'integer',
+        'dose_amount'           => 'decimal:2',
+        'frequency_per_day'     => 'integer',
+        'duration_days'         => 'integer',
         'total_volume_required' => 'decimal:2',
-        'unit_price' => 'decimal:2',
-        'total_price' => 'decimal:2',
+        'unit_price'            => 'decimal:2',
+        'supplier_price'        => 'decimal:2',
+        'total_price'           => 'decimal:2',
+    ];
+
+    // Frequency label → times per day
+    private const FREQUENCY_MAP = [
+        'OD'    => 1,
+        'Stat'  => 1,
+        'PRN'   => 1,
+        'Nocte' => 1,
+        'BDS'   => 2,
+        'TDS'   => 3,
+        'QID'   => 4,
     ];
 
     protected static function boot()
     {
         parent::boot();
 
-        static::saving(function ($item) {
-            // Load medicine if not already loaded
+        static::saving(function (PrescriptionItem $item) {
+            // 1. Load medicine relation if needed
             if (! $item->relationLoaded('medicine') && $item->medicine_id) {
                 $item->load('medicine');
             }
 
-            // Set measurement type and volume per unit from medicine
+            // 2. Derive medicine meta from the medicine model
             if ($item->medicine) {
-                // Only set if not already set
-                if (! $item->measurement_type) {
-                    $item->measurement_type = $item->medicine->measurement_type ?? 'discrete';
-                }
+                $item->measurement_type = $item->medicine->measurement_type ?? 'discrete';
+                $item->volume_per_unit  = $item->medicine->volume_per_unit;
 
-                if (! $item->volume_per_unit) {
-                    $item->volume_per_unit = $item->medicine->volume_per_unit;
-                }
-
-                // Set unit_of_measurement based on measurement_type
                 if (! $item->unit_of_measurement) {
-                    if ($item->measurement_type === 'volume') {
-                        $item->unit_of_measurement = 'ml';
-                    } else {
-                        $item->unit_of_measurement = $item->medicine->unit_of_measurement ?? 'unit';
-                    }
+                    $item->unit_of_measurement = $item->measurement_type === 'volume'
+                        ? 'ml'
+                        : ($item->medicine->unit_of_measurement ?? 'unit');
                 }
             }
 
-            // Calculate quantity and price
-            $item->calculateQuantityAndPrice();
-
-            // Auto-calculate total price if unit price and quantity are set
-            if ($item->quantity && $item->unit_price) {
-                $item->total_price = $item->quantity * $item->unit_price;
+            // 3. Derive frequency_per_day from the frequency string
+            if ($item->frequency && ! $item->frequency_per_day) {
+                $item->frequency_per_day = self::FREQUENCY_MAP[$item->frequency] ?? 1;
             }
 
-            dd($item); // Debugging line to check item state before saving
+            // 4. Calculate quantity, total_volume_required, pricing — all from scratch
+            $item->recalculate();
         });
 
-        static::saved(function ($item) {
+        static::saved(function (PrescriptionItem $item) {
+            // Keep prescription total in sync
             if ($item->prescription_id && $item->prescription) {
                 $item->prescription->updateTotalAmount();
             }
         });
 
-        static::deleted(function ($item) {
-            // Update prescription total when item is deleted
+        static::deleted(function (PrescriptionItem $item) {
             if ($item->prescription_id && $item->prescription) {
                 $item->prescription->updateTotalAmount();
             }
@@ -98,36 +101,81 @@ class PrescriptionItem extends Model
     }
 
     /**
-     * Calculate quantity and total price based on medicine type
+     * Full recalculation of quantity, total_volume_required, and pricing.
+     * Called automatically in the saving hook.
+     * Can also be called manually when editing items outside the form.
      */
-    public function calculateQuantityAndPrice(): void
+    public function recalculate(): void
     {
-        // Load medicine if not already loaded
-        if (! $this->relationLoaded('medicine') && $this->medicine_id) {
-            $this->load('medicine');
-        }
-
         if (! $this->medicine) {
+            Log::warning('PrescriptionItem::recalculate() — medicine not loaded', ['item_id' => $this->id ?? 'new']);
             return;
         }
 
-        // If dose_amount, frequency_per_day, and duration_days are set
+        // ── Step 1: derive frequency_per_day if not already set ──────────────
+        if (! $this->frequency_per_day && $this->frequency) {
+            $this->frequency_per_day = self::FREQUENCY_MAP[$this->frequency] ?? 1;
+        }
+
+        // ── Step 2: calculate quantity ───────────────────────────────────────
         if ($this->dose_amount && $this->frequency_per_day && $this->duration_days) {
             $calculation = $this->medicine->calculateRequiredQuantity(
-                $this->dose_amount,
-                $this->frequency_per_day,
-                $this->duration_days
+                (float) $this->dose_amount,
+                (int)   $this->frequency_per_day,
+                (int)   $this->duration_days
             );
 
             $this->total_volume_required = $calculation['total_required'];
-            $this->quantity = $calculation['quantity_needed'];
+            $this->quantity              = $calculation['quantity_needed'];
         }
 
-        // Calculate total price if unit_price is set
+        // ── Step 3: guard — quantity must exist by now ───────────────────────
+        if (empty($this->quantity)) {
+            throw new \RuntimeException(
+                "PrescriptionItem: cannot determine quantity for medicine_id={$this->medicine_id}. " .
+                "Provide dose_amount, frequency, and duration_days."
+            );
+        }
+
+        // ── Step 4: fetch best supplier price and apply markup ───────────────
+        $supplierPrice = DB::table('supplier_medicines')
+            ->where('medicine_id', $this->medicine_id)
+            ->where('is_available', true)
+            ->where('stock_quantity', '>=', $this->quantity)
+            ->orderBy('unit_price', 'asc')
+            ->value('unit_price');
+
+        if ($supplierPrice) {
+            try {
+                $pricingService = app(\App\Services\PricingService::class);
+                $pricing = $pricingService->calculateFinalPrice($supplierPrice, $this->medicine, $this->quantity);
+
+                $this->supplier_price = $pricing['supplier_price'];
+                $this->unit_price     = $pricing['final_unit_price'];
+                $this->markup_amount  = $pricing['markup_amount'] ?? null;
+            } catch (\Exception $e) {
+                Log::error('PrescriptionItem: pricing calculation failed', [
+                    'medicine_id' => $this->medicine_id,
+                    'error'       => $e->getMessage(),
+                ]);
+                // Fall back to raw supplier price
+                $this->supplier_price = $supplierPrice;
+                $this->unit_price     = $supplierPrice;
+            }
+        }
+
+        // ── Step 5: total price ──────────────────────────────────────────────
         if ($this->unit_price && $this->quantity) {
-            $this->total_price = $this->unit_price * $this->quantity;
+            $this->total_price = round((float) $this->unit_price * (int) $this->quantity, 2);
         }
+    }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // Legacy method — kept for any external callers, delegates to recalculate()
+    // ──────────────────────────────────────────────────────────────────────────
+    public function calculateQuantityAndPrice(): void
+    {
+        $this->recalculate();
     }
 
     /**
@@ -139,18 +187,22 @@ class PrescriptionItem extends Model
             return $this->dosage_instructions ?? 'N/A';
         }
 
-        $unit = $this->medicine->getDisplayUnit();
+        $unit = $this->medicine?->getDisplayUnit() ?? 'unit';
 
         return sprintf(
             '%s %s, %d times daily for %d days (Total: %s %s)',
-            number_format($this->dose_amount, 1),
+            number_format((float) $this->dose_amount, 1),
             $unit,
             $this->frequency_per_day,
             $this->duration_days,
-            number_format($this->total_volume_required, 1),
+            number_format((float) $this->total_volume_required, 1),
             $unit
         );
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Relations
+    // ──────────────────────────────────────────────────────────────────────────
 
     public function prescription(): BelongsTo
     {
@@ -167,19 +219,21 @@ class PrescriptionItem extends Model
         return $this->hasMany(QuotationItem::class);
     }
 
-    // Get the best available price for this item
+    // ──────────────────────────────────────────────────────────────────────────
+    // Availability helpers
+    // ──────────────────────────────────────────────────────────────────────────
+
     public function getBestPrice(): ?float
     {
-        $supplierMedicine = $this->medicine->supplierMedicines()
+        $sm = $this->medicine->supplierMedicines()
             ->where('is_available', true)
             ->where('stock_quantity', '>=', $this->quantity)
-            ->orderBy('unit_price', 'asc')
+            ->orderBy('unit_price')
             ->first();
 
-        return $supplierMedicine ? $supplierMedicine->unit_price * $this->quantity : null;
+        return $sm ? $sm->unit_price * $this->quantity : null;
     }
 
-    // Check if medicine is available
     public function isAvailable(): bool
     {
         return $this->medicine->supplierMedicines()
@@ -188,7 +242,6 @@ class PrescriptionItem extends Model
             ->exists();
     }
 
-    // Get available suppliers for this item
     public function getAvailableSuppliers()
     {
         return $this->medicine->supplierMedicines()

@@ -208,6 +208,87 @@ class OrdersTable
                 ActionGroup::make([
                     ViewAction::make(),
 
+                    Action::make('edit_items')
+                        ->label('Edit Order Items')
+                        ->icon('heroicon-o-pencil-square')
+                        ->color('warning')
+                        ->visible(fn (Order $record): bool => $record->status === 'pending_review')
+                        ->mountUsing(function (\Filament\Schemas\Schema  $form, Order $record) {
+                            $form->fill([
+                                'items' => $record->items->map(fn ($item) => [
+                                    'order_item_id' => $item->id,
+                                    'medicine_name'  => $item->medicine?->generic_name ?? $item->medicine?->name ?? 'Unknown',
+                                    'quantity'       => $item->quantity,
+                                    'unit_price'     => $item->unit_price,
+                                    'remove'         => false,
+                                ])->toArray(),
+                            ]);
+                        })
+                        ->form([
+                            \Filament\Forms\Components\Repeater::make('items')
+                                ->label('Order Items')
+                                ->schema([
+                                    \Filament\Forms\Components\Hidden::make('order_item_id'),
+
+                                    \Filament\Forms\Components\TextInput::make('medicine_name')
+                                        ->label('Medicine')
+                                        ->disabled()
+                                        ->columnSpan(2),
+
+                                    \Filament\Forms\Components\TextInput::make('quantity')
+                                        ->label('Quantity')
+                                        ->numeric()
+                                        ->minValue(1)
+                                        ->required()
+                                        ->columnSpan(1),
+
+                                    \Filament\Forms\Components\TextInput::make('unit_price')
+                                        ->label('Unit Price (KES)')
+                                        ->numeric()
+                                        ->disabled()
+                                        ->prefix('KES')
+                                        ->columnSpan(1),
+
+                                    \Filament\Forms\Components\Toggle::make('remove')
+                                        ->label('Remove this item')
+                                        ->helperText('Toggle ON to remove item from order')
+                                        ->default(false)
+                                        ->columnSpan(2),
+                                ])
+                                ->columns(2)
+                                ->addable(false)
+                                ->reorderable(false)
+                                ->itemLabel(fn (array $state): ?string => $state['medicine_name'] ?? null)
+                                ->collapsible(),
+                        ])
+                        ->action(function (Order $record, array $data): void {
+                            try {
+                                $record->updateOrderItems($data['items']);
+
+                                Notification::make()
+                                    ->title('Order Updated')
+                                    ->body('Order items have been updated successfully.')
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                \Log::error('Order Item Edit Error', [
+                                    'order_id' => $record->id,
+                                    'error'    => $e->getMessage(),
+                                ]);
+
+                                Notification::make()
+                                    ->title('Error updating order')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        })
+                        ->modalHeading('Edit Order Items')
+                        ->modalDescription('Modify quantities or remove items before sending to supplier.')
+                        ->modalSubmitActionLabel('Save Changes')
+                        ->modalWidth('2xl')
+                        ->tooltip('Edit order items before sending to supplier'),
+
                     Action::make('download_lpo')
                         ->label('Download LPO')
                         ->icon('heroicon-o-arrow-down-tray')
