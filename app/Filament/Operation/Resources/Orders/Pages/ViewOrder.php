@@ -16,7 +16,6 @@ class ViewOrder extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-        
 
             Action::make('send_to_supplier')
                 ->label('Send to Supplier')
@@ -32,13 +31,13 @@ class ViewOrder extends ViewRecord
                 ->action(function (array $data): void {
                     try {
                         $this->record->sendToSupplier($data['notes'] ?? null);
-                        
+
                         Notification::make()
                             ->title('Order sent to supplier')
-                            ->body("Order {$this->record->order_number} has been sent to {$this->record->supplier->name}")
+                            ->body("Order {$this->record->order_number} has been sent to {$this->record->supplier->company_name}")
                             ->success()
                             ->send();
-                        
+
                         $this->redirect(static::getResource()::getUrl('view', ['record' => $this->record]));
                     } catch (\Exception $e) {
                         Notification::make()
@@ -50,7 +49,7 @@ class ViewOrder extends ViewRecord
                 })
                 ->requiresConfirmation()
                 ->modalHeading('Send Order to Supplier')
-                ->modalDescription(fn () => "This will notify {$this->record->supplier->name} and make the order visible to them. They will be able to confirm and process the order.")
+                ->modalDescription(fn () => "This will notify {$this->record->supplier?->company_name} and make the order visible to them. They will be able to confirm and process the order.")
                 ->modalSubmitActionLabel('Send to Supplier'),
 
             Action::make('cancel')

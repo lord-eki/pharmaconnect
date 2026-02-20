@@ -126,7 +126,17 @@ class ExternalOrder extends Model
     }
 
     /**
-     * Submit external order and create supplier orders
+     * Submit external order — creates Order records in pending_review for
+     * the operations team to review and send to a supplier.
+     * Submit external order and create supplier orders.
+     *
+     * Supplier lookup uses the same cheapest-price logic that already
+     * determined the unit_price shown to the insurer when they built the order.
+     * So the supplier is effectively already known — we just resolve it again here.
+     *
+     * If a supplier cannot be found for any item (e.g. stock ran out between
+     * quote and submit), that item's order is flagged needs_manual_assignment
+     * so operations can fix it — the insurer sees a clean success either way.
      */
     public function submit(): bool
     {
@@ -135,47 +145,37 @@ class ExternalOrder extends Model
                 throw new \Exception('Cannot submit order without medicines');
             }
 
-            // Update status to submitted
             $this->status = 'submitted';
+            $this->ordered_at = $this->ordered_at ?? now();
             $this->save();
 
-            try {
-                // Create supplier orders from items
-                $this->createSupplierOrders();
+            $this->createSupplierOrders();
 
-                Log::info('External order submitted successfully', [
-                    'external_order_id' => $this->id,
-                    'order_number' => $this->order_number,
-                    'orders_count' => $this->orders()->count(),
-                ]);
-
-            } catch (\Exception $e) {
-                Log::error('Error creating supplier orders', [
-                    'external_order_id' => $this->id,
-                    'error' => $e->getMessage(),
-                ]);
-
-                // Revert to draft status if order creation fails
-                $this->status = 'draft';
-                $this->save();
-
-                throw $e;
-            }
+            Log::info('External order submitted successfully', [
+                'external_order_id' => $this->id,
+                'order_number'      => $this->order_number,
+                'orders_count'      => $this->orders()->count(),
+            ]);
 
             return true;
         });
     }
 
     /**
-     * Create supplier orders from external order items
-     * Similar to prescription flow but without prescription
+     * Group items by cheapest available supplier and create one Order per supplier.
+     *
+     * Items where no supplier has stock are collected into a separate
+     * needs_manual_assignment order so operations can source them manually.
+     * No exception is ever thrown to the insurer — all failures are handled
+     * gracefully and logged for operations to action.
      */
     protected function createSupplierOrders(): void
     {
-        // Group items by supplier
-        $itemsBySupplier = [];
-        
+        $itemsBySupplier  = [];   // supplierId => [['item' => ..., 'supplier_medicine' => ...]]
+        $unresolvableItems = [];  // items where no supplier has stock
+
         foreach ($this->items as $item) {
+            // Same lowest-price lookup used when the insurer was building the order
             $supplierMedicine = DB::table('supplier_medicines')
                 ->where('medicine_id', $item->medicine_id)
                 ->where('is_available', true)
@@ -184,89 +184,111 @@ class ExternalOrder extends Model
                 ->first();
 
             if (!$supplierMedicine) {
-                throw new \Exception("No available supplier found for medicine ID: {$item->medicine_id}");
+                // Stock may have changed since the insurer priced the order.
+                // Do NOT throw — collect and handle below so insurer sees success.
+                Log::warning('No available supplier for external order item — flagging for manual assignment', [
+                    'external_order_id' => $this->id,
+                    'medicine_id'       => $item->medicine_id,
+                ]);
+                $unresolvableItems[] = $item;
+                continue;
             }
 
             $supplierId = $supplierMedicine->supplier_id;
-            
-            if (!isset($itemsBySupplier[$supplierId])) {
-                $itemsBySupplier[$supplierId] = [];
-            }
-            
             $itemsBySupplier[$supplierId][] = [
-                'item' => $item,
+                'item'             => $item,
                 'supplier_medicine' => $supplierMedicine,
             ];
         }
 
-        // Create an order for each supplier
-        $createdOrders = [];
+        // Create one Order per supplier for the items we could resolve
         foreach ($itemsBySupplier as $supplierId => $supplierItems) {
-            // Calculate totals before creating the order
-            $orderTotal = 0;
-            $supplierTotal = 0;
+            $orderTotal    = array_sum(array_column($supplierItems, null) === $supplierItems
+                ? array_map(fn ($d) => $d['item']->total_price, $supplierItems)
+                : []);
+            $orderTotal    = collect($supplierItems)->sum(fn ($d) => $d['item']->total_price);
+            $supplierTotal = collect($supplierItems)->sum(fn ($d) => $d['supplier_medicine']->unit_price * $d['item']->quantity);
 
-            foreach ($supplierItems as $itemData) {
-                $item = $itemData['item'];
-                $supplierMedicine = $itemData['supplier_medicine'];
-                
-                $orderTotal += $item->total_price;
-                $supplierTotal += ($supplierMedicine->unit_price * $item->quantity);
-            }
-
-            // Create order with all required fields
             $order = Order::create([
-                'order_number' => Order::generateOrderNumber(),
-                'supplier_id' => $supplierId,
+                'order_number'      => Order::generateOrderNumber(),
+                'supplier_id'       => $supplierId,
                 'external_order_id' => $this->id,
-                'quotation_id' => null, // External orders don't have quotations
-                'prescription_id' => null, // External orders don't have prescriptions
-                'status' => 'pending_review',
-                'ordered_at' => now(),
+                'quotation_id'      => null,
+                'prescription_id'   => null,
+                'status'            => 'pending_review',
+                'ordered_at'        => now(),
                 'expected_delivery' => now()->addHours(24),
-                'total_amount' => $orderTotal,
-                'supplier_total' => $supplierTotal,
-                'markup_total' => $orderTotal - $supplierTotal,
+                'total_amount'      => $orderTotal,
+                'supplier_total'    => $supplierTotal,
+                'markup_total'      => $orderTotal - $supplierTotal,
             ]);
 
-            // Create order items
-            foreach ($supplierItems as $itemData) {
-                $item = $itemData['item'];
-                $supplierMedicine = $itemData['supplier_medicine'];
-
+            foreach ($supplierItems as $data) {
                 OrderItem::create([
-                    'order_id' => $order->id,
-                    'medicine_id' => $item->medicine_id,
-                    'supplier_medicine_id' => $supplierMedicine->id,
-                    'quotation_item_id' => null, // External orders don't have quotation items
-                    'quantity' => $item->quantity,
-                    'unit_price' => $item->unit_price,
-                    'supplier_price' => $supplierMedicine->unit_price,
-                    'total_price' => $item->total_price,
-                    'supplier_total' => $supplierMedicine->unit_price * $item->quantity,
+                    'order_id'             => $order->id,
+                    'medicine_id'          => $data['item']->medicine_id,
+                    'supplier_medicine_id' => $data['supplier_medicine']->id,
+                    'quotation_item_id'    => null,
+                    'quantity'             => $data['item']->quantity,
+                    'unit_price'           => $data['item']->unit_price,
+                    'supplier_price'       => $data['supplier_medicine']->unit_price,
+                    'total_price'          => $data['item']->total_price,
+                    'supplier_total'       => $data['supplier_medicine']->unit_price * $data['item']->quantity,
                 ]);
             }
 
-            $createdOrders[] = $order;
-
-            // Send order to supplier
-            $order->sendToSupplier();
-
             Log::info('Supplier order created from external order', [
                 'external_order_id' => $this->id,
-                'order_id' => $order->id,
-                'supplier_id' => $supplierId,
-                'items_count' => count($supplierItems),
-                'total_amount' => $orderTotal,
+                'order_id'          => $order->id,
+                'supplier_id'       => $supplierId,
+                'items_count'       => count($supplierItems),
             ]);
+
+            // Notify supplier asynchronously — never blocks the insurer response
+            dispatch(fn () => $this->notifySupplier($order))->afterResponse();
         }
 
-        // Notify stakeholders
-        dispatch(function () use ($createdOrders) {
-            foreach ($createdOrders as $order) {
-                $this->notifySupplier($order);
+        // Any items with no available supplier get their own order flagged
+        // for manual assignment by operations — same as existing row 90 in your DB
+        if (!empty($unresolvableItems)) {
+            $fallbackTotal = collect($unresolvableItems)->sum('total_price');
+
+            $fallbackOrder = Order::create([
+                'order_number'      => Order::generateOrderNumber(),
+                'supplier_id'       => null,          // operations will assign
+                'external_order_id' => $this->id,
+                'quotation_id'      => null,
+                'prescription_id'   => null,
+                'status'            => 'needs_manual_assignment',
+                'ordered_at'        => now(),
+                'expected_delivery' => now()->addHours(24),
+                'total_amount'      => $fallbackTotal,
+                'supplier_total'    => 0,
+                'markup_total'      => 0,
+                'rejection_reason'  => 'Out of stock — no available supplier at time of submission',
+                'is_rejected'       => true,
+            ]);
+
+            foreach ($unresolvableItems as $item) {
+                OrderItem::create([
+                    'order_id'             => $fallbackOrder->id,
+                    'medicine_id'          => $item->medicine_id,
+                    'supplier_medicine_id' => null,
+                    'quotation_item_id'    => null,
+                    'quantity'             => $item->quantity,
+                    'unit_price'           => $item->unit_price,
+                    'supplier_price'       => 0,
+                    'total_price'          => $item->total_price,
+                    'supplier_total'       => 0,
+                ]);
             }
-        })->afterResponse();
+
+            Log::warning('External order has items needing manual supplier assignment', [
+                'external_order_id'  => $this->id,
+                'fallback_order_id'  => $fallbackOrder->id,
+                'unresolvable_count' => count($unresolvableItems),
+            ]);
+        }
     }
 
     /**

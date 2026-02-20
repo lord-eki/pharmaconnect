@@ -219,9 +219,7 @@ class PrescriptionItem extends Model
         return $this->hasMany(QuotationItem::class);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Availability helpers
-    // ──────────────────────────────────────────────────────────────────────────
+
 
     public function getBestPrice(): ?float
     {
