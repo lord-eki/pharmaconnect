@@ -58,7 +58,7 @@ class ViewOrder extends ViewRecord
                         Notification::make()
                             ->success()
                             ->title('Order Confirmed')
-                            ->body('Order confirmed successfully. Operations team will process the delivery.')
+                            ->body('Order confirmed successfully.')
                             ->send();
 
                         // TODO: Notify operations team about confirmed order

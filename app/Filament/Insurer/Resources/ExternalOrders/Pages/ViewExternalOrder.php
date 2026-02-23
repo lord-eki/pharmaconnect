@@ -193,7 +193,7 @@ class ViewExternalOrder extends ViewRecord
                         Notification::make()
                             ->success()
                             ->title('Order Submitted')
-                            ->body('Your order has been submitted and sent to suppliers for processing.')
+                            ->body('Your order has been submitted successfully .')
                             ->send();
 
                     } catch (\Exception $e) {
