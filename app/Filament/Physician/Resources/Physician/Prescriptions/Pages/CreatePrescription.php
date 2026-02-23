@@ -11,6 +11,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\View;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -34,6 +35,60 @@ class CreatePrescription extends CreateRecord
 
     protected static string $resource = PrescriptionResource::class;
     protected static bool $canCreateAnother = false;
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Draft cache key — unique per physician session
+    // ──────────────────────────────────────────────────────────────────────────
+
+    protected function getDraftCacheKey(): string
+    {
+        return 'prescription_draft_' . Auth::id() . '_' . session()->getId();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Restore cached draft on page mount
+    // ──────────────────────────────────────────────────────────────────────────
+
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        $cached = Cache::get($this->getDraftCacheKey());
+
+        if ($cached) {
+            return array_merge($data, $cached);
+        }
+
+        return $data;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Save draft whenever a step is completed / field changes
+    // We hook into the wizard's step-change and also provide a manual save action
+    // ──────────────────────────────────────────────────────────────────────────
+
+    protected function afterValidate(): void
+    {
+        // Called on each wizard step validation — persist whatever we have
+        $this->saveDraft();
+    }
+
+    protected function saveDraft(): void
+    {
+        try {
+            $data = $this->form->getRawState();
+            Cache::put($this->getDraftCacheKey(), $data, now()->addHours(12));
+        } catch (\Throwable $e) {
+            // Non-fatal — silently skip if state isn't ready yet
+        }
+    }
+
+    protected function clearDraft(): void
+    {
+        Cache::forget($this->getDraftCacheKey());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Wizard steps
+    // ──────────────────────────────────────────────────────────────────────────
 
     protected function getSteps()
     {
@@ -84,6 +139,7 @@ class CreatePrescription extends CreateRecord
                                 $set('patient_has_insurance', $hasInsurance);
                                 if ($hasInsurance) $set('insurance_covered', true);
                             }
+                            $this->saveDraft();
                         }),
                 ]),
 
@@ -91,26 +147,49 @@ class CreatePrescription extends CreateRecord
                 ->icon('heroicon-o-clipboard-document-list')
                 ->schema([
                     Section::make()->schema([
-                        Textarea::make('diagnosis')->label('Diagnosis')->rows(1)->required()->columnSpanFull(),
-                        Textarea::make('notes')->label('Prescription Notes')->rows(2)->required()->columnSpanFull()->placeholder('Additional notes or instructions'),
+                        Textarea::make('diagnosis')->label('Diagnosis')->rows(1)->required()->columnSpanFull()
+                            ->live(onBlur: true)->afterStateUpdated(fn () => $this->saveDraft()),
+                        Textarea::make('notes')->label('Prescription Notes')->rows(2)->required()->columnSpanFull()
+                            ->placeholder('Additional notes or instructions')
+                            ->live(onBlur: true)->afterStateUpdated(fn () => $this->saveDraft()),
                         Toggle::make('insurance_covered')
                             ->label('Insurance Coverage')
                             ->helperText('Does this prescription have insurance coverage?')
                             ->default(false)
-                            ->visible(fn (Get $get) => $get('patient_has_insurance') === true),
+                            ->visible(fn (Get $get) => $get('patient_has_insurance') === true)
+                            ->live()->afterStateUpdated(fn () => $this->saveDraft()),
                     ])->columns(3),
                 ]),
 
             Step::make('Medicines')
                 ->icon('heroicon-o-beaker')
                 ->schema([
+                    // ── Column header row ─────────────────────────────────────
+                    // Single Placeholder with raw HTML — no field names rendered,
+                    // just a clean styled header that aligns with the repeater columns.
+                    Placeholder::make('_medicine_table_header')
+                        ->hiddenLabel()
+                        ->dehydrated(false)
+                        ->content(new \Illuminate\Support\HtmlString('
+                            <div style="display:grid;grid-template-columns:3fr 1fr 2fr 1fr 1fr 1fr 1fr 2fr;gap:0.5rem;padding:0.35rem 0.75rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:0.5rem 0.5rem 0 0;font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">
+                                <span>Medicine</span>
+                                <span>Dose</span>
+                                <span>Frequency</span>
+                                <span>Days</span>
+                                <span>Qty</span>
+                                <span>Unit (KES)</span>
+                                <span>Total (KES)</span>
+                                <span>Instructions</span>
+                            </div>
+                        ')),
+
                     Repeater::make('items')
                         ->relationship('items')
+                        ->hiddenLabel()            
                         ->schema([
-
-                            // ── Medicine (full width) ────────────────────────
                             Select::make('medicine_id')
-                                ->label('Medicine')
+                                ->hiddenLabel()
+                                ->placeholder('Medicine…')
                                 ->options(function (Get $get) {
                                     $selected = collect($get('../../items') ?? [])->pluck('medicine_id')->filter()->toArray();
                                     return collect(self::getCachedMedicineOptions())
@@ -128,26 +207,27 @@ class CreatePrescription extends CreateRecord
                                         $set('_medicine_type', $medicine['measurement_type']);
                                         $set('_unit_label', $medicine['unit_label']);
                                     }
-                                    // Reset dosage + previews on medicine change
                                     foreach (['dose_amount', 'frequency', 'duration_days', '_preview_quantity', '_preview_unit_price', '_preview_total_price'] as $field) {
                                         $set($field, null);
                                     }
+                                    $this->saveDraft();
                                 })
                                 ->columnSpan(3),
 
-                            // ── Dose amount ──────────────────────────────────
                             TextInput::make('dose_amount')
-                                ->label(fn (Get $get) => $get('_medicine_type') === 'volume' ? 'Dose (ml)' : 'Dosage')
+                                ->hiddenLabel()
+                                ->placeholder(fn (Get $get) => $get('_medicine_type') === 'volume' ? 'ml' : 'units')
                                 ->numeric()->required()->minValue(0.1)->step(0.1)
-                                ->suffix(fn (Get $get) => $get('_unit_label') ?? 'unit')
-                                ->helperText(fn (Get $get) => $get('_medicine_type') === 'volume' ? 'Volume per dose in ml' : 'Number of tablets/capsules per dose')
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn (Get $get, Set $set) => self::refreshPreviews($get, $set))
+                                ->afterStateUpdated(function (Get $get, Set $set) {
+                                    self::refreshPreviews($get, $set);
+                                    $this->saveDraft();
+                                })
                                 ->columnSpan(1),
 
-                            // ── Frequency ────────────────────────────────────
                             Select::make('frequency')
-                                ->label('How often?')
+                                ->hiddenLabel()
+                                ->placeholder('Frequency…')
                                 ->options([
                                     'OD'    => 'OD – once daily',
                                     'BDS'   => 'BDS – twice daily',
@@ -158,58 +238,63 @@ class CreatePrescription extends CreateRecord
                                     'PRN'   => 'PRN – as required',
                                 ])
                                 ->required()->searchable()->live()
-                                ->afterStateUpdated(fn (Get $get, Set $set) => self::refreshPreviews($get, $set))
-                                ->columnSpan(1),
+                                ->afterStateUpdated(function (Get $get, Set $set) {
+                                    self::refreshPreviews($get, $set);
+                                    $this->saveDraft();
+                                })
+                                ->columnSpan(2),
 
-                            // ── Duration ─────────────────────────────────────
                             TextInput::make('duration_days')
-                                ->label('For how many days')
-                                ->numeric()->required()->minValue(1)->suffix('days')
-                                ->helperText('Treatment duration')
+                                ->hiddenLabel()
+                                ->placeholder('Days')
+                                ->numeric()->required()->minValue(1)
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn (Get $get, Set $set) => self::refreshPreviews($get, $set))
+                                ->afterStateUpdated(function (Get $get, Set $set) {
+                                    self::refreshPreviews($get, $set);
+                                    $this->saveDraft();
+                                })
                                 ->columnSpan(1),
 
-                            // ── Instructions (full width) ────────────────────
-                            Textarea::make('dosage_instructions')
-                                ->label('Instructions')
-                                ->required()
-                                ->placeholder('e.g. Take with food, avoid alcohol')
-                                ->helperText('Additional instructions for the patient')
-                                ->rows(2)
-                                ->columnSpan(3),
-
-                            // ── Read-only previews — dehydrated(false) = never sent to DB ──
                             TextInput::make('_preview_quantity')
-                                ->label('Quantity (auto-calculated)')
-                                ->disabled()->dehydrated(false)->prefix('×')
-                                ->helperText('Calculated from dosage inputs')
+                                ->hiddenLabel()
+                                ->disabled()->dehydrated(false)
+                                ->placeholder('—')
                                 ->columnSpan(1),
 
                             TextInput::make('_preview_unit_price')
-                                ->label('Unit Price')
-                                ->disabled()->dehydrated(false)->prefix('KES')
+                                ->hiddenLabel()
+                                ->disabled()->dehydrated(false)
+                                ->placeholder('—')
                                 ->columnSpan(1),
 
                             TextInput::make('_preview_total_price')
-                                ->label('Estimated Total')
-                                ->disabled()->dehydrated(false)->prefix('KES')
+                                ->hiddenLabel()
+                                ->disabled()->dehydrated(false)
+                                ->placeholder('—')
                                 ->columnSpan(1),
 
-                            // ── Hidden medicine meta — UI only, not persisted ──
+                            // Instructions ─ span 2
+                            Textarea::make('dosage_instructions')
+                                ->hiddenLabel()
+                                ->required()
+                                ->placeholder('e.g. Take with food…')
+                                ->rows(1)
+                                ->live(onBlur: true)
+                                ->afterStateUpdated(fn () => $this->saveDraft())
+                                ->columnSpan(2),
+
+                            // Hidden meta — UI only, not persisted
                             TextInput::make('_medicine_type')->hidden()->dehydrated(false),
                             TextInput::make('_unit_label')->hidden()->dehydrated(false),
                         ])
-                        ->columns(3)
+                        ->columns(12)          // 12-col grid matching the header row
                         ->defaultItems(1)
-                        ->addActionLabel('Add Medicine')
-                        ->collapsible()
+                        ->addActionLabel('+ Add Medicine')
+                        ->collapsible(false)   // keep rows flat for the table feel
                         ->cloneable()
                         ->reorderable(false)
-                        ->itemLabel(fn (array $state): ?string => isset($state['medicine_id']) && $state['medicine_id']
-                            ? self::getMedicineName((int) $state['medicine_id'])
-                            : null
-                        ),
+                        ->deleteAction(fn ($action) => $action->after(fn () => $this->saveDraft()))
+                        ->itemLabel(null),     // no accordion labels — rows are already visible
                 ]),
 
             Step::make('Summary')
@@ -265,10 +350,6 @@ class CreatePrescription extends CreateRecord
         $set('_preview_total_price', round($priceData['unit_price'] * $quantity, 2));
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Lifecycle hooks
-    // ──────────────────────────────────────────────────────────────────────────
-
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $data['physician_id'] = auth()->id();
@@ -278,6 +359,9 @@ class CreatePrescription extends CreateRecord
 
     protected function afterCreate(): void
     {
+        // Clear the draft now that the prescription is saved
+        $this->clearDraft();
+
         if ($this->getRecord()->items()->exists()) {
             $this->getRecord()->updateTotalAmount();
         }
@@ -299,6 +383,20 @@ class CreatePrescription extends CreateRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('clearDraft')
+                ->label('Clear Draft')
+                ->icon('heroicon-o-trash')
+                ->color('danger')
+                ->outlined()
+                ->requiresConfirmation()
+                ->modalHeading('Discard draft?')
+                ->modalDescription('All unsaved prescription data will be lost.')
+                ->action(function () {
+                    $this->clearDraft();
+                    $this->form->fill([]);
+                    Notification::make()->warning()->title('Draft cleared')->send();
+                }),
+
             Action::make('back')
                 ->url($this->getResource()::getUrl('index'))
                 ->outlined()
