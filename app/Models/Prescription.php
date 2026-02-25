@@ -830,13 +830,20 @@ class Prescription extends Model
             }
 
             // Ensure all relationships are loaded
+            // Use optional chaining — external-order claims have no prescription or physician
             $claim->load([
                 'insuranceProvider',
                 'patient',
-                'prescription.physician',
-                'prescription.items.medicine',
-                'prescription.orders.supplier',
+                'prescription',
             ]);
+
+            if ($claim->prescription_id) {
+                $claim->prescription->load([
+                    'physician',
+                    'items.medicine',
+                    'orders.supplier',
+                ]);
+            }
 
             $provider = $claim->insuranceProvider;
 

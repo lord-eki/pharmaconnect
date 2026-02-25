@@ -60,14 +60,14 @@ class DeliveryStatusUpdatedNotification extends Notification implements ShouldQu
         // Add specific information based on status
         switch ($this->newStatus) {
             case 'assigned':
-                $message->line('📦 A delivery has been assigned to you.')
+                $message->line(' A delivery has been assigned to you.')
                     ->line('**Pickup Address:** ' . $this->delivery->pickup_address)
                     ->line('**Delivery Address:** ' . $this->delivery->delivery_address)
                     ->line('**Recipient:** ' . $this->delivery->recipient_name);
                 break;
 
             case 'picked_up':
-                $message->line('✅ Pickup confirmed. Please proceed to the delivery address.');
+                $message->line(' Pickup confirmed. Please proceed to the delivery address.');
                 break;
 
             case 'in_transit':
@@ -80,11 +80,11 @@ class DeliveryStatusUpdatedNotification extends Notification implements ShouldQu
                 break;
 
             case 'failed':
-                $message->line('⚠️ Delivery marked as failed. Please contact operations for more details.');
+                $message->line(' Delivery marked as failed. Please contact operations for more details.');
                 break;
 
             case 'cancelled':
-                $message->line('❌ This delivery has been cancelled.');
+                $message->line(' This delivery has been cancelled.');
                 break;
         }
 

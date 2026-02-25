@@ -394,6 +394,77 @@ class Order extends Model
         return $this->hasMany(Payable::class);
     }
 
+    /**
+     * Process receivables for all delivered orders once an insurance claim is approved.
+     *
+     * Call this from InsuranceClaim::approve() after persisting the approved_amount:
+     *
+     *   Order::processApprovedClaimReceivables($this);
+     *
+     * The approved_amount from the claim is used instead of the claimed (order) total,
+     * ensuring we only ever book what the insurer actually agreed to pay.
+     */
+    public static function processApprovedClaimReceivables(\App\Models\InsuranceClaim $claim): void
+    {
+        $paymentService = app(PaymentService::class);
+
+        // Collect delivered orders linked to this claim (via prescription or external order)
+        $orders = static::where(function ($q) use ($claim) {
+                if ($claim->prescription_id) {
+                    $q->where('prescription_id', $claim->prescription_id);
+                }
+                if ($claim->external_order_id) {
+                    $q->orWhere('external_order_id', $claim->external_order_id);
+                }
+            })
+            ->where('status', 'delivered')
+            ->get();
+
+        if ($orders->isEmpty()) {
+            Log::warning('processApprovedClaimReceivables: no delivered orders found for claim', [
+                'claim_id'          => $claim->id,
+                'prescription_id'   => $claim->prescription_id,
+                'external_order_id' => $claim->external_order_id ?? null,
+            ]);
+            return;
+        }
+
+        // Distribute the approved_amount proportionally across orders
+        $totalClaimed   = $orders->sum('total_amount');
+        $approvedAmount = (float) $claim->approved_amount;
+
+        foreach ($orders as $order) {
+            // Skip if receivable already exists for this order
+            if ($order->receivables()->exists()) {
+                Log::info('Receivable already exists — skipping', ['order_id' => $order->id]);
+                continue;
+            }
+
+            // Proportional share of the approved amount
+            $share = $totalClaimed > 0
+                ? round(($order->total_amount / $totalClaimed) * $approvedAmount, 2)
+                : $approvedAmount / $orders->count();
+
+            try {
+                // Temporarily override the order amount so PaymentService books the right figure
+                $order->setRelation('_approvedAmountOverride', $share);
+                $paymentService->processOrderPayments($order, $share);
+
+                Log::info('Receivable created after claim approval', [
+                    'order_id'        => $order->id,
+                    'claim_id'        => $claim->id,
+                    'approved_share'  => $share,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to create receivable after claim approval', [
+                    'order_id' => $order->id,
+                    'claim_id' => $claim->id,
+                    'error'    => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
     public function externalOrder(): BelongsTo
     {
         return $this->belongsTo(ExternalOrder::class);
@@ -673,21 +744,31 @@ class Order extends Model
             return;
         }
 
-        $patient = $this->prescription->patient;
+        // For external (insurer-originated) orders, delivery is handled at the ExternalOrder level
+        if ($this->external_order_id && !$this->prescription_id) {
+            Log::info('Skipping createDelivery for external order — handled at ExternalOrder level', [
+                'order_id' => $this->id,
+            ]);
+            return;
+        }
+
+        $patient = $this->prescription?->patient;
         $supplier = $this->supplier;
 
         $delivery = Delivery::create([
             'delivery_number' => Delivery::generateDeliveryNumber(),
             'order_id' => $this->id,
             'pickup_address' => $supplier->address ?? 'Supplier address not set',
-            'delivery_address' => $patient->address ?? "{$patient->city}, {$patient->county}",
+            'delivery_address' => $patient
+                ? ($patient->address ?? "{$patient->city}, {$patient->county}")
+                : 'Delivery address not set',
             'delivery_latitude' => null,
             'delivery_longitude' => null,
             'estimated_distance_km' => $this->estimateDistance(),
             'delivery_fee' => $this->calculateDeliveryFee(),
             'status' => 'pending',
-            'recipient_name' => $patient->full_name,
-            'recipient_phone' => $patient->phone,
+            'recipient_name' => $patient?->full_name ?? 'Unknown',
+            'recipient_phone' => $patient?->phone ?? null,
             'scheduled_pickup' => now()->addHours(2),
             'estimated_delivery' => now()->addHours(4),
         ]);
@@ -703,8 +784,12 @@ class Order extends Model
     // Calculate delivery fee based on distance/location
     protected function calculateDeliveryFee(): float
     {
-        $patient = $this->prescription->patient;
+        $patient = $this->prescription?->patient;
         $supplier = $this->supplier;
+
+        if (!$patient || !$supplier) {
+            return 200.00;
+        }
 
         if ($patient->county === $supplier->county) {
             return 200.00;
@@ -716,8 +801,12 @@ class Order extends Model
     // Estimate distance
     protected function estimateDistance(): float
     {
-        $patient = $this->prescription->patient;
+        $patient = $this->prescription?->patient;
         $supplier = $this->supplier;
+
+        if (!$patient || !$supplier) {
+            return 10.0;
+        }
 
         if ($patient->county === $supplier->county) {
             return 10.0;
@@ -755,24 +844,35 @@ class Order extends Model
                     }
                 }
 
-                // Process payments and commissions
-                $paymentService = app(PaymentService::class);
-                try {
-                    $paymentService->processOrderPayments($this);
-                } catch (\Exception $e) {
-                    Log::error('Failed to process order payments', [
-                        'order_id' => $this->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
+                // Process payments and commissions — only create receivables if insurance claim is approved (or not insured)
+                $claimApproved = !$prescription->insurance_covered
+                    || ($prescription->insuranceClaim && in_array($prescription->insuranceClaim->status, ['approved', 'paid']));
 
-                $commissionService = app(CommissionService::class);
-                try {
-                    $commissionService->calculateCommissionForOrder($this);
-                } catch (\Exception $e) {
-                    Log::error('Failed to calculate commission', [
-                        'order_id' => $this->id,
-                        'error' => $e->getMessage(),
+                if ($claimApproved) {
+                    $paymentService = app(PaymentService::class);
+                    try {
+                        $paymentService->processOrderPayments($this);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to process order payments', [
+                            'order_id' => $this->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+
+                    $commissionService = app(CommissionService::class);
+                    try {
+                        $commissionService->calculateCommissionForOrder($this);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to calculate commission', [
+                            'order_id' => $this->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                } else {
+                    Log::info('Receivables skipped — prescription insurance claim not yet approved', [
+                        'order_id'        => $this->id,
+                        'prescription_id' => $prescription->id,
+                        'claim_status'    => $prescription->insuranceClaim?->status ?? 'no_claim',
                     ]);
                 }
 
@@ -795,17 +895,45 @@ class Order extends Model
                         'external_order_id' => $externalOrder->id,
                         'order_number' => $externalOrder->order_number,
                     ]);
+
+                    // Create insurance claim for insurer-originated orders on delivery confirmation
+                    if ($externalOrder->insurance_provider_id) {
+                        try {
+                            $externalOrder->load('insuranceClaim');
+                            if (!$externalOrder->insuranceClaim) {
+                                $claim = $externalOrder->createInsuranceClaim();
+                                Log::info('Insurance claim auto-created for external order on delivery', [
+                                    'external_order_id' => $externalOrder->id,
+                                    'claim_id'          => $claim->id,
+                                    'claim_number'      => $claim->claim_number,
+                                ]);
+                            }
+                        } catch (\Exception $e) {
+                            Log::error('Failed to create insurance claim for external order', [
+                                'order_id'          => $this->id,
+                                'external_order_id' => $externalOrder->id,
+                                'error'             => $e->getMessage(),
+                            ]);
+                        }
+                    }
                 }
 
-                // Process payments
-                $paymentService = app(PaymentService::class);
-                try {
-                    $paymentService->processOrderPayments($this);
-                } catch (\Exception $e) {
-                    Log::error('Failed to process external order payments', [
-                        'order_id' => $this->id,
+                // Only process receivables if the insurance claim is approved (or no insurance)
+                if ($externalOrder->claimAllowsReceivables()) {
+                    $paymentService = app(PaymentService::class);
+                    try {
+                        $paymentService->processOrderPayments($this);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to process external order payments', [
+                            'order_id' => $this->id,
+                            'external_order_id' => $externalOrder->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                } else {
+                    Log::info('Receivables skipped — external order insurance claim not yet approved', [
+                        'order_id'          => $this->id,
                         'external_order_id' => $externalOrder->id,
-                        'error' => $e->getMessage(),
                     ]);
                 }
             }

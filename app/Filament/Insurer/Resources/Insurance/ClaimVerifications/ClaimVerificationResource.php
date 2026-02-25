@@ -31,7 +31,12 @@ class ClaimVerificationResource extends Resource
     {
         return parent::getEloquentQuery()
             ->where('insurance_provider_id', auth()->user()->insuranceProvider->id ?? 0)
-            ->with(['prescription.items.medicine', 'patient', 'prescription.orders']);
+            ->with([
+                'patient',
+                'prescription.items.medicine',
+                'prescription.orders',
+                'externalOrder',
+            ]);
     }
 
     public static function form(Schema $schema): Schema
@@ -58,13 +63,14 @@ class ClaimVerificationResource extends Resource
             'create' => CreateClaimVerification::route('/create'),
             // 'edit' => EditClaimVerification::route('/{record}/edit'),
             // 'view' => ViewClaimVerification::route('/{record}'),
-
         ];
     }
 
     public static function getNavigationBadge(): ?string
     {
-        $count = static::getModel()::where('status', 'submitted')->where('insurance_provider_id', auth()->user()->insuranceProvider->id)->count();
+        $count = static::getModel()::where('status', 'submitted')
+            ->where('insurance_provider_id', auth()->user()->insuranceProvider->id)
+            ->count();
 
         return $count > 0 ? (string) $count : null;
     }

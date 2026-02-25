@@ -70,13 +70,16 @@ class ViewDelivery extends ViewRecord
                         TextEntry::make('prescription.prescription_number')
                             ->label('Prescription Number')
                             ->color(Color::Blue)
-                            ->weight('bold'),
+                            ->weight('bold')
+                            ->placeholder('—'),
 
                         TextEntry::make('prescription.physician.name')
-                            ->label('Physician'),
+                            ->label('Physician')
+                            ->placeholder('—'),
 
                         TextEntry::make('prescription.patient.full_name')
-                            ->label('Patient'),
+                            ->label('Patient')
+                            ->placeholder('—'),
 
                         TextEntry::make('total_amount')
                             ->label('Total Orders Amount')
@@ -84,7 +87,30 @@ class ViewDelivery extends ViewRecord
                             ->money('KES')
                             ->weight('bold'),
                     ])
-                    ->columns(4),
+                    ->columns(4)
+                    ->visible(fn ($record) => $record->prescription_id !== null),
+
+                Section::make('Insurer Order Details')
+                    ->schema([
+                        TextEntry::make('externalOrder.order_number')
+                            ->label('External Order #')
+                            ->color(Color::Blue)
+                            ->weight('bold'),
+
+                        TextEntry::make('externalOrder.insuranceProvider.company_name')
+                            ->label('Insurance Provider'),
+
+                        TextEntry::make('recipient_name')
+                            ->label('Recipient'),
+
+                        TextEntry::make('total_amount')
+                            ->label('Total Orders Amount')
+                            ->state(fn ($record) => $record->orders->sum('total_amount'))
+                            ->money('KES')
+                            ->weight('bold'),
+                    ])
+                    ->columns(4)
+                    ->visible(fn ($record) => $record->prescription_id === null && $record->external_order_id !== null),
 
                 Section::make('Orders')
                     ->schema([
@@ -433,12 +459,11 @@ class ViewDelivery extends ViewRecord
                             ));
                         }
 
-                        // Notify physician for all commissions created
-                        if ($results['orders_processed'] > 0) {
+                        // Notify physician about commissions — only for prescription-based deliveries
+                        if ($results['orders_processed'] > 0 && $record->prescription_id && $record->prescription) {
                             $physician = $record->prescription->physician;
 
                             if ($physician && $physician->user) {
-                                // Get all commissions for this delivery
                                 $commissions = $record->prescription->commissions()
                                     ->whereIn('order_id', $record->orders->pluck('id'))
                                     ->get();

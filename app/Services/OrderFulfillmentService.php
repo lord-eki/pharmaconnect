@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Delivery;
 use App\Models\Order;
+use App\Models\Prescription;
 use App\Models\Rider;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -65,24 +66,32 @@ class OrderFulfillmentService
 
             $results['order_confirmed'] = true;
 
-            // Check delivery status
+            // Check delivery status — only applicable for prescription-based orders
             $prescription = $order->prescription;
-            if ($prescription->delivery) {
-                $results['delivery_exists'] = true;
+            if ($prescription) {
+                if ($prescription->delivery) {
+                    $results['delivery_exists'] = true;
 
-                // Check if all orders confirmed
-                $allConfirmed = $prescription->orders()
-                    ->whereNotIn('status', ['confirmed', 'delivered'])
-                    ->doesntExist();
+                    // Check if all orders confirmed
+                    $allConfirmed = $prescription->orders()
+                        ->whereNotIn('status', ['confirmed', 'delivered'])
+                        ->doesntExist();
 
-                $results['all_orders_confirmed'] = $allConfirmed;
+                    $results['all_orders_confirmed'] = $allConfirmed;
 
-                if ($allConfirmed) {
-                    Log::info('All prescription orders confirmed', [
-                        'prescription_id' => $prescription->id,
-                        'delivery_id' => $prescription->delivery->id,
-                    ]);
+                    if ($allConfirmed) {
+                        Log::info('All prescription orders confirmed', [
+                            'prescription_id' => $prescription->id,
+                            'delivery_id' => $prescription->delivery->id,
+                        ]);
+                    }
                 }
+            } else {
+                // External order — delivery tracking is at ExternalOrder level
+                $results['delivery_exists'] = (bool) $order->externalOrder?->delivery;
+                $results['all_orders_confirmed'] = $order->externalOrder
+                    ? $order->externalOrder->orders()->whereNotIn('status', ['confirmed', 'delivered'])->doesntExist()
+                    : false;
             }
 
             DB::commit();
@@ -362,7 +371,7 @@ class OrderFulfillmentService
                 'id' => $delivery->id,
                 'number' => $delivery->delivery_number,
                 'status' => $delivery->status,
-                'prescription_number' => $delivery->prescription->prescription_number,
+                'prescription_number' => $delivery->prescription?->prescription_number ?? ($delivery->externalOrder?->order_number ?? 'N/A'),
                 'created_at' => $delivery->created_at->toIso8601String(),
                 'scheduled_pickup' => $delivery->scheduled_pickup?->toIso8601String(),
                 'actual_pickup' => $delivery->actual_pickup?->toIso8601String(),
@@ -384,8 +393,12 @@ class OrderFulfillmentService
                 'phone' => $delivery->rider->phone,
                 'rating' => $delivery->rider->rating,
             ] : null,
-            'patient' => [
+            'patient' => $delivery->prescription ? [
                 'name' => $delivery->prescription->patient->full_name,
+                'address' => $delivery->delivery_address,
+                'phone' => $delivery->recipient_phone,
+            ] : [
+                'name' => $delivery->recipient_name,
                 'address' => $delivery->delivery_address,
                 'phone' => $delivery->recipient_phone,
             ],
@@ -401,7 +414,7 @@ class OrderFulfillmentService
      */
     public function getPrescriptionFulfillmentStatus(int $prescriptionId): array
     {
-        $prescription = \App\Models\Prescription::with([
+        $prescription = Prescription::with([
             'delivery.orders.supplier',
             'delivery.rider',
             'patient',

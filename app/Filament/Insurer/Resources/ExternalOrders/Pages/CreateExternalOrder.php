@@ -281,6 +281,15 @@ class CreateExternalOrder extends CreateRecord
                         ])
                         ->columns(2),
 
+                    Section::make('Additional Notes')
+                        ->schema([
+                            Textarea::make('notes')
+                                ->label('Order Notes')
+                                ->rows(3)
+                                ->columnSpanFull()
+                                ->placeholder('Member details, authorisation notes, special instructions, etc.'),
+                        ]),
+
                 ])
                 ->columns(2),
 
@@ -306,10 +315,21 @@ class CreateExternalOrder extends CreateRecord
         $data['created_by_user_id'] = auth()->id();
         $data['status'] = 'draft';
 
-        // Set insurance provider if user has one
-        if (auth()->user()->insuranceProvider) {
-            $data['insurance_provider_id'] = auth()->user()->insuranceProvider->id;
+        // Set insurance provider from the logged-in insurer user
+        $provider = auth()->user()->insuranceProvider;
+
+        if (! $provider) {
+            Notification::make()
+                ->danger()
+                ->title('No Insurance Provider linked to your account')
+                ->body('Please contact an administrator to link your account to an insurance provider before placing orders.')
+                ->persistent()
+                ->send();
+
+            $this->halt();
         }
+
+        $data['insurance_provider_id'] = $provider->id;
 
         return $data;
     }

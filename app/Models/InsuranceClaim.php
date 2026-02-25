@@ -75,6 +75,11 @@ class InsuranceClaim extends Model
         return $this->belongsTo(Prescription::class);
     }
 
+    public function externalOrder(): BelongsTo
+    {
+        return $this->belongsTo(ExternalOrder::class, 'external_order_id');
+    }
+
     public function insuranceProvider(): BelongsTo
     {
         return $this->belongsTo(InsuranceProvider::class);

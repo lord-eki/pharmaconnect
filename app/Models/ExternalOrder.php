@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Models\InsuranceClaim;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -89,6 +90,11 @@ class ExternalOrder extends Model
     public function delivery(): HasOne
     {
         return $this->hasOne(Delivery::class, 'external_order_id');
+    }
+
+    public function insuranceClaim(): HasOne
+    {
+        return $this->hasOne(InsuranceClaim::class, 'external_order_id');
     }
 
     /**
@@ -493,6 +499,71 @@ class ExternalOrder extends Model
     public function scopeForInsuranceProvider($query, $providerId)
     {
         return $query->where('insurance_provider_id', $providerId);
+    }
+
+    /**
+     * Create an InsuranceClaim for this external (insurer-originated) order.   
+     */
+    public function createInsuranceClaim(): InsuranceClaim
+    {
+        
+        if ($this->insuranceClaim) {
+            return $this->insuranceClaim;
+        }
+
+        $existing = InsuranceClaim::where('external_order_id', $this->id)->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        if (!$this->insurance_provider_id) {
+            throw new \Exception("External order {$this->order_number} has no insurance provider — cannot create claim.");
+        }
+
+        $claimedAmount = $this->orders()
+            ->whereIn('status', ['confirmed', 'delivered'])
+            ->sum('total_amount');
+
+        if ($claimedAmount <= 0) {
+            $claimedAmount = $this->total_amount;
+        }
+
+        $claim = InsuranceClaim::create([
+            'external_order_id'    => $this->id,
+            'insurance_provider_id' => $this->insurance_provider_id,
+            'patient_id'           => null,   
+            'prescription_id'      => null,
+            'policy_number'        => $this->reference_number ?? $this->order_number,
+            'claimed_amount'       => $claimedAmount,
+            'status'               => 'submitted',
+            'submitted_at'         => now(),
+            'notes'                => "Auto-generated claim for external order {$this->order_number} after delivery confirmation.",
+        ]);
+
+        Log::info('Insurance claim created for external order', [
+            'external_order_id'    => $this->id,
+            'order_number'         => $this->order_number,
+            'claim_id'             => $claim->id,
+            'claim_number'         => $claim->claim_number,
+            'insurance_provider_id' => $this->insurance_provider_id,
+            'claimed_amount'       => $claimedAmount,
+        ]);
+
+        return $claim;
+    }
+
+    /**
+     * Whether an approved insurance claim exists, allowing receivables to be confirmed.
+     */
+    public function claimAllowsReceivables(): bool
+    {
+        if (!$this->insurance_provider_id) {
+            return true;
+        }
+
+        $claim = $this->insuranceClaim ?? InsuranceClaim::where('external_order_id', $this->id)->first();
+
+        return $claim && in_array($claim->status, ['approved', 'paid']);
     }
 
     /**
