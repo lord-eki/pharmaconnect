@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Models\InsuranceClaim;
+use App\Models\Setting;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -131,19 +132,6 @@ class ExternalOrder extends Model
         });
     }
 
-    /**
-     * Submit external order — creates Order records in pending_review for
-     * the operations team to review and send to a supplier.
-     * Submit external order and create supplier orders.
-     *
-     * Supplier lookup uses the same cheapest-price logic that already
-     * determined the unit_price shown to the insurer when they built the order.
-     * So the supplier is effectively already known — we just resolve it again here.
-     *
-     * If a supplier cannot be found for any item (e.g. stock ran out between
-     * quote and submit), that item's order is flagged needs_manual_assignment
-     * so operations can fix it — the insurer sees a clean success either way.
-     */
     public function submit(): bool
     {
         return DB::transaction(function () {
@@ -167,21 +155,12 @@ class ExternalOrder extends Model
         });
     }
 
-    /**
-     * Group items by cheapest available supplier and create one Order per supplier.
-     *
-     * Items where no supplier has stock are collected into a separate
-     * needs_manual_assignment order so operations can source them manually.
-     * No exception is ever thrown to the insurer — all failures are handled
-     * gracefully and logged for operations to action.
-     */
     protected function createSupplierOrders(): void
     {
-        $itemsBySupplier  = [];   // supplierId => [['item' => ..., 'supplier_medicine' => ...]]
-        $unresolvableItems = [];  // items where no supplier has stock
+        $itemsBySupplier  = [];   
+        $unresolvableItems = [];  
 
         foreach ($this->items as $item) {
-            // Same lowest-price lookup used when the insurer was building the order
             $supplierMedicine = DB::table('supplier_medicines')
                 ->where('medicine_id', $item->medicine_id)
                 ->where('is_available', true)
@@ -190,8 +169,6 @@ class ExternalOrder extends Model
                 ->first();
 
             if (!$supplierMedicine) {
-                // Stock may have changed since the insurer priced the order.
-                // Do NOT throw — collect and handle below so insurer sees success.
                 Log::warning('No available supplier for external order item — flagging for manual assignment', [
                     'external_order_id' => $this->id,
                     'medicine_id'       => $item->medicine_id,
@@ -207,13 +184,16 @@ class ExternalOrder extends Model
             ];
         }
 
-        // Create one Order per supplier for the items we could resolve
+        $isFirstOrder = true;
+
         foreach ($itemsBySupplier as $supplierId => $supplierItems) {
             $orderTotal    = array_sum(array_column($supplierItems, null) === $supplierItems
                 ? array_map(fn ($d) => $d['item']->total_price, $supplierItems)
                 : []);
             $orderTotal    = collect($supplierItems)->sum(fn ($d) => $d['item']->total_price);
             $supplierTotal = collect($supplierItems)->sum(fn ($d) => $d['supplier_medicine']->unit_price * $d['item']->quantity);
+
+            $deliveryFee = $isFirstOrder ? Setting::deliveryFee() : 0.0;
 
             $order = Order::create([
                 'order_number'      => Order::generateOrderNumber(),
@@ -224,7 +204,7 @@ class ExternalOrder extends Model
                 'status'            => 'pending_review',
                 'ordered_at'        => now(),
                 'expected_delivery' => now()->addHours(24),
-                'total_amount'      => $orderTotal,
+                'total_amount'      => $orderTotal + $deliveryFee,
                 'supplier_total'    => $supplierTotal,
                 'markup_total'      => $orderTotal - $supplierTotal,
             ]);
@@ -240,8 +220,26 @@ class ExternalOrder extends Model
                     'supplier_price'       => $data['supplier_medicine']->unit_price,
                     'total_price'          => $data['item']->total_price,
                     'supplier_total'       => $data['supplier_medicine']->unit_price * $data['item']->quantity,
+                    'is_delivery_fee'      => false,
                 ]);
             }
+
+            if ($isFirstOrder) {
+                OrderItem::create([
+                    'order_id'             => $order->id,
+                    'medicine_id'          => $data['item']->medicine_id,
+                    'supplier_medicine_id' => null,
+                    'quotation_item_id'    => null,
+                    'quantity'             => 1,
+                    'unit_price'           => $deliveryFee,
+                    'supplier_price'       => 0.00,
+                    'total_price'          => $deliveryFee,
+                    'supplier_total'       => 0.00,
+                    'is_delivery_fee'      => true,
+                ]);
+            }
+
+            $isFirstOrder = false;
 
             Log::info('Supplier order created from external order', [
                 'external_order_id' => $this->id,
@@ -250,12 +248,11 @@ class ExternalOrder extends Model
                 'items_count'       => count($supplierItems),
             ]);
 
-            // Notify supplier asynchronously — never blocks the insurer response
+            // Notify supplier asynchronously 
             dispatch(fn () => $this->notifySupplier($order))->afterResponse();
         }
 
         // Any items with no available supplier get their own order flagged
-        // for manual assignment by operations — same as existing row 90 in your DB
         if (!empty($unresolvableItems)) {
             $fallbackTotal = collect($unresolvableItems)->sum('total_price');
 
@@ -299,7 +296,6 @@ class ExternalOrder extends Model
 
     /**
      * Create consolidated delivery for external order
-     * Called when first supplier order is confirmed
      */
     public function createConsolidatedDelivery($orders): Delivery
     {
@@ -388,17 +384,11 @@ class ExternalOrder extends Model
     }
 
     /**
-     * Calculate delivery fee based on distance and pickup points
+     * Flat delivery fee per order — sourced from admin settings.
      */
     protected function calculateDeliveryFee(array $pickupLocations): float
     {
-        $baseDeliveryFee = 200.00; 
-        $perPickupFee = 50.00; 
-
-        $numberOfPickups = count($pickupLocations);
-        $totalFee = $baseDeliveryFee + (($numberOfPickups - 1) * $perPickupFee);
-
-        return $totalFee;
+        return Setting::deliveryFee();
     }
 
     /**
@@ -502,7 +492,7 @@ class ExternalOrder extends Model
     }
 
     /**
-     * Create an InsuranceClaim for this external (insurer-originated) order.   
+     * Create an InsuranceClaim for this external order.   
      */
     public function createInsuranceClaim(): InsuranceClaim
     {

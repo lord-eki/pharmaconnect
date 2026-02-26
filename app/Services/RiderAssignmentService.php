@@ -148,24 +148,9 @@ class RiderAssignmentService
         return sprintf('%s%s-%s', $prefix, $ym, $sequencePadded);
     }
 
-    /**
-     * Calculate delivery fee based on location
-     */
     protected function calculateDeliveryFee($supplier, $patient): float
     {
-        // Same county = KES 200
-        // Different county in same region = KES 500
-        // Different region = KES 800
-
-        if ($supplier->county === $patient->county) {
-            return 200.00;
-        }
-
-        if ($this->isSameRegion($supplier->county, $patient->county)) {
-            return 500.00;
-        }
-
-        return 800.00;
+        return 100.00;
     }
 
     /**
@@ -173,35 +158,12 @@ class RiderAssignmentService
      */
     protected function estimateDistance($supplier, $patient): float
     {
-        // Simple estimation based on county
-        // Can be enhanced with actual geocoding
+       
         if ($supplier->county === $patient->county) {
-            return 10.0; // 10km within same county
+            return 10.0; 
         }
 
-        return 50.0; // 50km different counties
-    }
-
-    /**
-     * Check if counties are in same region
-     */
-    protected function isSameRegion(string $county1, string $county2): bool
-    {
-        // Define regions
-        $regions = [
-            'central' => ['Nairobi', 'Kiambu', 'Murang\'a', 'Nyeri', 'Kirinyaga'],
-            'coast' => ['Mombasa', 'Kilifi', 'Kwale', 'Lamu', 'Taita Taveta'],
-            'eastern' => ['Machakos', 'Kitui', 'Makueni', 'Embu', 'Tharaka Nithi'],
-            // Add more regions as needed
-        ];
-
-        foreach ($regions as $region => $counties) {
-            if (in_array($county1, $counties) && in_array($county2, $counties)) {
-                return true;
-            }
-        }
-
-        return false;
+        return 50.0; 
     }
 
     /**
@@ -216,7 +178,6 @@ class RiderAssignmentService
 
             switch ($status) {
                 case 'picked_up':
-                    // This is called when ALL orders are picked up
                     $updates['actual_pickup'] = now();
                     break;
 
@@ -235,7 +196,6 @@ class RiderAssignmentService
                         $delivery->rider->incrementDeliveries();
                     }
 
-                    // Mark ALL orders as delivered
                     foreach ($delivery->orders as $order) {
                         $order->update([
                             'status' => 'delivered',

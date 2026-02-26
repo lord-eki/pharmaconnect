@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Mail\InsuranceClaimFormMail;
 use App\Mail\NewOrderNotification;
+use App\Models\Setting;
 use App\Services\PricingService;
 use App\Traits\HasAuditLog;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -325,36 +326,11 @@ class Prescription extends Model
     }
 
     /**
-     * Calculate delivery fee considering multiple pickups
+     * Flat delivery fee per prescription — sourced from admin settings.
      */
     protected function calculateConsolidatedDeliveryFee($pickupLocations, $patient): float
     {
-        if ($pickupLocations instanceof \Illuminate\Support\Collection) {
-            $pickupLocations = $pickupLocations->toArray();
-        }
-
-        // Base fee
-        $baseFee = 200.00;
-
-        // Add fee for multiple pickups ksh 100 per additional pickup
-        if (count($pickupLocations) > 1) {
-            $baseFee += (count($pickupLocations) - 1) * 100.00;
-        }
-
-        // Check if any pickup is in different county from patient
-        $differentCounty = false;
-        foreach ($pickupLocations as $location) {
-            if (($location['county'] ?? null) !== $patient->county) {
-                $differentCounty = true;
-                break;
-            }
-        }
-
-        if ($differentCounty) {
-            $baseFee += 300.00; // Additional fee for cross-county
-        }
-
-        return $baseFee;
+        return Setting::deliveryFee();
     }
 
     /**
@@ -471,9 +447,13 @@ class Prescription extends Model
             return;
         }
 
+        $isFirstOrder = true;
+
         foreach ($supplierGroups as $supplierId => $groupData) {
             try {
-                $this->createOrderForSupplier($quotation, $supplierId, $groupData);
+                // The delivery fee line item is appended only to the first supplier order
+                $this->createOrderForSupplier($quotation, $supplierId, $groupData, $isFirstOrder);
+                $isFirstOrder = false;
             } catch (\Exception $e) {
                 Log::error('Error creating order for supplier', [
                     'supplier_id' => $supplierId,
@@ -528,9 +508,10 @@ class Prescription extends Model
     }
 
     /**
-     * Create order for supplier with bulk insert
+     * Create order for supplier with bulk insert.
+     * last row and its amount is included in the order total.
      */
-    protected function createOrderForSupplier(Quotation $quotation, int $supplierId, array $groupData): Order
+    protected function createOrderForSupplier(Quotation $quotation, int $supplierId, array $groupData, bool $isFirstOrder = false): Order
     {
         $pricingService = app(PricingService::class);
 
@@ -552,23 +533,26 @@ class Prescription extends Model
             $markedUpTotal += $pricing['final_total'];
         }
 
+        $deliveryFee = $isFirstOrder ? Setting::deliveryFee() : 0.0;
+
+
         $markupTotal = $markedUpTotal - $supplierTotal;
 
         $order = Order::create([
-            'order_number' => Order::generateOrderNumber(),
-            'quotation_id' => $quotation->id,
+            'order_number'    => Order::generateOrderNumber(),
+            'quotation_id'    => $quotation->id,
             'prescription_id' => $this->id,
-            'supplier_id' => $supplierId,
-            'supplier_total' => $supplierTotal,
-            'markup_total' => $markupTotal,
-            'total_amount' => $markedUpTotal,
-            'status' => 'pending_review',
-            'ordered_at' => now(),
+            'supplier_id'     => $supplierId,
+            'supplier_total'  => $supplierTotal,
+            'markup_total'    => $markupTotal,
+            'total_amount'    => $markedUpTotal + $deliveryFee,
+            'status'          => 'pending_review',
+            'ordered_at'      => now(),
             'expected_delivery' => now()->addHours(24),
-            'notes' => "Auto-generated from prescription {$this->prescription_number}",
+            'notes'           => "Auto-generated from prescription {$this->prescription_number}",
         ]);
 
-        // Bulk insert order items
+        // Bulk insert medicine order items
         $orderItems = [];
         foreach ($groupData['quotation_items'] as $quotationItem) {
             $prescriptionItem = $quotationItem->prescriptionItem;
@@ -582,36 +566,52 @@ class Prescription extends Model
             );
 
             $orderItems[] = [
-                'order_id' => $order->id,
+                'order_id'         => $order->id,
                 'quotation_item_id' => $quotationItem->id,
-                'medicine_id' => $prescriptionItem->medicine_id,
-                'quantity' => $quotationItem->quantity,
-                'supplier_price' => $pricing['supplier_price'],
-                'unit_price' => $pricing['final_unit_price'],
-                'total_price' => $pricing['final_total'],
-                'status' => 'pending',
-                'created_at' => now(),
-                'updated_at' => now(),
+                'medicine_id'      => $prescriptionItem->medicine_id,
+                'quantity'         => $quotationItem->quantity,
+                'supplier_price'   => $pricing['supplier_price'],
+                'unit_price'       => $pricing['final_unit_price'],
+                'total_price'      => $pricing['final_total'],
+                'is_delivery_fee'    => false,
+                'status'           => 'pending',
+                'created_at'       => now(),
+                'updated_at'       => now(),
+            ];
+        }
+
+
+        if ($isFirstOrder) {
+            $orderItems[] = [
+                'order_id'          => $order->id,
+                'quotation_item_id' => null,
+                'medicine_id'       => $prescriptionItem->medicine_id, 
+                'quantity'          => 1,
+                'supplier_price'    => 0.00,
+                'unit_price'        => $deliveryFee,
+                'total_price'       => $deliveryFee,
+                'is_delivery_fee'   => true,
+                'status'            => 'pending',
+                'created_at'        => now(),
+                'updated_at'        => now(),
             ];
         }
 
         OrderItem::insert($orderItems);
 
-        Log::info('Order created (delivery will be created on first confirmation)', [
-            'order_number' => $order->order_number,
-            'supplier_id' => $supplierId,
-            'total_amount' => $markedUpTotal,
-            'status' => 'pending_review',
+        Log::info('Order created' . ($isFirstOrder ? ' with delivery fee line item' : ''), [
+            'order_number'  => $order->order_number,
+            'supplier_id'   => $supplierId,
+            'total_amount'  => $markedUpTotal + $deliveryFee,
+            'delivery_fee'  => $deliveryFee,
+            'status'        => 'pending_review',
         ]);
-
-        // Notify internal operations team instead
 
         dispatch(function () use ($order) {
             $this->notifyOperations($order);
         });
 
         return $order;
-
     }
 
     protected function notifyOperations(Order $order): void

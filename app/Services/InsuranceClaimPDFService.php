@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\InsuranceClaim;
+use App\Models\Setting;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class InsuranceClaimPDFService
@@ -15,7 +16,9 @@ class InsuranceClaimPDFService
         $claim->load([
             'prescription.items.medicine',
             'prescription.physician',
-            'prescription.orders.items.medicine',
+            'prescription.orders',       
+            'externalOrder.items.medicine',
+            'externalOrder.orders',       
             'patient',
             'insuranceProvider',
         ]);
@@ -31,9 +34,37 @@ class InsuranceClaimPDFService
             'secondary_color' => $provider->secondary_color ?: '#666666',
         ];
 
+        $deliveryFeeItem = null;
+
+        $parentOrders = null;
+        if ($claim->prescription) {
+            $parentOrders = $claim->prescription->orders;
+        } elseif ($claim->externalOrder) {
+            $parentOrders = $claim->externalOrder->orders;
+        }
+
+        if ($parentOrders) {
+            $firstOrder = $parentOrders->sortBy('id')->first();
+            if ($firstOrder) {
+                $firstOrder->load(['items' => fn ($q) => $q->orderBy('id', 'asc')]);
+
+                $deliveryFeeItem = $firstOrder->items->firstWhere('is_delivery_fee', true);
+
+                if (! $deliveryFeeItem) {
+                    $fee = Setting::deliveryFee();
+                    $deliveryFeeItem = (object) [
+                        'total_price'     => $fee,
+                        'is_delivery_fee' => true,
+                        'is_synthesised'  => true,
+                    ];
+                }
+            }
+        }
+
         return PDF::loadView('pdf.insurance-claim', [
-            'claim' => $claim,
-            'branding' => $branding,
+            'claim'           => $claim,
+            'branding'        => $branding,
+            'deliveryFeeItem' => $deliveryFeeItem,
         ])
         ->setPaper('a4', 'portrait')
         ->setOption('margin-top', 10)
@@ -78,7 +109,7 @@ class InsuranceClaimPDFService
     }
 
     /**
-     * Stream claim form (view in browser)
+     * Stream claim form 
      */
     public static function stream(InsuranceClaim $claim): \Symfony\Component\HttpFoundation\Response
     {

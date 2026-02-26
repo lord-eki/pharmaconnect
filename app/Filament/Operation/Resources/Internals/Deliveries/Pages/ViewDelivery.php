@@ -257,13 +257,7 @@ class ViewDelivery extends ViewRecord
                         ->searchable()
                         ->helperText('Only available riders are shown'),
 
-                   TextInput::make('delivery_fee')
-                        ->label('Delivery Fee (KES)')
-                        ->numeric()
-                        ->minValue(0)
-                        ->required()
-                        ->prefix('KES')
-                        ->helperText('Enter the delivery fee for this order'),
+
                 ])
                 ->action(function ($record, array $data) {
                     try {
@@ -272,7 +266,6 @@ class ViewDelivery extends ViewRecord
                         $record->update([
                             'rider_id' => $data['rider_id'],
                             'status' => 'assigned',
-                            'delivery_fee' => $data['delivery_fee'],
                         ]);
 
                         $rider->update(['is_available' => false]);
@@ -313,15 +306,6 @@ class ViewDelivery extends ViewRecord
                         ->required()
                         ->searchable(),
 
-                    \Filament\Forms\Components\TextInput::make('delivery_fee')
-                        ->label('Delivery Fee (KES)')
-                        ->numeric()
-                        ->minValue(0)
-                        ->default(fn ($record) => $record->delivery_fee)
-                        ->required()
-                        ->prefix('KES')
-                        ->helperText('Update the delivery fee if needed'),
-
                     Textarea::make('reason')
                         ->label('Reason for Reassignment')
                         ->required()
@@ -341,7 +325,6 @@ class ViewDelivery extends ViewRecord
 
                         $record->update([
                             'rider_id' => $data['rider_id'],
-                            'delivery_fee' => $data['delivery_fee'],
                             'delivery_notes' => ($record->delivery_notes ?? '').
                                 "\n\nRider reassigned: ".now()->toDateTimeString().
                                 "\nReason: ".$data['reason'],

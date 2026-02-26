@@ -21,7 +21,7 @@ class AuditlogResource extends Resource
 
     protected static ?string $navigationLabel = 'Audit Logs';
 
-    protected static string|UnitEnum|null $navigationGroup = 'System';
+    protected static string|UnitEnum|null $navigationGroup = 'Settings';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCircleStack;
 

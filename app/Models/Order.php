@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\CommissionService;
 use App\Services\PaymentService;
+use App\Models\Setting;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -781,21 +782,10 @@ class Order extends Model
         ]);
     }
 
-    // Calculate delivery fee based on distance/location
+    // Calculate delivery fee — reads the flat rate from admin settings
     protected function calculateDeliveryFee(): float
     {
-        $patient = $this->prescription?->patient;
-        $supplier = $this->supplier;
-
-        if (!$patient || !$supplier) {
-            return 200.00;
-        }
-
-        if ($patient->county === $supplier->county) {
-            return 200.00;
-        }
-
-        return 500.00;
+        return Setting::deliveryFee();
     }
 
     // Estimate distance

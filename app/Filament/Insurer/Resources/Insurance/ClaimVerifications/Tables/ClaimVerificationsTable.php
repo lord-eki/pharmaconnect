@@ -114,7 +114,6 @@ class ClaimVerificationsTable
             ])
             ->recordActions([
                 ActionGroup::make([
-                   // Download Claim Form PDF
                     Action::make('download_claim')
                         ->label('Download Claim Form')
                         ->icon('heroicon-o-document-arrow-down')
@@ -123,7 +122,7 @@ class ClaimVerificationsTable
                             return InsuranceClaimPDFService::download($record);
                         }),
 
-                    // View Claim Form PDF (in browser)
+                    // View Claim Form PDF 
                     Action::make('view_claim')
                         ->label('View Claim Form')
                         ->icon('heroicon-o-eye')

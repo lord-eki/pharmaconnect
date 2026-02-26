@@ -110,6 +110,6 @@ class ExternalOrdersTable
                     DeleteBulkAction::make()
                         ->visible(fn () => auth()->user()->hasRole(['super_admin'])),
                 ]),
-            ]);
+            ])->striped();
     }
 }
