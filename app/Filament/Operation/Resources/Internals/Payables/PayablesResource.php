@@ -22,7 +22,7 @@ class PayablesResource extends Resource
 
     protected static ?string $modelLabel = 'Payables';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Payments';
+    protected static string|UnitEnum|null $navigationGroup = 'Finance & Payments';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::ArrowTrendingUp;
 

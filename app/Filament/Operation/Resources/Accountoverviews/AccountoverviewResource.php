@@ -21,7 +21,7 @@ class AccountoverviewResource extends Resource
 
     protected static ?string $navigationLabel = 'Account Overview';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Finance';
+    protected static string|UnitEnum|null $navigationGroup = 'Finance & Payments';
 
     public static function form(Schema $schema): Schema
     {

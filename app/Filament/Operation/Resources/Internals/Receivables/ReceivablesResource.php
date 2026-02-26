@@ -23,7 +23,7 @@ class ReceivablesResource extends Resource
 
 
 
-    protected static string | UnitEnum | null $navigationGroup = 'Payments';
+    protected static string | UnitEnum | null $navigationGroup = 'Finance & Payments';
 
 
 
