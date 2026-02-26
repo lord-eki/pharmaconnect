@@ -153,9 +153,7 @@ class ViewExternalOrder extends ViewRecord
                                     ])
                                     ->placeholder('N/A'),
 
-                                TextEntry::make('delivery.rider.name')
-                                    ->label('Assigned Rider')
-                                    ->placeholder('Not assigned'),
+                               
                             ]),
                     ])
                     ->collapsible()
