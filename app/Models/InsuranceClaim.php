@@ -12,6 +12,7 @@ class InsuranceClaim extends Model
 
     protected $fillable = [
         'claim_number',
+        'external_order_id',
         'prescription_id',
         'insurance_provider_id',
         'patient_id',

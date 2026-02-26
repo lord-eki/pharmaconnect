@@ -506,17 +506,35 @@ class ExternalOrder extends Model
      */
     public function createInsuranceClaim(): InsuranceClaim
     {
-        
-        if ($this->insuranceClaim) {
+        Log::info('[CLAIM-DIAG] createInsuranceClaim called', [
+            'external_order_id'     => $this->id,
+            'order_number'          => $this->order_number,
+            'insurance_provider_id' => $this->insurance_provider_id,
+            'status'                => $this->status,
+        ]);
+
+        // Return existing if already loaded on the model
+        if ($this->relationLoaded('insuranceClaim') && $this->insuranceClaim) {
+            Log::info('[CLAIM-DIAG] Returning already-loaded claim', [
+                'claim_id' => $this->insuranceClaim->id,
+            ]);
             return $this->insuranceClaim;
         }
 
         $existing = InsuranceClaim::where('external_order_id', $this->id)->first();
         if ($existing) {
+            Log::info('[CLAIM-DIAG] Existing claim found in DB — returning it', [
+                'claim_id'     => $existing->id,
+                'claim_number' => $existing->claim_number,
+                'status'       => $existing->status,
+            ]);
             return $existing;
         }
 
         if (!$this->insurance_provider_id) {
+            Log::error('[CLAIM-DIAG] Cannot create claim — no insurance_provider_id', [
+                'external_order_id' => $this->id,
+            ]);
             throw new \Exception("External order {$this->order_number} has no insurance provider — cannot create claim.");
         }
 
@@ -524,14 +542,24 @@ class ExternalOrder extends Model
             ->whereIn('status', ['confirmed', 'delivered'])
             ->sum('total_amount');
 
+        Log::info('[CLAIM-DIAG] Calculated claimed amount from orders', [
+            'external_order_id' => $this->id,
+            'claimed_from_orders' => $claimedAmount,
+            'order_statuses' => $this->orders()->pluck('status', 'id')->toArray(),
+        ]);
+
         if ($claimedAmount <= 0) {
             $claimedAmount = $this->total_amount;
+            Log::warning('[CLAIM-DIAG] No confirmed/delivered orders found — falling back to external order total_amount', [
+                'external_order_id' => $this->id,
+                'fallback_amount'   => $claimedAmount,
+            ]);
         }
 
         $claim = InsuranceClaim::create([
             'external_order_id'    => $this->id,
             'insurance_provider_id' => $this->insurance_provider_id,
-            'patient_id'           => null,   
+            'patient_id'           => null,
             'prescription_id'      => null,
             'policy_number'        => $this->reference_number ?? $this->order_number,
             'claimed_amount'       => $claimedAmount,
@@ -540,13 +568,21 @@ class ExternalOrder extends Model
             'notes'                => "Auto-generated claim for external order {$this->order_number} after delivery confirmation.",
         ]);
 
-        Log::info('Insurance claim created for external order', [
-            'external_order_id'    => $this->id,
-            'order_number'         => $this->order_number,
-            'claim_id'             => $claim->id,
-            'claim_number'         => $claim->claim_number,
-            'insurance_provider_id' => $this->insurance_provider_id,
-            'claimed_amount'       => $claimedAmount,
+        Log::info('[CLAIM-DIAG] InsuranceClaim::create() returned', [
+            'claim_id'              => $claim->id,
+            'claim_number'          => $claim->claim_number,
+            'external_order_id_on_claim' => $claim->external_order_id,
+            'insurance_provider_id' => $claim->insurance_provider_id,
+            'claimed_amount'        => $claim->claimed_amount,
+            'status'                => $claim->status,
+        ]);
+
+        // Verify it actually persisted with external_order_id
+        $verify = InsuranceClaim::where('external_order_id', $this->id)->first();
+        Log::info('[CLAIM-DIAG] DB verification after create', [
+            'found_in_db'                => (bool) $verify,
+            'verified_claim_id'          => $verify?->id,
+            'verified_external_order_id' => $verify?->external_order_id,
         ]);
 
         return $claim;

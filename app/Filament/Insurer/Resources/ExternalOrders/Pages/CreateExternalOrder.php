@@ -190,7 +190,7 @@ class CreateExternalOrder extends CreateRecord
                                                 $html .= '<div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">';
                                                 $html .= '<div class="font-medium text-sm text-gray-900 dark:text-gray-100 mb-1">'.e($medicineName).'</div>';
                                                 $html .= '<div class="flex justify-between items-center text-xs text-gray-600 dark:text-gray-400">';
-                                                $html .= '<span>Qty: '.$quantity.' × KES '.number_format($unitPrice, 2).'</span>';
+                                                $html .= '<span>Qty: '.$quantity.'  KES '.number_format($unitPrice, 2).'</span>';
                                                 $html .= '<span class="font-semibold text-gray-900 dark:text-gray-100">KES '.number_format($totalPrice, 2).'</span>';
                                                 $html .= '</div>';
                                                 $html .= '</div>';
@@ -377,11 +377,19 @@ class CreateExternalOrder extends CreateRecord
     }
 
     /**
-     * Get medicine name with caching for display
+     * Get medicine name with caching for display.
+     * Accepts string|int|null because Filament's Repeater passes state values
+     * as strings even when the underlying field stores integers.
      */
-    protected static function getMedicineName(?int $medicineId): ?string
+    protected static function getMedicineName(int|string|null $medicineId): ?string
     {
         if (! $medicineId) {
+            return null;
+        }
+
+        $medicineId = (int) $medicineId;
+
+        if ($medicineId <= 0) {
             return null;
         }
 
@@ -402,8 +410,14 @@ class CreateExternalOrder extends CreateRecord
     /**
      * Get cached medicine pricing with markup applied
      */
-    protected static function getMedicinePricing(int $medicineId, int $quantity = 1): array
+    protected static function getMedicinePricing(int|string $medicineId, int $quantity = 1): array
     {
+        $medicineId = (int) $medicineId;
+
+        if ($medicineId <= 0) {
+            return ['unit_price' => 0, 'supplier_price' => 0];
+        }
+
         if ($quantity <= 0) {
             $quantity = 1;
         }

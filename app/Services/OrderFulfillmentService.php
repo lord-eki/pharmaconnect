@@ -167,19 +167,26 @@ class OrderFulfillmentService
     public function handleDeliveryCompletion(Delivery $delivery, array $data): array
     {
         try {
-
             DB::beginTransaction();
+
+            // ── DIAGNOSTIC: dump delivery identity up front ──────────────────
+            Log::info('[CLAIM-DIAG] handleDeliveryCompletion started', [
+                'delivery_id'       => $delivery->id,
+                'delivery_number'   => $delivery->delivery_number,
+                'prescription_id'   => $delivery->prescription_id,
+                'external_order_id' => $delivery->external_order_id,
+                'is_external'       => $delivery->external_order_id !== null,
+            ]);
 
             $results = [
                 'delivery_completed' => false,
                 'payments_processed' => false,
                 'commission_created' => false,
-                'orders_processed' => 0,
-                'errors' => [],
+                'orders_processed'   => 0,
+                'errors'             => [],
             ];
 
             foreach ($delivery->orders as $order) {
-
                 $pivot = $delivery->orders->find($order->id)?->pivot;
                 if ($pivot && $pivot->pickup_status !== 'picked_up') {
                     $delivery->markOrderPickedUp($order->id, 'Auto-marked during delivery completion');
@@ -208,13 +215,22 @@ class OrderFulfillmentService
 
             foreach ($delivery->orders as $order) {
                 try {
+                    // ── DIAGNOSTIC: per-order identity ───────────────────────
+                    Log::info('[CLAIM-DIAG] Processing order in delivery', [
+                        'delivery_id'       => $delivery->id,
+                        'order_id'          => $order->id,
+                        'order_number'      => $order->order_number,
+                        'external_order_id' => $order->external_order_id,
+                        'prescription_id'   => $order->prescription_id,
+                    ]);
+
                     // Process payments
                     $paymentResults = $this->paymentService->processOrderPayments($order);
                     if ($paymentResults) {
                         $totalPaymentsProcessed++;
                     }
 
-                    // Calculate commission
+                    // Calculate commission (prescription orders only)
                     if (! $order->external_order_id) {
                         $commission = $this->commissionService->calculateCommissionForOrder($order);
                         if ($commission) {
@@ -226,20 +242,82 @@ class OrderFulfillmentService
 
                 } catch (\Exception $e) {
                     $results['errors'][] = "Order {$order->order_number}: {$e->getMessage()}";
-                    Log::error('Error processing order in delivery', [
-                        'order_id' => $order->id,
+                    Log::error('[CLAIM-DIAG] Error processing order in delivery', [
+                        'order_id'    => $order->id,
                         'order_number' => $order->order_number,
-                        'error' => $e->getMessage(),
+                        'error'       => $e->getMessage(),
+                        'trace'       => $e->getTraceAsString(),
                     ]);
                 }
             }
 
             $results['payments_processed'] = ($totalPaymentsProcessed === $delivery->orders->count());
-            $results['commission_created'] = ($totalCommissionsCreated === $delivery->orders->count());
+            $results['commission_created']  = ($totalCommissionsCreated === $delivery->orders->count());
 
-            // Update prescription status
+            // Update prescription status (prescription-based deliveries)
             if ($delivery->prescription) {
+                Log::info('[CLAIM-DIAG] Marking prescription fulfilled', [
+                    'prescription_id' => $delivery->prescription_id,
+                ]);
                 $delivery->prescription->markFulfilled();
+            }
+
+            // ── Create insurance claim for external (insurer-originated) orders ──
+            Log::info('[CLAIM-DIAG] Checking whether to create insurance claim', [
+                'delivery_id'              => $delivery->id,
+                'external_order_id'        => $delivery->external_order_id,
+                'external_order_id_set'    => $delivery->external_order_id !== null,
+                'external_order_loaded'    => $delivery->relationLoaded('externalOrder'),
+                'external_order_exists'    => (bool) $delivery->externalOrder,
+            ]);
+
+            if ($delivery->external_order_id) {
+                // Force-load the relation in case it was cached as null
+                $delivery->load('externalOrder');
+
+                $externalOrder = $delivery->externalOrder;
+
+                Log::info('[CLAIM-DIAG] External order resolved', [
+                    'delivery_id'            => $delivery->id,
+                    'external_order_id'      => $delivery->external_order_id,
+                    'external_order_found'   => (bool) $externalOrder,
+                    'insurance_provider_id'  => $externalOrder?->insurance_provider_id,
+                    'existing_claim_id'      => $externalOrder
+                        ? \App\Models\InsuranceClaim::where('external_order_id', $externalOrder->id)->value('id')
+                        : null,
+                ]);
+
+                if ($externalOrder) {
+                    try {
+                        $claim = $externalOrder->createInsuranceClaim();
+
+                        Log::info('[CLAIM-DIAG] Insurance claim created successfully', [
+                            'delivery_id'          => $delivery->id,
+                            'external_order_id'    => $externalOrder->id,
+                            'claim_id'             => $claim->id,
+                            'claim_number'         => $claim->claim_number,
+                            'insurance_provider_id' => $claim->insurance_provider_id,
+                            'claimed_amount'       => $claim->claimed_amount,
+                            'status'               => $claim->status,
+                        ]);
+
+                    } catch (\Exception $e) {
+                        // Non-fatal — delivery is still marked complete
+                        Log::error('[CLAIM-DIAG] Failed to create insurance claim after delivery', [
+                            'delivery_id'       => $delivery->id,
+                            'external_order_id' => $externalOrder->id,
+                            'error'             => $e->getMessage(),
+                            'trace'             => $e->getTraceAsString(),
+                        ]);
+                        $results['errors'][] = 'Insurance claim creation failed: ' . $e->getMessage();
+                    }
+                } else {
+                    Log::error('[CLAIM-DIAG] external_order_id set on delivery but ExternalOrder record not found', [
+                        'delivery_id'       => $delivery->id,
+                        'external_order_id' => $delivery->external_order_id,
+                    ]);
+                    $results['errors'][] = 'Insurance claim skipped: ExternalOrder record not found for id ' . $delivery->external_order_id;
+                }
             }
 
             // Update rider
@@ -250,15 +328,13 @@ class OrderFulfillmentService
 
             DB::commit();
 
-            Log::info('Prescription delivery completed', [
-                'delivery_id' => $delivery->id,
-                'delivery_number' => $delivery->delivery_number,
-                'prescription_id' => $delivery->prescription_id ?? 'External Order',
-                'prescription_number' => $delivery->prescription->prescription_number ?? 'External Order',
-                'orders_processed' => $results['orders_processed'],
-                'total_orders' => $delivery->orders->count(),
-                'payments_processed' => $totalPaymentsProcessed,
-                'commissions_created' => $totalCommissionsCreated,
+            Log::info('[CLAIM-DIAG] handleDeliveryCompletion committed successfully', [
+                'delivery_id'       => $delivery->id,
+                'delivery_number'   => $delivery->delivery_number,
+                'external_order_id' => $delivery->external_order_id,
+                'orders_processed'  => $results['orders_processed'],
+                'total_orders'      => $delivery->orders->count(),
+                'errors'            => $results['errors'],
             ]);
 
             // Send notifications
@@ -269,10 +345,10 @@ class OrderFulfillmentService
         } catch (\Exception $e) {
             DB::rollBack();
 
-            Log::error('Error handling delivery completion', [
+            Log::error('[CLAIM-DIAG] handleDeliveryCompletion ROLLED BACK', [
                 'delivery_id' => $delivery->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'error'       => $e->getMessage(),
+                'trace'       => $e->getTraceAsString(),
             ]);
 
             throw $e;

@@ -71,6 +71,10 @@ class Delivery extends Model
     {
         return $this->belongsTo(Order::class);
     }
+    public function externalOrder(): BelongsTo
+    {
+        return $this->belongsTo(ExternalOrder::class, 'external_order_id');
+    }
 
     public function rider(): BelongsTo
     {

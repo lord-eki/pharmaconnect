@@ -406,7 +406,9 @@
             </div>
         </div>
 
-        {{-- Patient Details Section --}}
+        {{-- Patient / Recipient Details Section --}}
+        @if($claim->patient)
+        {{-- Prescription-based claim: real patient record --}}
         <div class="section-header">1. Patient Details</div>
         <div class="form-section">
             <div class="form-row">
@@ -442,13 +444,54 @@
                 </div>
             </div>
         </div>
-
-        {{-- Claim Details Section --}}
-        <div class="section-header">2. Details of Claim (complete in all cases)</div>
+        @else
+        {{-- External order claim: recipient details from the external order --}}
+        @php $externalOrder = $claim->externalOrder; @endphp
+        <div class="section-header">1. Recipient Details</div>
         <div class="form-section">
             <div class="form-row">
+                <div class="form-group half-width">
+                    <div class="form-label">Recipient Name</div>
+                    <div class="form-value bold">{{ $externalOrder?->recipient_name ?? 'N/A' }}</div>
+                </div>
+                <div class="form-group half-width">
+                    <div class="form-label">Reference / Order Number</div>
+                    <div class="form-value bold">{{ $claim->policy_number }}</div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group half-width">
+                    <div class="form-label">Contact Phone</div>
+                    <div class="form-value">{{ $externalOrder?->recipient_phone ?? 'N/A' }}</div>
+                </div>
+                <div class="form-group half-width">
+                    <div class="form-label">Contact Email</div>
+                    <div class="form-value">{{ $externalOrder?->recipient_email ?? 'N/A' }}</div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group full-width">
+                    <div class="form-label">Delivery Address</div>
+                    <div class="form-value">
+                        {{ $externalOrder?->delivery_address ?? 'N/A' }}
+                        @if($externalOrder?->delivery_city), {{ $externalOrder->delivery_city }}@endif
+                        @if($externalOrder?->delivery_county), {{ $externalOrder->delivery_county }}@endif
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
+
+        {{-- Claim Details Section --}}
+        <div class="section-header">2. Details of Claim</div>
+        <div class="form-section">
+            @if($claim->prescription)
+            {{-- Prescription-based claim --}}
+            <div class="form-row">
                 <div class="form-group third-width">
-                    <div class="form-label">Date of  Illness</div>
+                    <div class="form-label">Date of Illness</div>
                     <div class="form-value">{{ $claim->prescription->prescribed_at?->format('d/m/Y') ?? 'N/A' }}</div>
                 </div>
                 <div class="form-group third-width">
@@ -478,12 +521,46 @@
                     <div class="form-value">{{ $claim->prescription->prescription_number ?? 'N/A' }}</div>
                 </div>
             </div>
+            @else
+            {{-- External order claim --}}
+            @php $externalOrder = $externalOrder ?? $claim->externalOrder; @endphp
+            <div class="form-row">
+                <div class="form-group half-width">
+                    <div class="form-label">Order Date</div>
+                    <div class="form-value">{{ $externalOrder?->ordered_at?->format('d/m/Y') ?? 'N/A' }}</div>
+                </div>
+                <div class="form-group half-width">
+                    <div class="form-label">Submitted Date</div>
+                    <div class="form-value">{{ $claim->submitted_at?->format('d/m/Y') ?? 'N/A' }}</div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group half-width">
+                    <div class="form-label">External Order Number</div>
+                    <div class="form-value bold">{{ $externalOrder?->order_number ?? 'N/A' }}</div>
+                </div>
+                <div class="form-group half-width">
+                    <div class="form-label">Reference Number</div>
+                    <div class="form-value">{{ $externalOrder?->reference_number ?? 'N/A' }}</div>
+                </div>
+            </div>
+
+            @if($externalOrder?->notes)
+            <div class="form-row">
+                <div class="form-group full-width">
+                    <div class="form-label">Order Notes</div>
+                    <div class="form-value">{{ $externalOrder->notes }}</div>
+                </div>
+            </div>
+            @endif
+            @endif
         </div>
 
         {{-- Medication / Treatment Details --}}
         <div class="section-header">3. Claim Breakdown</div>
         <div class="form-section">
-            <div class="form-label" style="margin-bottom: 5px;">Itemized list of treatment/medicines and costs:</div>
+            <div class="form-label" style="margin-bottom: 5px;">Itemized list of medicines and costs:</div>
             <table class="claim-table">
                 <thead>
                     <tr>
@@ -495,29 +572,57 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($claim->prescription->items as $index => $item)
-                    <tr>
-                        <td class="text-center">{{ $index + 1 }}</td>
-                        <td>
-                            <div class="medicine-name">{{ $item->medicine->generic_name }}</div>
-                            <div class="medicine-details">
-                                @if($item->medicine->brand_name)
-                                    Brand: {{ $item->medicine->brand_name }} •
-                                @endif
-                                {{ $item->medicine->strength }} • {{ $item->medicine->dosage_form }}
-                            </div>
-                        </td>
-                        <td class="text-center">{{ $item->quantity }}</td>
-                        <td class="small-text">{{ $item->dosage_instructions ?? 'As prescribed' }}</td>
-                        <td class="text-right bold">{{ number_format($item->total_price, 2) }}</td>
-                    </tr>
-                    @endforeach
-                    @if($claim->prescription->items->count() == 0)
-                    <tr>
-                        <td colspan="5" class="text-center" style="padding: 15px; color: #666;">
-                            No prescription items recorded
-                        </td>
-                    </tr>
+                    @if($claim->prescription)
+                        {{-- Prescription-based: items come from the prescription --}}
+                        @forelse($claim->prescription->items as $index => $item)
+                        <tr>
+                            <td class="text-center">{{ $index + 1 }}</td>
+                            <td>
+                                <div class="medicine-name">{{ $item->medicine->generic_name }}</div>
+                                <div class="medicine-details">
+                                    @if($item->medicine->brand_name)
+                                        Brand: {{ $item->medicine->brand_name }} •
+                                    @endif
+                                    {{ $item->medicine->strength }} • {{ $item->medicine->dosage_form }}
+                                </div>
+                            </td>
+                            <td class="text-center">{{ $item->quantity }}</td>
+                            <td class="small-text">{{ $item->dosage_instructions ?? 'As prescribed' }}</td>
+                            <td class="text-right bold">{{ number_format($item->total_price, 2) }}</td>
+                        </tr>
+                        @empty
+                        <tr>
+                            <td colspan="5" class="text-center" style="padding: 15px; color: #666;">
+                                No prescription items recorded
+                            </td>
+                        </tr>
+                        @endforelse
+                    @else
+                        {{-- External order: items come from the external order --}}
+                        @php $externalOrder = $externalOrder ?? $claim->externalOrder; @endphp
+                        @forelse($externalOrder?->items ?? [] as $index => $item)
+                        <tr>
+                            <td class="text-center">{{ $index + 1 }}</td>
+                            <td>
+                                <div class="medicine-name">{{ $item->medicine->generic_name ?? 'N/A' }}</div>
+                                <div class="medicine-details">
+                                    @if($item->medicine?->brand_name)
+                                        Brand: {{ $item->medicine->brand_name }} •
+                                    @endif
+                                    {{ $item->medicine?->strength }} • {{ $item->medicine?->dosage_form }}
+                                </div>
+                            </td>
+                            <td class="text-center">{{ $item->quantity }}</td>
+                            <td class="small-text">—</td>
+                            <td class="text-right bold">{{ number_format($item->total_price, 2) }}</td>
+                        </tr>
+                        @empty
+                        <tr>
+                            <td colspan="5" class="text-center" style="padding: 15px; color: #666;">
+                                No order items recorded
+                            </td>
+                        </tr>
+                        @endforelse
                     @endif
                 </tbody>
             </table>
