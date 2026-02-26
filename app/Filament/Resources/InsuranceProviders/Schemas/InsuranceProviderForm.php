@@ -14,6 +14,7 @@ use Filament\Forms\Components\ViewField;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 
 class InsuranceProviderForm
 {
@@ -22,12 +23,19 @@ class InsuranceProviderForm
         return $schema
             ->components([
 
-                Section::make('Basic Information')
+                Section::make(fn ($record, $operation) => $operation === 'edit' ? ' ' . $record?->company_name : 'Basic Information')
                     ->schema([
                    
                         Select::make('company_name')
-                            ->required()->options(User::role('insurer')->whereDoesntHave('insuranceProvider')->pluck('name','name'))
-                            ->helperText('Official registered company name'),
+                            ->required()
+                            ->options(function () {
+                                return User::role('insurer')
+                                    ->whereDoesntHave('insuranceProvider')
+                                    ->pluck('name', 'name');
+                            })
+                            ->searchable()
+                            ->helperText('Official registered company name')
+                            ->visible(fn ($operation) => $operation === 'create'),
 
                         TextInput::make('registration_number')
                             ->required()
