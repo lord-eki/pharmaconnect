@@ -375,10 +375,12 @@ class Prescription extends Model
         // Single query to get all relevant supplier medicines
         $medicineIds = $this->items->pluck('medicine_id')->toArray();
 
+        // Fetch ALL active suppliers for each medicine — including out-of-stock ones.
+        // Out-of-stock suppliers are still included so we can assign the cheapest price
+        // at prescription time. Stock is re-checked at the "Send to Supplier" step.
         $supplierMedicines = DB::table('supplier_medicines')
             ->whereIn('medicine_id', $medicineIds)
             ->where('is_available', true)
-            ->where('stock_quantity', '>', 0)
             ->select([
                 'id',
                 'medicine_id',
@@ -395,21 +397,22 @@ class Prescription extends Model
         foreach ($this->items as $item) {
             $availableSuppliers = $supplierMedicines->get($item->medicine_id, collect());
 
-            foreach ($availableSuppliers as $supplierMedicine) {
-                if ($supplierMedicine->stock_quantity >= $item->quantity) {
-                    $quotationItems[] = [
-                        'quotation_id' => $quotation->id,
-                        'prescription_item_id' => $item->id,
-                        'supplier_id' => $supplierMedicine->supplier_id,
-                        'supplier_medicine_id' => $supplierMedicine->id,
-                        'quantity' => $item->quantity,
-                        'unit_price' => $supplierMedicine->unit_price,
-                        'total_price' => $supplierMedicine->unit_price * $item->quantity,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ];
-                    $hasItems = true;
-                }
+            // Sort by price ascending so the cheapest ends up first (used later in grouping)
+            $sorted = $availableSuppliers->sortBy('unit_price');
+
+            foreach ($sorted as $supplierMedicine) {
+                $quotationItems[] = [
+                    'quotation_id' => $quotation->id,
+                    'prescription_item_id' => $item->id,
+                    'supplier_id' => $supplierMedicine->supplier_id,
+                    'supplier_medicine_id' => $supplierMedicine->id,
+                    'quantity' => $item->quantity,
+                    'unit_price' => $supplierMedicine->unit_price,
+                    'total_price' => $supplierMedicine->unit_price * $item->quantity,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+                $hasItems = true;
             }
         }
 

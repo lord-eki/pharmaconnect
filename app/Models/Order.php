@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Exceptions\StockShortageException;
 use App\Services\CommissionService;
 use App\Services\PaymentService;
 use App\Models\Setting;
@@ -262,14 +263,23 @@ class Order extends Model
         }
     }
 
-    /**
-     * Send order to supplier for processing
-     */
+
     public function sendToSupplier(?string $notes = null): bool
     {
         if ($this->status !== 'pending_review') {
             throw new \Exception('Order must be in pending_review status to send to supplier');
         }
+
+        // ── Stock check before sending ─────────────────────────────────────
+        $shortages = $this->checkStockShortages();
+
+        if (! empty($shortages)) {
+            throw new StockShortageException(
+                'Some medicines are out of stock at the current supplier.',
+                $shortages
+            );
+        }
+        // ──────────────────────────────────────────────────────────────────
 
         $this->status = 'sent_to_supplier';
         $this->sent_to_supplier_at = now();
@@ -289,6 +299,156 @@ class Order extends Model
         }
 
         return $saved;
+    }
+
+    /**
+     * Check whether the current supplier has sufficient stock for every item.
+     *
+     * Returns an array of shortage entries, each containing:
+     *   - order_item_id
+     *   - medicine_id
+     *   - medicine_name
+     *   - required_quantity
+     *   - available_stock
+     *   - alternative_suppliers  — collection of suppliers who have stock, sorted cheapest first
+     */
+    public function checkStockShortages(): array
+    {
+        $this->loadMissing('items.medicine');
+
+        $shortages = [];
+
+        foreach ($this->items()->where('is_delivery_fee', false)->get() as $item) {
+            $medicine = $item->medicine;
+
+            $supplierMedicine = DB::table('supplier_medicines')
+                ->where('medicine_id', $item->medicine_id)
+                ->where('supplier_id', $this->supplier_id)
+                ->first();
+
+            $availableStock = $supplierMedicine?->stock_quantity ?? 0;
+
+            if ($availableStock < $item->quantity) {
+                // Find alternative suppliers with enough stock, sorted cheapest first
+                $alternatives = DB::table('supplier_medicines as sm')
+                    ->join('suppliers as s', 's.id', '=', 'sm.supplier_id')
+                    ->where('sm.medicine_id', $item->medicine_id)
+                    ->where('sm.is_available', true)
+                    ->where('sm.stock_quantity', '>=', $item->quantity)
+                    ->where('sm.supplier_id', '!=', $this->supplier_id)
+                    ->select([
+                        's.id as supplier_id',
+                        's.company_name',
+                        'sm.unit_price',
+                        'sm.stock_quantity',
+                    ])
+                    ->orderBy('sm.unit_price', 'asc')
+                    ->get();
+
+                $shortages[] = [
+                    'order_item_id'          => $item->id,
+                    'medicine_id'            => $item->medicine_id,
+                    'medicine_name'          => $medicine?->generic_name ?? "Medicine #{$item->medicine_id}",
+                    'required_quantity'      => $item->quantity,
+                    'available_stock'        => $availableStock,
+                    'alternative_suppliers'  => $alternatives,
+                ];
+            }
+        }
+
+        return $shortages;
+    }
+
+    /**
+     * Reassign this order (and its items) to a different supplier.
+     *
+     * The new supplier must be able to fulfil every non-delivery-fee item.
+     * Prices are updated from the supplier_medicines pivot table.
+     * The order stays in `pending_review` so the operation can review before sending.
+     */
+    public function reassignToSupplier(int $newSupplierId, ?string $reason = null): bool
+    {
+        return DB::transaction(function () use ($newSupplierId, $reason) {
+            $pricingService = app(\App\Services\PricingService::class);
+
+            // Record original supplier in history
+            $history = $this->reassignment_history ?? [];
+            $history[] = [
+                'from_supplier_id' => $this->supplier_id,
+                'to_supplier_id'   => $newSupplierId,
+                'reason'           => $reason ?? 'Stock shortage',
+                'reassigned_at'    => now()->toIso8601String(),
+                'reassigned_by'    => auth()->id(),
+            ];
+
+            if (! $this->original_supplier_id) {
+                $this->original_supplier_id = $this->supplier_id;
+            }
+
+            $this->supplier_id          = $newSupplierId;
+            $this->reassignment_history = $history;
+            $this->reassignment_count   = count($history);
+            $this->is_rejected          = false;
+
+            if ($reason) {
+                $this->notes = ($this->notes ? $this->notes."\n\n" : '').'Reassigned: '.$reason;
+            }
+
+            // Recalculate item prices for the new supplier
+            $supplierTotal  = 0;
+            $markedUpTotal  = 0;
+
+            $this->loadMissing('items.medicine');
+
+            foreach ($this->items()->where('is_delivery_fee', false)->get() as $item) {
+                $medicine = $item->medicine;
+
+                $sm = DB::table('supplier_medicines')
+                    ->where('medicine_id', $item->medicine_id)
+                    ->where('supplier_id', $newSupplierId)
+                    ->first();
+
+                if (! $sm) {
+                    throw new \Exception(
+                        "Supplier does not carry medicine: {$medicine?->generic_name}"
+                    );
+                }
+
+                $pricing = $pricingService->calculateFinalPrice(
+                    $sm->unit_price,
+                    $medicine,
+                    $item->quantity
+                );
+
+                $item->update([
+                    'supplier_price' => $pricing['supplier_price'],
+                    'unit_price'     => $pricing['final_unit_price'],
+                    'total_price'    => $pricing['final_total'],
+                ]);
+
+                $supplierTotal += $pricing['supplier_total'];
+                $markedUpTotal += $pricing['final_total'];
+            }
+
+            // Preserve existing delivery fee item
+            $deliveryFeeItem = $this->items()->where('is_delivery_fee', true)->first();
+            $deliveryFee     = $deliveryFeeItem ? $deliveryFeeItem->total_price : 0;
+
+            $this->supplier_total = $supplierTotal;
+            $this->markup_total   = $markedUpTotal - $supplierTotal;
+            $this->total_amount   = $markedUpTotal + $deliveryFee;
+            $this->save();
+
+            Log::info('Order reassigned to new supplier', [
+                'order_id'         => $this->id,
+                'order_number'     => $this->order_number,
+                'from_supplier_id' => $history[count($history) - 1]['from_supplier_id'],
+                'to_supplier_id'   => $newSupplierId,
+                'new_total'        => $this->total_amount,
+            ]);
+
+            return true;
+        });
     }
 
     /**
