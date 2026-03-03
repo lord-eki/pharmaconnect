@@ -194,7 +194,7 @@ class OrderResource extends Resource
         $supplier = Auth::user()->supplier;
 
         $pending = Order::where('supplier_id', $supplier->id)
-            ->where('status', 'pending')
+            ->where('status', ['sent_to_supplier'])
             ->count();
 
         return $pending > 0 ? (string) $pending : null;
