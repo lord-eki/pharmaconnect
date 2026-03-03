@@ -14,7 +14,7 @@ class ListDocuments extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->outlined()->icon('heroicon-o-clipboard-document-check')->label('Upload Document'),
+            CreateAction::make()->icon('heroicon-o-clipboard-document-check')->label('Upload Document'),
         ];
     }
 

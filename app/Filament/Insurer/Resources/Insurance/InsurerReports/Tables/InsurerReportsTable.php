@@ -73,11 +73,11 @@ class InsurerReportsTable
 
                 BadgeColumn::make('status')
                     ->colors([
-                        'warning' => 'submitted',
-                        'info' => 'under_review',
-                        'success' => 'approved',
+                        'secondary' => 'submitted',
+                        'gray' => 'under_review',
+                        'info' => 'approved',
                         'danger' => 'rejected',
-                        'primary' => 'paid',
+                        'success' => 'paid',
                     ]),
                 TextColumn::make('pdf_path')->wrap()->label('PDF Generated')->formatStateUsing(fn ($state) => $state ? 'Yes' : 'No'),
             ])
@@ -149,7 +149,7 @@ class InsurerReportsTable
                 Action::make('download_pdf')
                     ->label('Download')
                     ->icon('heroicon-o-arrow-down-tray')
-                    ->color('danger')->visible((fn ($record) => ! filled($record->pdf_path)))
+                    ->color('success')->visible((fn ($record) => ! filled($record->pdf_path)))
                     ->action(function ($record) {
                         return static::downloadClaimPdf($record);
                     }),

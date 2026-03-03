@@ -23,7 +23,12 @@ class QuotationsTable
                 TextColumn::make('total_amount')
                     ->numeric()->money('KES')
                     ->sortable(),
-                BadgeColumn::make('status'),
+                BadgeColumn::make('status')->colors([
+                    'success' => 'sent',
+                    'info' => 'accepted',
+                    'danger' => 'rejected',
+                    'gray' => 'pending',
+                ]),
                 TextColumn::make('valid_until')
                     ->dateTime()
                     ->sortable(),

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Prescriptions\Tables;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -21,7 +22,12 @@ class PrescriptionsTable
                     ->searchable(),
                 TextColumn::make('patient.id')
                     ->searchable(),
-                TextColumn::make('status')->badge(),
+                BadgeColumn::make('status')->colors([
+                    'info' => 'processing',
+                    'success' => 'fulfilled',
+                    'danger' => 'cancelled',
+                    'gray' => 'draft'
+                ]),
                 TextColumn::make('total_amount')->money('KES')
                     ->numeric(),
                 IconColumn::make('insurance_covered')

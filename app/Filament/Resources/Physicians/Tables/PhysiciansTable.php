@@ -46,7 +46,13 @@ class PhysiciansTable
                 TextColumn::make('practice_email')
                     ->searchable(),
                 TextColumn::make('practice_type'),
-                BadgeColumn::make('verification_status')->label('Status'),
+                BadgeColumn::make('verification_status')->label('Status')->colors([
+                    'success' => 'verified',
+                    'info' => 'pending',
+                    'danger' => 'rejected',
+                    'warning' => 'suspended',
+                   
+                ]),
               
                 TextColumn::make('commission_rate')
                     ->numeric()->label('Commission(%) ')

@@ -74,8 +74,8 @@ class ClaimVerificationsTable
 
                 BadgeColumn::make('status')
                     ->colors([
-                        'warning' => 'submitted',
-                        'info' => 'under_review',
+                        'info' => 'submitted',
+                        'gray' => 'under_review',
                         'success' => 'approved',
                         'danger' => 'rejected',
                         'primary' => 'paid',

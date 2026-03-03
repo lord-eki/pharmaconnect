@@ -29,7 +29,13 @@ class OrdersTable
                     ->numeric()->money('KES')
                     ->sortable(),
          
-                BadgeColumn::make('status'),
+                BadgeColumn::make('status')->colors([
+                    'info' => 'shipped',
+                    'success' => 'confirmed',
+                    'danger' => 'cancelled',
+                    'gray' => 'pending',
+                    'success' => 'delivered',
+                ]),
                 TextColumn::make('ordered_at')
                     ->dateTime()
                     ->sortable(),

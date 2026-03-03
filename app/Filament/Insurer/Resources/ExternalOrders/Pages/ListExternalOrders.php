@@ -13,7 +13,7 @@ class ListExternalOrders extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->outlined()->icon('heroicon-o-bars-arrow-down'),
+            CreateAction::make()->icon('heroicon-o-bars-arrow-down'),
         ];
     }
 }

@@ -65,7 +65,7 @@ class DocumentsTable
                     ->sortable()
                     ->formatStateUsing(fn (string $state): string => ucfirst($state))
                     ->colors([
-                        'warning' => 'pending',
+                        'gray' => 'pending',
                         'success' => 'verified',
                         'danger' => 'rejected',
                     ]),

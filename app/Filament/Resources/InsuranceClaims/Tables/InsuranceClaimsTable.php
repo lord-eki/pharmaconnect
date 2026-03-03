@@ -75,11 +75,11 @@ class InsuranceClaimsTable
 
                 BadgeColumn::make('status')
                     ->colors([
-                        'primary' => 'submitted',
-                        'warning' => 'under_review',
+                        'info' => 'submitted',
+                        'gray' => 'under_review',
                         'success' => 'approved',
                         'danger' => 'rejected',
-                        'info' => 'paid',
+                        'primary' => 'paid',
                     ])
                     ->sortable(),
 

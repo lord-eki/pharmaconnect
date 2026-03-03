@@ -96,7 +96,7 @@ class OrdersTable
                 BadgeColumn::make('status')
                     ->label('Status')
                     ->colors([
-                        'warning' => 'pending_review',
+                        'gray' => 'pending_review',
                         'info' => 'sent_to_supplier',
                         'primary' => ['confirmed', 'processing', 'shipped','sent_to_supplier'],
                         'success' => 'delivered',

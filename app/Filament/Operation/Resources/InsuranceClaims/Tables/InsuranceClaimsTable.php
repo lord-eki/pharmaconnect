@@ -75,11 +75,11 @@ class InsuranceClaimsTable
 
                 BadgeColumn::make('status')
                     ->colors([
-                        'warning' => 'submitted',
-                        'info' => 'under_review',
-                        'success' => 'approved',
+                        'gray' => 'submitted',
+                        'primary' => 'under_review',
+                        'info' => 'approved',
                         'danger' => 'rejected',
-                        'primary' => 'paid',
+                        'success' => 'paid',
                     ])
                     ->icons([
                         'heroicon-o-clock' => 'submitted',

@@ -52,10 +52,9 @@ class AccountoverviewsTable
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'patient' => 'info',
-                        'insurance' => 'primary',
-                        'supplier' => 'warning',
+                        'insurance' => 'info',
+                        'supplier' => 'gray',
                         'physician' => 'success',
-                        default => 'gray',
                     }),
 
                 TextColumn::make('party_name')
