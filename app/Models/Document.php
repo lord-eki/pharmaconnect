@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\HasAuditLog;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,7 +12,7 @@ use Illuminate\Support\Facades\Storage;
 
 class Document extends Model
 {
-    use HasFactory ,SoftDeletes;
+    use HasFactory ,SoftDeletes , HasAuditLog;
 
     protected $fillable = [
         'document_number',
@@ -43,7 +44,6 @@ class Document extends Model
         'metadata',
     ];
 
-
     protected $casts = [
         'uploaded_at' => 'datetime',
         'verified_at' => 'datetime',
@@ -68,10 +68,8 @@ class Document extends Model
         });
 
         static::deleting(function ($document) {
-            // Archive the physical file instead of deleting
-            if ($document->isForceDeleting() && Storage::exists($document->file_path)) {
-                $archivePath = 'archives/' . $document->file_path;
-                Storage::move($document->file_path, $archivePath);
+            if ($document->isForceDeleting() && Storage::disk('local')->exists('private/'.$document->file_path)) {
+                Storage::disk('local')->move('private/'.$document->file_path, 'private/archives/'.$document->file_path);
             }
         });
     }
@@ -204,7 +202,7 @@ class Document extends Model
 
     public function getFileUrl(): string
     {
-        return Storage::url($this->file_path);
+        return route('documents.preview', $this->id);
     }
 
     public function getDownloadUrl(): string
@@ -223,7 +221,7 @@ class Document extends Model
             $i++;
         }
 
-        return round($bytes, 2) . ' ' . $units[$i];
+        return round($bytes, 2).' '.$units[$i];
     }
 
     public function isImage(): bool
@@ -264,18 +262,21 @@ class Document extends Model
     public function archive(): bool
     {
         $this->status = 'archived';
+
         return $this->save();
     }
 
     public function lock(): bool
     {
         $this->is_locked = true;
+
         return $this->save();
     }
 
     public function unlock(): bool
     {
         $this->is_locked = false;
+
         return $this->save();
     }
 
@@ -357,5 +358,4 @@ class Document extends Model
             default => false,
         };
     }
-    
 }

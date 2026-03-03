@@ -14,6 +14,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use UnitEnum;
+use Illuminate\Database\Eloquent\Builder;
 
 class AuditlogResource extends Resource
 {
@@ -50,6 +51,12 @@ class AuditlogResource extends Resource
             // 'edit' => EditAuditlog::route('/{record}/edit'),
         ];
     }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->where('auditable_type','App\Models\Document');
+    }
+
 
  
 }
