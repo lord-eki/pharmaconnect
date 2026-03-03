@@ -4,3 +4,12 @@
 @source '../../../views/filament/rider/**/*.blade.php';
 @source '../../../views/filament/components/**/*.blade.php';
 @source '../../../views/components/**/*.blade.php';
+
+
+.fi-sidebar {
+    background-color: #F7F3F2;
+}
+
+body{
+    background-color: #F7F3F2;
+}

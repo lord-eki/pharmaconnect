@@ -3,3 +3,11 @@
 @source '../../../../app/Filament/**/*';
 @source '../../../../resources/views/filament/**/*';
 @source '../../../../resources/views/filament/widgets/**/*';
+
+.fi-sidebar {
+    background-color: #F7F3F2;
+}
+
+body{
+    background-color: #F7F3F2;
+}

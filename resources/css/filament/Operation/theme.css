@@ -3,3 +3,11 @@
 @source '../../../../app/Filament/Operation/**/*';
 @source '../../../../resources/views/filament/operation/**/*';
 @source '../../../../resources/views/filament/components/**/*';
+
+.fi-sidebar {
+    background-color: #F7F3F2;
+}
+
+body{
+    background-color: #F7F3F2;
+}

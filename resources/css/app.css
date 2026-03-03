@@ -9,4 +9,11 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+.fi-sidebar {
+    background-color: #F7F3F2;
+}
+
+body{
+    background-color: #F7F3F2;
+}
 
