@@ -102,10 +102,10 @@ class PatientsTable
                     Action::make('create_prescription')
                         ->label('New Prescription')
                         ->icon('heroicon-o-document-plus')
-                        ->color('success'),
-                    // ->url(fn ($record) => route('filament.physician.resources.prescriptions.create', [
-                    //     'patient_id' => $record->id,
-                    // ])),
+                        ->color('success')
+                    ->url(fn ($record) => route('filament.Physician.resources.physician.prescriptions.create', [
+                        'patient_id' => $record->id,
+                    ])),
                 ])->label('More actions')
                     ->icon('heroicon-m-ellipsis-vertical')
                     ->size(Size::Small)
