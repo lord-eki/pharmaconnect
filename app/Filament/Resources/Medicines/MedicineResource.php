@@ -31,7 +31,6 @@ class MedicineResource extends Resource
 {
     protected static ?string $model = Medicine::class;
 
-
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBeaker;
 
     protected static string|UnitEnum|null $navigationGroup = 'Medicine Management';
@@ -42,9 +41,12 @@ class MedicineResource extends Resource
     {
         return $schema
             ->schema([
+
+                // ── Row 1: Basic Information — full width ──────────────────────────
                 Section::make('Basic Information')
+                    ->columnSpanFull()
                     ->schema([
-                        Grid::make(2)
+                        Grid::make(3)
                             ->schema([
                                 Select::make('category_id')
                                     ->label('Category')
@@ -68,24 +70,23 @@ class MedicineResource extends Resource
 
                                 Select::make('dosage_form')
                                     ->options([
-                                        'Tablet' => 'Tablet',
-                                        'Capsule' => 'Capsule',
-                                        'Syrup' => 'Syrup',
-                                        'Suspension' => 'Suspension',
-                                        'Injection' => 'Injection',
-                                        'Cream' => 'Cream',
-                                        'Ointment' => 'Ointment',
-                                        'Drops' => 'Drops',
-                                        'Inhaler' => 'Inhaler',
-                                        'Patch' => 'Patch',
+                                        'Tablet'      => 'Tablet',
+                                        'Capsule'     => 'Capsule',
+                                        'Syrup'       => 'Syrup',
+                                        'Suspension'  => 'Suspension',
+                                        'Injection'   => 'Injection',
+                                        'Cream'       => 'Cream',
+                                        'Ointment'    => 'Ointment',
+                                        'Drops'       => 'Drops',
+                                        'Inhaler'     => 'Inhaler',
+                                        'Patch'       => 'Patch',
                                         'Suppository' => 'Suppository',
-                                        'Solution' => 'Solution',
+                                        'Solution'    => 'Solution',
                                     ])
                                     ->required()
                                     ->searchable()
                                     ->live()
                                     ->afterStateUpdated(function ($state, callable $set) {
-                                        // Auto-suggest measurement type based on dosage form
                                         $volumeForms = ['Syrup', 'Suspension', 'Injection', 'Solution', 'Drops'];
                                         if (in_array($state, $volumeForms)) {
                                             $set('measurement_type', 'volume');
@@ -100,8 +101,10 @@ class MedicineResource extends Resource
                             ]),
                     ]),
 
+                // ── Row 2: Measurement Information — full width ────────────────────
                 Section::make('Measurement Information')
                     ->description('Define how this medicine is measured and dispensed')
+                    ->columnSpanFull()
                     ->schema([
                         Grid::make(3)
                             ->schema([
@@ -109,7 +112,7 @@ class MedicineResource extends Resource
                                     ->label('Measurement Type')
                                     ->options([
                                         'discrete' => 'Discrete (Tablets/Capsules)',
-                                        'volume' => 'Volume-Based (Syrups/Injections)',
+                                        'volume'   => 'Volume-Based (Syrups/Injections)',
                                     ])
                                     ->required()
                                     ->default('discrete')
@@ -140,35 +143,23 @@ class MedicineResource extends Resource
                             ]),
                     ]),
 
-                Section::make('Medicine Details')
+                // ── Row 3: Medicine Details + Regulatory Info — side by side ───────
+                Grid::make(2)
+                    ->columnSpanFull()
                     ->schema([
-                        Textarea::make('active_ingredients')
-                            ->required()
-                            ->rows(2)
-                            ->columnSpanFull()
-                            ->placeholder('List all active ingredients'),
 
-                        RichEditor::make('description')
-                            ->columnSpanFull(),
+                        // Left column — Medicine Details (active ingredients only)
+                        Section::make('Medicine Details')
+                            ->schema([
+                                Textarea::make('active_ingredients')
+                                    ->required()
+                                    ->rows(4)
+                                    ->columnSpanFull()
+                                    ->placeholder('List all active ingredients'),
+                            ]),
 
-                        RichEditor::make('usage_instructions')
-                            ->columnSpanFull(),
-
-                        RichEditor::make('side_effects')
-                            ->columnSpanFull(),
-
-                        RichEditor::make('contraindications')
-                            ->columnSpanFull(),
-
-                        Textarea::make('storage_requirements')
-                            ->rows(2)
-                            ->columnSpanFull()
-                            ->placeholder('Storage temperature, conditions, etc.'),
-                    ]),
-
-                Section::make('Regulatory Information')
-                    ->schema([
-                        Grid::make(2)
+                        // Right column — Regulatory Information
+                        Section::make('Regulatory Information')
                             ->schema([
                                 TextInput::make('ppb_registration_number')
                                     ->label('PPB Registration Number')
@@ -221,13 +212,13 @@ class MedicineResource extends Resource
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'discrete' => 'info',
-                        'volume' => 'success',
-                        default => 'gray',
+                        'volume'   => 'success',
+                        default    => 'gray',
                     })
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'discrete' => 'Discrete',
-                        'volume' => 'Volume',
-                        default => $state,
+                        'volume'   => 'Volume',
+                        default    => $state,
                     })
                     ->toggleable(),
 
@@ -271,17 +262,17 @@ class MedicineResource extends Resource
 
                 SelectFilter::make('dosage_form')
                     ->options([
-                        'Tablet' => 'Tablet',
-                        'Capsule' => 'Capsule',
-                        'Syrup' => 'Syrup',
-                        'Injection' => 'Injection',
+                        'Tablet'   => 'Tablet',
+                        'Capsule'  => 'Capsule',
+                        'Syrup'    => 'Syrup',
+                        'Injection'=> 'Injection',
                     ]),
 
                 SelectFilter::make('measurement_type')
                     ->label('Measurement Type')
                     ->options([
                         'discrete' => 'Discrete',
-                        'volume' => 'Volume-Based',
+                        'volume'   => 'Volume-Based',
                     ]),
 
                 SelectFilter::make('prescription_required')

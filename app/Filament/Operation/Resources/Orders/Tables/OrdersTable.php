@@ -50,18 +50,7 @@ class OrdersTable
                     ->icon(fn (string $state): string => $state === 'Insurer' ? 'heroicon-m-building-office' : 'heroicon-m-document-text')
                     ->tooltip(fn ($record) => $record->external_order_id
                         ? "External order: {$record->externalOrder?->order_number} — {$record->externalOrder?->recipient_name}"
-                        : 'Standard prescription order')
-                    ->label('Prescription / Recipient')
-                    ->searchable()
-                    ->sortable()
-                    ->color('primary')
-                    ->icon('heroicon-m-document-text')
-                    ->getStateUsing(fn ($record) => $record->prescription?->prescription_number
-                        ?? $record->externalOrder?->recipient_name
-                        ?? '—')
-                    ->description(fn ($record) => $record->external_order_id
-                        ? "Ref: {$record->externalOrder?->order_number}"
-                        : null),
+                        : 'Standard prescription order'),
 
                 TextColumn::make('supplier.company_name')
                     ->label('Supplier')
@@ -72,7 +61,19 @@ class OrdersTable
 
                 TextColumn::make('prescription.patient.full_name')
                     ->label('Patient / Recipient')
-                    ->searchable()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $query) use ($search) {
+                            $query
+                                ->orWhereHas('prescription.patient', fn (Builder $q) =>
+                                    $q->where('first_name', 'like', "%{$search}%")
+                                      ->orWhere('last_name', 'like', "%{$search}%")
+                                      ->orWhereRaw("CONCAT(first_name, ' ', last_name) like ?", ["%{$search}%"])
+                                )
+                                ->orWhereHas('externalOrder', fn (Builder $q) =>
+                                    $q->where('recipient_name', 'like', "%{$search}%")
+                                );
+                        });
+                    })
                     ->toggleable()
                     ->wrap()
                     ->getStateUsing(fn ($record) => $record->prescription?->patient?->full_name

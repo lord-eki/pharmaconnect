@@ -23,7 +23,7 @@ class Medicine extends Model
         'measurement_type',
         'volume_per_unit',
         'unit_of_measurement',
-        'pack_size',
+        'pack_size' => '',
         'manufacturer',
         'active_ingredients',
         'description',
