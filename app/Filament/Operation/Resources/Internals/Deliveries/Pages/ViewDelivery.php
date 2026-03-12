@@ -8,19 +8,19 @@ use App\Notifications\CommissionEarnedNotification;
 use App\Notifications\DeliveryAssignedNotification;
 use App\Notifications\DeliveryStatusUpdatedNotification;
 use App\Notifications\RiderReassignedNotification;
-use App\Services\DeliveryTrackingService;
 use App\Services\OrderFulfillmentService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Support\Colors\Color;
 
@@ -32,15 +32,17 @@ class ViewDelivery extends ViewRecord
     {
         return $schema
             ->components([
-                Section::make('Delivery Overview')
+
+                Section::make()
                     ->schema([
-                        Grid::make(4)
+                        Grid::make(5)
                             ->schema([
                                 TextEntry::make('delivery_number')
-                                    ->label('Delivery Number')
+                                    ->label('Delivery #')
                                     ->weight('bold'),
 
                                 TextEntry::make('status')
+                                    ->label('Status')
                                     ->badge()
                                     ->color(fn (string $state): string => match ($state) {
                                         'pending' => 'gray',
@@ -55,182 +57,230 @@ class ViewDelivery extends ViewRecord
                                     }),
 
                                 TextEntry::make('orders_count')
-                                    ->label('Total Orders')
+                                    ->label('Orders')
                                     ->state(fn ($record) => $record->orders->count())
                                     ->badge()
                                     ->color('info'),
 
                                 TextEntry::make('delivery_fee')
-                                    ->money('KES'),
+                                    ->label('Delivery Fee')
+                                    ->money('KES')
+                                    ->weight('bold'),
+
+                                TextEntry::make('total_amount')
+                                    ->label('Orders Total')
+                                    ->state(fn ($record) => $record->orders->sum('total_amount'))
+                                    ->money('KES')
+                                    ->weight('bold'),
                             ]),
-                    ]),
+                    ])->columnSpanFull()
+                    ->compact(),
 
-                Section::make('Prescription Details')
-                    ->schema([
-                        TextEntry::make('prescription.prescription_number')
-                            ->label('Prescription Number')
-                            ->color(Color::Blue)
-                            ->weight('bold')
-                            ->placeholder('—'),
 
-                        TextEntry::make('prescription.physician.name')
-                            ->label('Physician')
-                            ->placeholder('—'),
+                    Grid::make(4)
+                        ->schema([
 
-                        TextEntry::make('prescription.patient.full_name')
-                            ->label('Patient')
-                            ->placeholder('—'),
+                            Tabs::make()
+                                ->columnSpan(3)
+                                ->tabs([
 
-                        TextEntry::make('total_amount')
-                            ->label('Total Orders Amount')
-                            ->state(fn ($record) => $record->orders->sum('total_amount'))
-                            ->money('KES')
-                            ->weight('bold'),
-                    ])
-                    ->columns(4)
-                    ->visible(fn ($record) => $record->prescription_id !== null),
+                                    Tab::make('Delivery')
+                                        ->icon('heroicon-o-map-pin')
+                                        ->schema([
 
-                Section::make('Insurer Order Details')
-                    ->schema([
-                        TextEntry::make('externalOrder.order_number')
-                            ->label('External Order #')
-                            ->color(Color::Blue)
-                            ->weight('bold'),
+                                            Section::make('Pickup')
+                                                ->schema([
+                                                    Grid::make(3)
+                                                        ->schema([
+                                                            TextEntry::make('pickup_address')
+                                                                ->label('Address'),
 
-                        TextEntry::make('externalOrder.insuranceProvider.company_name')
-                            ->label('Insurance Provider'),
+                                                            TextEntry::make('scheduled_pickup')
+                                                                ->label('Scheduled')
+                                                                ->dateTime('M d, Y H:i'),
 
-                        TextEntry::make('recipient_name')
-                            ->label('Recipient'),
+                                                            TextEntry::make('actual_pickup')
+                                                                ->label('Actual')
+                                                                ->dateTime('M d, Y H:i')
+                                                                ->placeholder('—'),
+                                                        ]),
+                                                ])
+                                                ->compact(),
 
-                        TextEntry::make('total_amount')
-                            ->label('Total Orders Amount')
-                            ->state(fn ($record) => $record->orders->sum('total_amount'))
-                            ->money('KES')
-                            ->weight('bold'),
-                    ])
-                    ->columns(4)
-                    ->visible(fn ($record) => $record->prescription_id === null && $record->external_order_id !== null),
+                                            Section::make('Drop-off')
+                                                ->schema([
+                                                    Grid::make(4)
+                                                        ->schema([
+                                                            TextEntry::make('delivery_address')
+                                                                ->label('Address'),
 
-                Section::make('Orders')
-                    ->schema([
-                        RepeatableEntry::make('orders')
-                            ->schema([
-                                Grid::make(4)
-                                    ->schema([
-                                        TextEntry::make('order_number')
-                                            ->label('Order Number')
-                                            ->weight('bold'),
+                                                            TextEntry::make('recipient_name')
+                                                                ->label('Recipient'),
 
-                                        TextEntry::make('supplier.company_name')
-                                            ->label('Supplier'),
+                                                            TextEntry::make('recipient_phone')
+                                                                ->label('Phone'),
 
-                                        TextEntry::make('status')
-                                            ->badge()
-                                            ->color(fn (string $state): string => match ($state) {
-                                                'pending_review' => 'warning',
-                                                'sent_to_supplier' => 'info',
-                                                'confirmed' => 'success',
-                                                'delivered' => 'success',
-                                                'cancelled' => 'danger',
-                                                default => 'gray',
-                                            }),
+                                                            TextEntry::make('estimated_distance_km')
+                                                                ->label('Distance')
+                                                                ->suffix(' km'),
 
-                                        TextEntry::make('total_amount')
-                                            ->money('KES')
-                                            ->weight('bold'),
-                                    ]),
+                                                            TextEntry::make('estimated_delivery')
+                                                                ->label('Est. Delivery')
+                                                                ->dateTime('M d, Y H:i'),
 
-                                Grid::make(2)
-                                    ->schema([
-                                        TextEntry::make('pivot.pickup_status')
-                                            ->label('Pickup Status')
-                                            ->badge()
-                                            ->color(fn ($state): string => match ($state) {
-                                                'picked_up' => 'success',
-                                                'pending' => 'warning',
-                                                'failed' => 'danger',
-                                                default => 'gray',
-                                            })
-                                            ->formatStateUsing(fn ($state): string => ucfirst($state ?? 'pending')),
+                                                            TextEntry::make('actual_delivery')
+                                                                ->label('Actual Delivery')
+                                                                ->dateTime('M d, Y H:i')
+                                                                ->placeholder('—'),
 
-                                        TextEntry::make('pivot.picked_up_at')
-                                            ->label('Picked Up At')
-                                            ->dateTime('M d, Y H:i')
-                                            ->placeholder('Not picked up yet'),
-                                    ]),
-                            ])
-                            ->columns(1),
-                    ])
-                    ->collapsible(),
+                                                            TextEntry::make('delivery_notes')
+                                                                ->label('Notes')
+                                                                ->placeholder('No notes'),
+                                                        ]),
+                                                ])
+                                                ->compact(),
+                                        ]),
 
-                Section::make('Rider Information')
-                    ->schema([
-                        TextEntry::make('rider.full_name')
-                            ->label('Rider Name')
-                            ->default('Not Assigned')
-                            ->badge()
-                            ->color(fn ($state) => $state === 'Not Assigned' ? 'danger' : 'success'),
+                                    Tab::make('Orders')
+                                        ->icon('heroicon-o-shopping-bag')
+                                        ->schema([
+                                            RepeatableEntry::make('orders')
+                                                ->label('')
+                                                ->schema([
+                                                    Grid::make(4)
+                                                        ->schema([
+                                                            TextEntry::make('order_number')
+                                                                ->label('Order #')
+                                                                ->weight('bold'),
 
-                        TextEntry::make('rider.phone')
-                            ->label('Phone')
-                            ->default('N/A'),
+                                                            TextEntry::make('supplier.company_name')
+                                                                ->label('Supplier'),
 
-                        TextEntry::make('rider.vehicle_type')
-                            ->label('Vehicle')
-                            ->default('N/A'),
+                                                            TextEntry::make('status')
+                                                                ->label('Status')
+                                                                ->badge()
+                                                                ->color(fn (string $state): string => match ($state) {
+                                                                    'pending_review' => 'warning',
+                                                                    'sent_to_supplier' => 'info',
+                                                                    'confirmed' => 'success',
+                                                                    'delivered' => 'success',
+                                                                    'cancelled' => 'danger',
+                                                                    default => 'gray',
+                                                                }),
 
-                        TextEntry::make('rider.vehicle_registration')
-                            ->label('Registration')
-                            ->default('N/A'),
+                                                            TextEntry::make('total_amount')
+                                                                ->label('Amount')
+                                                                ->money('KES')
+                                                                ->weight('bold'),
+                                                        ]),
 
-                        TextEntry::make('rider.rating')
-                            ->label('Rating')
-                            ->default('N/A')
-                            ->suffix(' / 5'),
-                    ])
-                    ->columns(3)
-                    ->visible(fn ($record) => $record->rider_id !== null),
+                                                    Grid::make(2)
+                                                        ->schema([
+                                                            TextEntry::make('pivot.pickup_status')
+                                                                ->label('Pickup Status')
+                                                                ->badge()
+                                                                ->color(fn ($state): string => match ($state) {
+                                                                    'picked_up' => 'success',
+                                                                    'pending' => 'warning',
+                                                                    'failed' => 'danger',
+                                                                    default => 'gray',
+                                                                })
+                                                                ->formatStateUsing(fn ($state): string => ucfirst($state ?? 'pending')),
 
-                Section::make('Pickup Details')
-                    ->schema([
-                        TextEntry::make('pickup_address')
-                            ->columnSpanFull(),
+                                                            TextEntry::make('pivot.picked_up_at')
+                                                                ->label('Picked Up At')
+                                                                ->dateTime('M d, Y H:i')
+                                                                ->placeholder('—'),
+                                                        ]),
+                                                ])
+                                                ->columns(1),
+                                        ]),
 
-                        TextEntry::make('scheduled_pickup')
-                            ->dateTime('M d, Y H:i A'),
+                                    Tab::make('Prescription')
+                                        ->icon('heroicon-o-document-text')
+                                        ->visible(fn ($record) => $record->prescription_id !== null)
+                                        ->schema([
+                                            Grid::make(2)
+                                                ->schema([
+                                                    TextEntry::make('prescription.prescription_number')
+                                                        ->label('Prescription #')
+                                                        ->color(Color::Blue)
+                                                        ->weight('bold')
+                                                        ->placeholder('—'),
 
-                        TextEntry::make('actual_pickup')
-                            ->dateTime('M d, Y H:i A')
-                            ->placeholder('Not picked up yet'),
-                    ])
-                    ->columns(2),
+                                                    TextEntry::make('prescription.physician.name')
+                                                        ->label('Physician')
+                                                        ->placeholder('—'),
 
-                Section::make('Delivery Details')
-                    ->schema([
-                        TextEntry::make('delivery_address')
-                            ->columnSpanFull(),
+                                                    TextEntry::make('prescription.patient.full_name')
+                                                        ->label('Patient')
+                                                        ->placeholder('—'),
 
-                        TextEntry::make('recipient_name'),
+                                                    TextEntry::make('total_amount')
+                                                        ->label('Orders Total')
+                                                        ->state(fn ($record) => $record->orders->sum('total_amount'))
+                                                        ->money('KES')
+                                                        ->weight('bold'),
+                                                ]),
+                                        ]),
 
-                        TextEntry::make('recipient_phone'),
+                                    Tab::make('Insurer Order')
+                                        ->icon('heroicon-o-building-office')
+                                        ->visible(fn ($record) => $record->prescription_id === null && $record->external_order_id !== null)
+                                        ->schema([
+                                            Grid::make(2)
+                                                ->schema([
+                                                    TextEntry::make('externalOrder.order_number')
+                                                        ->label('External Order #')
+                                                        ->color(Color::Blue)
+                                                        ->weight('bold'),
 
-                        TextEntry::make('estimated_delivery')
-                            ->dateTime('M d, Y H:i A'),
+                                                    TextEntry::make('externalOrder.insuranceProvider.company_name')
+                                                        ->label('Insurance Provider'),
 
-                        TextEntry::make('actual_delivery')
-                            ->dateTime('M d, Y H:i A')
-                            ->placeholder('Not delivered yet'),
+                                                    TextEntry::make('recipient_name')
+                                                        ->label('Recipient'),
 
-                        TextEntry::make('estimated_distance_km')
-                            ->label('Distance')
-                            ->suffix(' km'),
+                                                    TextEntry::make('total_amount')
+                                                        ->label('Orders Total')
+                                                        ->state(fn ($record) => $record->orders->sum('total_amount'))
+                                                        ->money('KES')
+                                                        ->weight('bold'),
+                                                ]),
+                                        ]),
+                                ]),
 
-                        TextEntry::make('delivery_notes')
-                            ->columnSpanFull()
-                            ->placeholder('No notes'),
-                    ])
-                    ->columns(3),
+                            Section::make('Rider')
+                                ->icon('heroicon-o-user-circle')
+                                ->columnSpan(1)
+                                ->schema([
+                                    TextEntry::make('rider.full_name')
+                                        ->label('Name')
+                                        ->default('Not Assigned')
+                                        ->badge()
+                                        ->color(fn ($state) => $state === 'Not Assigned' ? 'danger' : 'success'),
+
+                                    TextEntry::make('rider.phone')
+                                        ->label('Phone')
+                                        ->default('—'),
+
+                                    TextEntry::make('rider.vehicle_type')
+                                        ->label('Vehicle')
+                                        ->default('—'),
+
+                                    TextEntry::make('rider.vehicle_registration')
+                                        ->label('Plate')
+                                        ->default('—'),
+
+                                    TextEntry::make('rider.rating')
+                                        ->label('Rating')
+                                        ->default('—')
+                                        ->suffix(' / 5'),
+                                ])
+                                ->visible(fn ($record) => $record->rider_id !== null),
+
+                        
+                ])->columnSpanFull(),
 
             ]);
     }
@@ -238,7 +288,6 @@ class ViewDelivery extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            // Assign Rider 
             Action::make('assign_rider')
                 ->label('Assign Rider')
                 ->icon('heroicon-o-user-plus')
@@ -256,8 +305,6 @@ class ViewDelivery extends ViewRecord
                         ->required()
                         ->searchable()
                         ->helperText('Only available riders are shown'),
-
-
                 ])
                 ->action(function ($record, array $data) {
                     try {
@@ -288,7 +335,6 @@ class ViewDelivery extends ViewRecord
                     }
                 }),
 
-            // Reassign Rider
             Action::make('reassign_rider')
                 ->label('Reassign Rider')
                 ->icon('heroicon-o-arrow-path')
@@ -358,7 +404,6 @@ class ViewDelivery extends ViewRecord
                 ->requiresConfirmation()
                 ->action(function ($record) {
                     try {
-                        // Check if all orders are picked up
                         if ($record->allOrdersPickedUp()) {
                             $record->update([
                                 'status' => 'in_transit',
@@ -370,9 +415,7 @@ class ViewDelivery extends ViewRecord
 
                         if ($record->rider && $record->rider->user) {
                             $record->rider->user->notify(new DeliveryStatusUpdatedNotification(
-                                $record,
-                                'assigned',
-                                'picked_up'
+                                $record, 'assigned', 'picked_up'
                             ));
                         }
 
@@ -401,9 +444,7 @@ class ViewDelivery extends ViewRecord
 
                     if ($record->rider && $record->rider->user) {
                         $record->rider->user->notify(new DeliveryStatusUpdatedNotification(
-                            $record,
-                            'picked_up',
-                            'in_transit'
+                            $record, 'picked_up', 'in_transit'
                         ));
                     }
 
@@ -436,13 +477,10 @@ class ViewDelivery extends ViewRecord
 
                         if ($record->rider && $record->rider->user) {
                             $record->rider->user->notify(new DeliveryStatusUpdatedNotification(
-                                $record,
-                                $record->getOriginal('status'),
-                                'delivered'
+                                $record, $record->getOriginal('status'), 'delivered'
                             ));
                         }
 
-                        // Notify physician about commissions — only for prescription-based deliveries
                         if ($results['orders_processed'] > 0 && $record->prescription_id && $record->prescription) {
                             $physician = $record->prescription->physician;
 
@@ -496,9 +534,7 @@ class ViewDelivery extends ViewRecord
 
                         if ($record->rider && $record->rider->user) {
                             $record->rider->user->notify(new DeliveryStatusUpdatedNotification(
-                                $record,
-                                $record->getOriginal('status'),
-                                'failed'
+                                $record, $record->getOriginal('status'), 'failed'
                             ));
                         }
 

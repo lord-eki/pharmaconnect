@@ -354,6 +354,9 @@ class DeliveriesTable
                         ->icon('heroicon-o-document-magnifying-glass')
                         ->color('gray')
                         ->visible(fn ($record) => $record->delivery_note_document_id)
+                        ->url(fn ($record) => $record->deliveryNoteDocument
+                            ? route('delivery-note.view', ['document' => $record->deliveryNoteDocument->id])
+                            : null)
                         ->openUrlInNewTab(),
 
                     Action::make('view_details')
@@ -458,6 +461,7 @@ class DeliveriesTable
                                     ->body('None of the selected deliveries are eligible for note generation.')
                                     ->warning()
                                     ->send();
+
                                 return;
                             }
 
@@ -474,14 +478,14 @@ class DeliveriesTable
 
                                     Notification::make()
                                         ->title('Bulk Generation Started')
-                                        ->body(count($deliveryIds) . ' delivery notes are being generated in the background.')
+                                        ->body(count($deliveryIds).' delivery notes are being generated in the background.')
                                         ->info()
                                         ->send();
                                 } else {
                                     // Generate synchronously
                                     $successCount = 0;
                                     $failCount = 0;
-                                    
+
                                     foreach ($deliveries as $delivery) {
                                         try {
                                             if ($data['send_emails'] ?? false) {
@@ -499,12 +503,12 @@ class DeliveriesTable
                                             $failCount++;
                                         }
                                     }
-                                    
+
                                     $message = "{$successCount} delivery notes generated successfully";
                                     if ($failCount > 0) {
                                         $message .= ", {$failCount} failed";
                                     }
-                                    
+
                                     Notification::make()
                                         ->title('Bulk Generation Complete')
                                         ->body($message)
