@@ -10,7 +10,6 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
-
 use Filament\Forms\Components\Placeholder;
 use Filament\Schemas\Components\Section;
 use Filament\Support\Enums\Size;
@@ -111,22 +110,21 @@ class PrescriptionsTable
             ->recordActions([
                 ActionGroup::make([
                     ViewAction::make(),
-                    
+
                     Action::make('view_orders')
                         ->label('View Orders')
                         ->icon('heroicon-o-shopping-bag')
                         ->color('info')
                         ->modalHeading(fn (Prescription $record) => "Orders for {$record->prescription_number}")
-                        ->modalDescription(fn (Prescription $record) => $record->orders()->count() . ' order(s) for this prescription')
                         ->modalWidth('5xl')
                         ->visible(fn (Prescription $record) => $record->orders()->count() > 0)
                         ->form(fn (Prescription $record) => static::getOrdersForm($record))
                         ->modalSubmitAction(false)
                         ->modalCancelActionLabel('Close'),
-                    
+
                     EditAction::make()
                         ->visible(fn (Prescription $record) => $record->status === 'draft'),
-                    
+
                     Action::make('submit')
                         ->icon('heroicon-o-paper-airplane')
                         ->color('success')
@@ -156,19 +154,19 @@ class PrescriptionsTable
         return [
             Placeholder::make('summary')
                 ->label('Summary')
-                ->content($orders->count() . ' order(s) • Total: KES ' . number_format($orders->sum('total_amount'), 2)),
+                ->content($orders->count().' order(s) • Total: KES '.number_format($orders->sum('total_amount'), 2)),
 
             Section::make('Orders')
                 ->schema(
                     $orders->map(function ($order) {
                         return Section::make($order->order_number)
-                            ->description('Supplier: ' . ($order->supplier->business_name ?? 'Awaiting Dispatch'))
+                            // ->description('Supplier: ' . ($order->supplier->company_name ?? 'Awaiting Dispatch'))
                             ->icon('heroicon-o-shopping-bag')
                             ->schema([
                                 Placeholder::make("status_{$order->id}")
                                     ->label('Status')
                                     ->content(fn () => new \Illuminate\Support\HtmlString(
-                                        '<span class="fi-badge fi-badge-' . match($order->status) {
+                                        '<span class="fi-badge fi-badge-'.match ($order->status) {
                                             'pending' => 'warning',
                                             'confirmed' => 'info',
                                             'processing' => 'info',
@@ -176,12 +174,12 @@ class PrescriptionsTable
                                             'delivered' => 'success',
                                             'cancelled' => 'danger',
                                             default => 'gray',
-                                        } . '">' . ucfirst($order->status) . '</span>'
+                                        }.'">'.ucfirst($order->status).'</span>'
                                     )),
 
                                 Placeholder::make("total_{$order->id}")
                                     ->label('Order Total')
-                                    ->content('KES ' . number_format($order->supplier_total ?? $order->total_amount, 2)),
+                                    ->content('KES '.number_format($order->supplier_total ?? $order->total_amount, 2)),
 
                                 Placeholder::make("ordered_{$order->id}")
                                     ->label('Ordered At')
@@ -209,7 +207,7 @@ class PrescriptionsTable
 
                                         Placeholder::make("delivery_fee_{$order->id}")
                                             ->label('Delivery Fee')
-                                            ->content('KES ' . number_format($order->delivery->delivery_fee ?? 0, 2)),
+                                            ->content('KES '.number_format($order->delivery->delivery_fee ?? 0, 2)),
                                     ])
                                     ->columns(3)
                                     ->visible(fn () => $order->delivery)
@@ -217,23 +215,66 @@ class PrescriptionsTable
                                     ->collapsed(),
 
                                 Section::make('Order Items')
-                                    ->schema(
-                                        $order->items->map(function ($item) {
-                                            return Placeholder::make("item_{$item->id}")
-                                                ->label($item->medicine->generic_name . 
-                                                    ($item->medicine->brand_name ? " ({$item->medicine->brand_name})" : ''))
-                                                ->content(new \Illuminate\Support\HtmlString(
-                                                    '<div class="text-sm space-y-1">' .
-                                                    '<div class="text-gray-600 dark:text-gray-400">' . 
-                                                    $item->medicine->strength . ' • ' . $item->medicine->dosage_form . 
-                                                    '</div>' .
-                                                    '<div><strong>Quantity:</strong> ' . $item->quantity . ' units</div>' .
-                                                    '<div><strong>Unit Price:</strong> KES ' . number_format($item->supplier_price ?? $item->unit_price, 2) . '</div>' .
-                                                    '<div><strong>Total:</strong> KES ' . number_format(($item->supplier_price ?? $item->unit_price) * $item->quantity, 2) . '</div>' .
-                                                    '</div>'
-                                                ));
-                                        })->toArray()
-                                    )->columnSpanFull()
+                                    ->schema([
+                                        Placeholder::make('items_table')
+                                            ->label('')
+                                            ->content(function () use ($order) {
+                                                $medicineItems = $order->items->where('is_delivery_fee', false);
+
+                                                $rows = $medicineItems->map(function ($item) {
+                                                    $price = $item->supplier_price ?? $item->unit_price;
+                                                    $total = $price * $item->quantity;
+
+                                                    return '
+                        <tr>
+                            <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top;">
+                                <div style="font-weight:600; color:#1a1a2e;">
+                                    '.e($item->medicine->generic_name).
+                                                                    ($item->medicine->brand_name ? ' <span style="color:#64748b;font-weight:400;">('.e($item->medicine->brand_name).')</span>' : '').'
+                                </div>
+                                <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
+                                    '.e($item->medicine->strength).' &bull; '.e($item->medicine->dosage_form).'
+                                </div>
+                            </td>
+                            <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; text-align:center; vertical-align:top;">
+                                '.$item->quantity.' units
+                            </td>
+                            <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; text-align:right; vertical-align:top;">
+                                KES '.number_format($price, 2).'
+                            </td>
+                            <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; text-align:right; vertical-align:top; font-weight:600; color:#1a1a2e;">
+                                KES '.number_format($total, 2).'
+                            </td>
+                        </tr>';
+                                                })->implode('');
+
+                                                $grandTotal = $medicineItems->sum(function ($item) {
+                                                    return ($item->supplier_price ?? $item->unit_price) * $item->quantity;
+                                                });
+
+                                                $html = '
+                    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                        <thead>
+                            <tr style="background:#f8fafc;">
+                                <th style="padding:8px 12px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#64748b; border-bottom:2px solid #e2e8f0;">Medicine</th>
+                                <th style="padding:8px 12px; text-align:center; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#64748b; border-bottom:2px solid #e2e8f0;">Qty</th>
+                                <th style="padding:8px 12px; text-align:right; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#64748b; border-bottom:2px solid #e2e8f0;">Unit Price</th>
+                                <th style="padding:8px 12px; text-align:right; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#64748b; border-bottom:2px solid #e2e8f0;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>'.$rows.'</tbody>
+                        <tfoot>
+                            <tr style="background:#f8fafc;">
+                                <td colspan="3" style="padding:10px 12px; text-align:right; font-weight:700; color:#374151; border-top:2px solid #e2e8f0;">Order Total</td>
+                                <td style="padding:10px 12px; text-align:right; font-weight:700; color:#f97316; border-top:2px solid #e2e8f0;">KES '.number_format($grandTotal, 2).'</td>
+                            </tr>
+                        </tfoot>
+                    </table>';
+
+                                                return new \Illuminate\Support\HtmlString($html);
+                                            }),
+                                    ])
+                                    ->columnSpanFull()
                                     ->collapsible()
                                     ->collapsed(true),
                             ])
