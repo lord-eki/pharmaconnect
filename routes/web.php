@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\InsuranceClaimController;
+use App\Http\Controllers\CommissionStatementController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -41,4 +42,9 @@ Route::middleware(['auth'])->group(function () {
             'Content-Type' => $document->mime_type,
         ]);
     })->name('documents.download');
+
+    Route::get(
+            '/commissions/statement',
+            [CommissionStatementController::class, 'download']
+        )->name('commissions.statement');
 });

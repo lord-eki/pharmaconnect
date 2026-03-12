@@ -61,7 +61,7 @@ class CommissionsTable
                     ->weight(FontWeight::Bold)
                     ->color('success'),
 
-               BadgeColumn::make('status')
+               TextColumn::make('status')->badge()
                     ->colors([
                         'warning' => 'pending',
                         'info' => 'approved',
