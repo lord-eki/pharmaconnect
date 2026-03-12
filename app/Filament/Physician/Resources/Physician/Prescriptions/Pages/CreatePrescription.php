@@ -61,15 +61,9 @@ class CreatePrescription extends CreateRecord
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Save draft whenever a step is completed / field changes
-    // We hook into the wizard's step-change and also provide a manual save action
+    // Draft is saved only via the Clear Draft action and on final create.
+    // saveDraft() is available for explicit calls only — not hooked into Livewire lifecycle.
     // ──────────────────────────────────────────────────────────────────────────
-
-    protected function afterValidate(): void
-    {
-        // Called on each wizard step validation — persist whatever we have
-        $this->saveDraft();
-    }
 
     protected function saveDraft(): void
     {
@@ -139,7 +133,6 @@ class CreatePrescription extends CreateRecord
                                 $set('patient_has_insurance', $hasInsurance);
                                 if ($hasInsurance) $set('insurance_covered', true);
                             }
-                            $this->saveDraft();
                         }),
                 ]),
 
@@ -147,17 +140,15 @@ class CreatePrescription extends CreateRecord
                 ->icon('heroicon-o-clipboard-document-list')
                 ->schema([
                     Section::make()->schema([
-                        Textarea::make('diagnosis')->label('Diagnosis')->rows(1)->required()->columnSpanFull()
-                            ->live(onBlur: true)->afterStateUpdated(fn () => $this->saveDraft()),
+                        Textarea::make('diagnosis')->label('Diagnosis')->rows(1)->required()->columnSpanFull(),
                         Textarea::make('notes')->label('Prescription Notes')->rows(2)->required()->columnSpanFull()
-                            ->placeholder('Additional notes or instructions')
-                            ->live(onBlur: true)->afterStateUpdated(fn () => $this->saveDraft()),
+                            ->placeholder('Additional notes or instructions'),
                         Toggle::make('insurance_covered')
                             ->label('Insurance Coverage')
                             ->helperText('Does this prescription have insurance coverage?')
                             ->default(false)
                             ->visible(fn (Get $get) => $get('patient_has_insurance') === true)
-                            ->live()->afterStateUpdated(fn () => $this->saveDraft()),
+                            ->live(),
                     ])->columns(3),
                 ]),
 
@@ -210,7 +201,6 @@ class CreatePrescription extends CreateRecord
                                     foreach (['dose_amount', 'frequency', 'duration_days', '_preview_quantity', '_preview_unit_price', '_preview_total_price'] as $field) {
                                         $set($field, null);
                                     }
-                                    $this->saveDraft();
                                 })
                                 ->columnSpan(3),
 
@@ -221,7 +211,6 @@ class CreatePrescription extends CreateRecord
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(function (Get $get, Set $set) {
                                     self::refreshPreviews($get, $set);
-                                    $this->saveDraft();
                                 })
                                 ->columnSpan(1),
 
@@ -240,7 +229,6 @@ class CreatePrescription extends CreateRecord
                                 ->required()->searchable()->live()
                                 ->afterStateUpdated(function (Get $get, Set $set) {
                                     self::refreshPreviews($get, $set);
-                                    $this->saveDraft();
                                 })
                                 ->columnSpan(2),
 
@@ -251,7 +239,6 @@ class CreatePrescription extends CreateRecord
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(function (Get $get, Set $set) {
                                     self::refreshPreviews($get, $set);
-                                    $this->saveDraft();
                                 })
                                 ->columnSpan(1),
 
@@ -279,8 +266,6 @@ class CreatePrescription extends CreateRecord
                                 ->required()
                                 ->placeholder('e.g. Take with food…')
                                 ->rows(1)
-                                ->live(onBlur: true)
-                                ->afterStateUpdated(fn () => $this->saveDraft())
                                 ->columnSpan(2),
 
                             // Hidden meta — UI only, not persisted
@@ -293,7 +278,7 @@ class CreatePrescription extends CreateRecord
                         ->collapsible(false)   // keep rows flat for the table feel
                         ->cloneable()
                         ->reorderable(false)
-                        ->deleteAction(fn ($action) => $action->after(fn () => $this->saveDraft()))
+                        ->deleteAction(fn ($action) => $action)
                         ->itemLabel(null),     // no accordion labels — rows are already visible
                 ]),
 
