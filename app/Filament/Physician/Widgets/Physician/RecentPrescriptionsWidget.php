@@ -66,8 +66,8 @@ class RecentPrescriptionsWidget extends TableWidget
             ])
             ->actions([
                 Action::make('view')
-                    // ->url(fn (Prescription $record): string => 
-                    //     route('filament.physician.resources.prescriptions.view', $record))
+                    ->url(fn (Prescription $record): string => 
+                        route('filament.Physician.resources.physician.prescriptions.view', $record))
                     ->icon('heroicon-o-eye'),
             ])
             ->heading('Recent Prescriptions')
