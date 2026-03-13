@@ -9,6 +9,7 @@ use App\Filament\Operation\Resources\Internals\Receivables\Schemas\ReceivablesFo
 use App\Filament\Operation\Resources\Internals\Receivables\Tables\ReceivablesTable;
 use App\Models\Receivable;
 use BackedEnum;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -54,4 +55,12 @@ class ReceivablesResource extends Resource
             // 'edit' => EditReceivables::route('/{record}/edit'),
         ];
     }
+
+
+    // public static function getEloquentQuery(): Builder
+    // {
+    //     $query = parent::getEloquentQuery();
+
+    //     return $query->where('claim_status','approved');
+    // }
 }

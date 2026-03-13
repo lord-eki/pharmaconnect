@@ -8,9 +8,7 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
-use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Textarea;
@@ -30,7 +28,7 @@ class ReceivablesTable
     {
         return $table
             ->columns([
-                 TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->label('Date')
                     ->date()
                     ->sortable(),
@@ -45,7 +43,7 @@ class ReceivablesTable
                     ->label('Prescription')
                     ->searchable()
                     ->sortable(),
-                    // ->url(fn ($record) => $record->prescription_id ? route('filament.admin.resources.prescriptions.view', $record->prescription_id) : null),
+                // ->url(fn ($record) => $record->prescription_id ? route('filament.admin.resources.prescriptions.view', $record->prescription_id) : null),
 
                 TextColumn::make('patient.last_name')
                     ->label('Patient')
@@ -76,15 +74,12 @@ class ReceivablesTable
                     ->sortable()
                     ->weight('bold'),
 
-        
-
                 IconColumn::make('received_at')
                     ->label('Received')
                     ->boolean()
                     ->sortable()
-                    ->tooltip(fn ($record) => $record->received_at ? 'Received on ' . $record->received_at->format('M d, Y') : 'Not received'),
+                    ->tooltip(fn ($record) => $record->received_at ? 'Received on '.$record->received_at->format('M d, Y') : 'Not received'),
 
-               
             ])
             ->filters([
                 SelectFilter::make('payment_source')
@@ -113,24 +108,22 @@ class ReceivablesTable
                     ->label('Pending Payment'),
 
                 Filter::make('overdue_claims')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->where('payment_source', 'insurance')
-                              ->where('claim_status', 'submitted')
-                              ->where('claim_submitted_at', '<', now()->subDays(30))
+                    ->query(fn (Builder $query): Builder => $query->where('payment_source', 'insurance')
+                        ->where('claim_status', 'submitted')
+                        ->where('claim_submitted_at', '<', now()->subDays(30))
                     )
                     ->label('Overdue Claims (30+ days)'),
             ])
             ->recordActions([
                 ActionGroup::make([
-                    
+
                     Action::make('submit_claim')
                         ->label('Submit to Insurance')
                         ->icon('heroicon-o-paper-airplane')
                         ->color('primary')
                         ->requiresConfirmation()
                         ->modalDescription('Submit this claim to the insurance company for processing')
-                        ->visible(fn (Receivable $record) => 
-                            $record->payment_source === 'insurance' && 
+                        ->visible(fn (Receivable $record) => $record->payment_source === 'insurance' &&
                             $record->claim_status === 'draft'
                         )
                         ->form([
@@ -152,7 +145,7 @@ class ReceivablesTable
                                 'claim_reference' => $data['claim_reference'],
                                 'claim_submitted_at' => $data['claim_submitted_at'],
                             ]);
-                            
+
                             Notification::make()
                                 ->success()
                                 ->title('Claim Submitted')
@@ -166,13 +159,12 @@ class ReceivablesTable
                         ->color('success')
                         ->requiresConfirmation()
                         ->modalDescription('Mark this claim as approved by the insurance company')
-                        ->visible(fn (Receivable $record) => 
-                            $record->payment_source === 'insurance' && 
+                        ->visible(fn (Receivable $record) => $record->payment_source === 'insurance' &&
                             $record->claim_status === 'submitted'
                         )
                         ->action(function (Receivable $record) {
                             $record->update(['claim_status' => 'approved']);
-                            
+
                             Notification::make()
                                 ->success()
                                 ->title('Claim Approved')
@@ -186,7 +178,7 @@ class ReceivablesTable
                         ->color('success')
                         ->requiresConfirmation()
                         ->modalDescription('Record that payment has been received')
-                        ->visible(fn (Receivable $record) => !$record->received_at)
+                        ->visible(fn (Receivable $record) => $record->claim_status === 'approved')
                         ->form([
                             DateTimePicker::make('received_at')
                                 ->label('Payment Received On')
@@ -202,15 +194,15 @@ class ReceivablesTable
                             $record->update([
                                 'received_at' => $data['received_at'],
                             ]);
-                            
+
                             // Update claim status to paid if insurance
                             if ($record->payment_source === 'insurance') {
                                 $record->update(['claim_status' => 'paid']);
                             }
-                            
+
                             // Create transaction record
                             $record->transaction()->create([
-                                'reference' => 'TXN-' . strtoupper(uniqid()),
+                                'reference' => 'TXN-'.strtoupper(uniqid()),
                                 'amount' => $record->amount,
                                 'currency' => 'KES',
                                 'type' => 'receivable',
@@ -218,46 +210,21 @@ class ReceivablesTable
                                 'completed_at' => $data['received_at'],
                                 'notes' => $data['notes'] ?? null,
                             ]);
-                            
+
                             Notification::make()
                                 ->success()
                                 ->title('Payment Recorded')
-                                ->body("KES " . number_format($record->amount, 2) . " received from " . ($record->payment_source === 'insurance' ? $record->insuranceProvider->company_name : $record->patient->last_name))
+                                ->body('KES '.number_format($record->amount, 2).' received from '.($record->payment_source === 'insurance' ? $record->insuranceProvider->company_name : $record->patient->last_name))
                                 ->send();
                         }),
 
-                    Action::make('reject_claim')
-                        ->label('Reject Claim')
-                        ->icon('heroicon-o-x-circle')
-                        ->color('danger')
-                        ->requiresConfirmation()
-                        ->modalDescription('Mark this claim as rejected by the insurance company')
-                        ->visible(fn (Receivable $record) => 
-                            $record->payment_source === 'insurance' && 
-                            in_array($record->claim_status, ['submitted', 'approved'])
-                        )
-                        ->form([
-                            Textarea::make('rejection_reason')
-                                ->label('Rejection Reason')
-                                ->required()
-                                ->helperText('Why was this claim rejected?'),
-                        ])
-                        ->action(function (Receivable $record, array $data) {
-                            $record->update(['claim_status' => 'rejected']);
-                            
-                            Notification::make()
-                                ->danger()
-                                ->title('Claim Rejected')
-                                ->body('Review and resubmit if necessary')
-                                ->send();
-                        }),
+                
 
                     Action::make('resubmit_claim')
                         ->label('Resubmit Claim')
                         ->icon('heroicon-o-arrow-path')
                         ->color('warning')
-                        ->visible(fn (Receivable $record) => 
-                            $record->payment_source === 'insurance' && 
+                        ->visible(fn (Receivable $record) => $record->payment_source === 'insurance' &&
                             $record->claim_status === 'rejected'
                         )
                         ->action(function (Receivable $record) {
@@ -265,7 +232,7 @@ class ReceivablesTable
                                 'claim_status' => 'draft',
                                 'claim_reference' => null,
                             ]);
-                            
+
                             Notification::make()
                                 ->info()
                                 ->title('Ready for Resubmission')
@@ -275,7 +242,7 @@ class ReceivablesTable
                 ]),
             ])
             ->headerActions([
-               ExportAction::make()
+                ExportAction::make()
                     ->exporter(ReceivableExporter::class)
                     ->label('Export')
                     ->color('primary')

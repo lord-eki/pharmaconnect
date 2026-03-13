@@ -228,6 +228,15 @@ class InsuranceClaim extends Model
             'reviewed_by' => $reviewedBy ?? auth()->id(),
             'notes' => $notes ?? $this->notes,
         ]);
+
+        if ($this->prescription_id) {
+            Receivable::where('prescription_id', $this->prescription_id)
+                ->whereNull('received_at')
+                ->update([
+                    'claim_status' => 'approved',
+                    'amount' => $approvedAmount,
+                ]);
+        }
     }
 
     /**
@@ -241,6 +250,12 @@ class InsuranceClaim extends Model
             'reviewed_at' => now(),
             'reviewed_by' => $reviewedBy ?? auth()->id(),
         ]);
+
+        if ($this->prescription_id) {
+            Receivable::where('prescription_id', $this->prescription_id)
+                ->whereNull('received_at')
+                ->update(['claim_status' => 'rejected']);
+        }
     }
 
     /**
