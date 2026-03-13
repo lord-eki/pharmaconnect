@@ -239,17 +239,7 @@ class ViewOrder extends ViewRecord
                 ->modalDescription('Are you sure you want to cancel this order? This action cannot be undone.')
                 ->modalSubmitActionLabel('Cancel Order'),
 
-            Action::make('view_prescription')
-                ->label('View Prescription')
-                ->icon('heroicon-o-document-text')
-                ->color('gray')
-                ->visible(fn () => $this->record->prescription_id),
-
-            Action::make('view_delivery')
-                ->label('View Delivery')
-                ->icon('heroicon-o-truck')
-                ->color('gray')
-                ->visible(fn () => $this->record->delivery),
+          
         ];
     }
 }

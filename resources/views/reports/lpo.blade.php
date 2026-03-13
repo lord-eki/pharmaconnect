@@ -16,21 +16,32 @@
             font-size: 11pt;
             line-height: 1.4;
             color: #333;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .page-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
         }
         
         .container {
             padding: 20px;
+            flex: 1;
         }
         
         .header {
-            border-bottom: 3px solid #2563eb;
-            padding-bottom: 15px;
+            background-color: #f97316;
+            color: white;
+            padding: 20px;
             margin-bottom: 20px;
         }
         
         .header-top {
             width: 100%;
-            margin-bottom: 10px;
+            margin-bottom: 0;
         }
         
         .header-top table {
@@ -44,14 +55,14 @@
         }
         
         .company-info h1 {
-            color: #2563eb;
+            color: #ffffff;
             font-size: 24pt;
             margin-bottom: 5px;
         }
         
         .company-info p {
             font-size: 10pt;
-            color: #666;
+            color: #ffffff;
             margin-bottom: 2px;
         }
         
@@ -63,14 +74,14 @@
         
         .lpo-title h2 {
             font-size: 28pt;
-            color: #1e40af;
+            color: #ffffff;
             font-weight: bold;
             margin: 0;
         }
         
         .lpo-title p {
             font-size: 12pt;
-            color: #666;
+            color: #ffffff;
             margin-top: 5px;
         }
         
@@ -100,9 +111,9 @@
         
         .info-box h3 {
             font-size: 12pt;
-            color: #2563eb;
+            color: #f97316;
             margin-bottom: 10px;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #fed7aa;
             padding-bottom: 5px;
         }
         
@@ -122,7 +133,7 @@
         }
         
         .items-table thead {
-            background-color: #2563eb;
+            background-color: #f97316;
             color: white;
         }
         
@@ -183,10 +194,10 @@
         }
         
         .totals-table .grand-total {
-            border-top: 2px solid #2563eb;
+            border-top: 2px solid #f97316;
             font-weight: bold;
             font-size: 12pt;
-            color: #2563eb;
+            color: #f97316;
             padding-top: 10px;
         }
         
@@ -233,14 +244,35 @@
         }
         
         .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 2px solid #e5e7eb;
+            background-color: #f97316;
+            color: #ffffff;
+            padding: 15px 20px;
+            text-align: center;
+            margin-top: auto;
+        }
+
+        .footer p {
+            font-size: 9pt;
+            color: #ffffff;
+        }
+
+        @media print {
+            body {
+                min-height: 100vh;
+            }
+            .footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+            }
         }
         
-        .signatures {
-            width: 100%;
-            margin-top: 40px;
+        .section-title {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: #f97316;
+            font-size: 12pt;
         }
         
         .signatures table {
@@ -274,20 +306,19 @@
         }
         
         .badge-warning { background-color: #fef3c7; color: #92400e; }
-        .badge-info { background-color: #dbeafe; color: #1e40af; }
+        .badge-info { background-color: #fff7ed; color: #c2410c; }
         .badge-success { background-color: #d1fae5; color: #065f46; }
         .badge-primary { background-color: #e0e7ff; color: #3730a3; }
         .badge-danger { background-color: #fee2e2; color: #991b1b; }
         
-        .section-title {
-            margin-top: 20px;
-            margin-bottom: 10px;
-            color: #2563eb;
-            font-size: 12pt;
+        .signatures {
+            width: 100%;
+            margin-top: 40px;
         }
     </style>
 </head>
 <body>
+    <div class="page-wrapper">
     <div class="container">
         <!-- Header -->
         <div class="header">
@@ -297,7 +328,7 @@
                         <td class="company-info">
                             <h1>Pharmaconnect</h1>
                             <p>P.O. Box 12345, Nairobi, Kenya</p>
-                            <p>Tel: +254 700 000 000 | Email: info@pharmaconnect.com</p>
+                            <p>Tel: +254 700 000 000 | Email: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="5b32353d341b2b333a29363a383435353e382f75383436">[email&#160;protected]</a></p>
                             <p>Website: www.pharmaconnect.com</p>
                         </td>
                         <td class="lpo-title">
@@ -504,11 +535,9 @@
 
         <!-- Footer -->
         <div class="footer">
-            <p style="text-align: center; font-size: 9pt; color: #666;">
-                This is a computer-generated document. No signature is required.<br>
-                Generated on {{ now()->format('F d, Y \a\t H:i') }}
-            </p>
+            <p>This is a computer-generated document. No signature is required.</p>
+            <p>&copy; {{ date('Y') }} PharmaConnect. All rights reserved.</p>
         </div>
-    </div>
+    </div><!-- /.page-wrapper -->
 </body>
 </html>

@@ -38,7 +38,12 @@ class InsuranceClaimsTable
 
                 TextColumn::make('patient.full_name')
                     ->label('Patient')
-                    ->searchable()
+                    ->searchable(query: function (Builder $query, string $search) {
+                        $query->orWhereHas('patient', function (Builder $q) use ($search) {
+                            $q->where('first_name', 'like', "%{$search}%")
+                              ->orWhere('last_name', 'like', "%{$search}%");
+                        });
+                    })
                     ->sortable(),
 
                 TextColumn::make('policy_number')
@@ -73,7 +78,7 @@ class InsuranceClaimsTable
                     ->sortable()
                     ->placeholder('—'),
 
-                BadgeColumn::make('status')
+                TextColumn::make('status')->badge()
                     ->colors([
                         'gray' => 'submitted',
                         'primary' => 'under_review',

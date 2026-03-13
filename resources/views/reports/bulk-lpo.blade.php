@@ -26,17 +26,23 @@
             text-align: center;
             padding: 100px 20px;
             page-break-after: always;
+            background-color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
         
         .cover-page h1 {
             font-size: 36pt;
-            color: #2563eb;
+            color: #f97316;
             margin-bottom: 20px;
         }
         
         .cover-page h2 {
             font-size: 24pt;
-            color: #666;
+            color: #f97316;
             margin-bottom: 40px;
         }
         
@@ -45,7 +51,7 @@
             max-width: 500px;
             text-align: left;
             padding: 30px;
-            border: 2px solid #2563eb;
+            border: 2px solid #f97316;
             border-radius: 10px;
             background-color: #f9fafb;
         }
@@ -56,19 +62,20 @@
         }
         
         .cover-page .summary strong {
-            color: #2563eb;
+            color: #f97316;
             font-size: 16pt;
         }
         
         .header {
-            border-bottom: 3px solid #2563eb;
-            padding-bottom: 15px;
+            background-color: #f97316;
+            color: white;
+            padding: 20px;
             margin-bottom: 20px;
         }
         
         .header-top {
             width: 100%;
-            margin-bottom: 10px;
+            margin-bottom: 0;
         }
         
         .header-top table {
@@ -82,14 +89,14 @@
         }
         
         .company-info h1 {
-            color: #2563eb;
+            color: #ffffff;
             font-size: 24pt;
             margin-bottom: 5px;
         }
         
         .company-info p {
             font-size: 10pt;
-            color: #666;
+            color: #ffffff;
             margin-bottom: 2px;
         }
         
@@ -101,14 +108,14 @@
         
         .lpo-title h2 {
             font-size: 28pt;
-            color: #1e40af;
+            color: #ffffff;
             font-weight: bold;
             margin: 0;
         }
         
         .lpo-title p {
             font-size: 12pt;
-            color: #666;
+            color: #ffffff;
             margin-top: 5px;
         }
         
@@ -138,9 +145,9 @@
         
         .info-box h3 {
             font-size: 12pt;
-            color: #2563eb;
+            color: #f97316;
             margin-bottom: 10px;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #fed7aa;
             padding-bottom: 5px;
         }
         
@@ -160,7 +167,7 @@
         }
         
         .items-table thead {
-            background-color: #2563eb;
+            background-color: #f97316;
             color: white;
         }
         
@@ -221,10 +228,10 @@
         }
         
         .totals-table .grand-total {
-            border-top: 2px solid #2563eb;
+            border-top: 2px solid #f97316;
             font-weight: bold;
             font-size: 12pt;
-            color: #2563eb;
+            color: #f97316;
             padding-top: 10px;
         }
         
@@ -237,9 +244,9 @@
         }
         
         .badge-warning { background-color: #fef3c7; color: #92400e; }
-        .badge-info { background-color: #dbeafe; color: #1e40af; }
+        .badge-info { background-color: #ffffff; color: #f97316; }
         .badge-success { background-color: #d1fae5; color: #065f46; }
-        .badge-primary { background-color: #e0e7ff; color: #3730a3; }
+        .badge-primary { background-color: #ffffff; color: #f97316; }
         .badge-danger { background-color: #fee2e2; color: #991b1b; }
         
         .page-break {
@@ -247,15 +254,31 @@
         }
         
         .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 2px solid #e5e7eb;
+            background-color: #f97316;
+            color: #ffffff;
+            padding: 15px 20px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .footer p {
+            font-size: 9pt;
+            color: #ffffff;
+        }
+
+        @media print {
+            .footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+            }
         }
         
         .section-title {
             margin-top: 20px;
             margin-bottom: 10px;
-            color: #2563eb;
+            color: #f97316;
             font-size: 12pt;
         }
     </style>
@@ -290,7 +313,7 @@
                         <td class="company-info">
                             <h1>Pharmaconnect</h1>
                             <p>P.O. Box 12345, Nairobi, Kenya</p>
-                            <p>Tel: +254 700 000 000 | Email: info@pharmaconnect.com</p>
+                            <p>Tel: +254 700 000 000 | Email: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="f1989f979eb1819990839c90929e9f9f949285df929e9c">[email&#160;protected]</a></p>
                             <p>Website: www.pharmaconnect.com</p>
                         </td>
                         <td class="lpo-title">
@@ -458,15 +481,10 @@
 
         <!-- Footer -->
         <div class="footer">
-            <p style="text-align: center; font-size: 9pt; color: #666;">
-                Order {{ $index + 1 }} of {{ $orders->count() }} | Generated on {{ $generatedAt->format('F d, Y \a\t H:i') }}
-            </p>
+            <p>Order {{ $index + 1 }} of {{ $orders->count() }} | Generated on {{ $generatedAt->format('F d, Y \a\t H:i') }}</p>
+            <p>&copy; {{ date('Y') }} PharmaConnect. All rights reserved.</p>
         </div>
-    </div>
-    
-    @if(!$loop->last)
-    <div class="page-break"></div>
-    @endif
+    </div><!-- /.container -->
     @endforeach
 </body>
 </html>
