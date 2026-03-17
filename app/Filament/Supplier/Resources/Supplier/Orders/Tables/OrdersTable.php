@@ -74,8 +74,7 @@ class OrdersTable
                 TextColumn::make('ordered_at')
                     ->label('Order Date')
                     ->dateTime()
-                    ->sortable()
-                    ->since(),
+                    ->sortable(),
 
                 TextColumn::make('expected_delivery')
                     ->label('Expected Delivery')

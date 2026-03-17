@@ -180,7 +180,6 @@ class DocumentForm
                                 ->placeholder('—')
                                 ->visible(fn ($get) => filled($get('prescription_id'))),
 
-                            // Row 5: File upload full width
                             FileUpload::make('file_path')
                                 ->label('Upload Document')
                                 ->disk('local')
@@ -227,7 +226,6 @@ class DocumentForm
                         ]),
                     ])->columnSpanFull(),
 
-                // ── Edit-only sections ────────────────────────────────────────
                 Section::make('Verification & Status')
                     ->schema([
                         Grid::make(4)->schema([

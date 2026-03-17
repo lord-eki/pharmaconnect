@@ -37,7 +37,6 @@ class FinancialsTable
 
                         $orderId = $record->order->id;
 
-                        // First check: Is this order in the delivery_order pivot table?
                         $deliveryRecord = DB::table('delivery_order')
                             ->where('order_id', $orderId)
                             ->first();
@@ -58,7 +57,6 @@ class FinancialsTable
                             }
                         }
 
-                        // Second check: Is there a delivery with this order_id as primary?
                         $delivery = Delivery::where('order_id', $orderId)->first();
 
                         if ($delivery) {

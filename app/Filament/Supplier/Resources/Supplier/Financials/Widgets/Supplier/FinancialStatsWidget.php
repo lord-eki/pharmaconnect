@@ -11,7 +11,7 @@ class FinancialStatsWidget extends StatsOverviewWidget
 {
   protected function getStats(): array
     {
-        $supplierId = Auth::user()->userProfile->id ?? null;
+        $supplierId = Auth::user()->supplier->user_id;
 
         if (!$supplierId) {
             return [];

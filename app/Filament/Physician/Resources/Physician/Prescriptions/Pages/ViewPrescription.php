@@ -111,11 +111,6 @@ class ViewPrescription extends ViewRecord
                             ->state(fn ($record) => $record->items->count())
                             ->suffix(' item(s)'),
 
-                        TextEntry::make('quotation.status')
-                            ->label('Quotation')
-                            ->badge()
-                            ->default('Not generated')
-                            ->visible(fn ($record) => $record->status !== 'draft'),
                     ])
                     ->columns(2)
                     ->columnSpan(1),

@@ -107,7 +107,7 @@ class ViewDelivery extends ViewRecord
                                                 ])
                                                 ->compact(),
 
-                                            Section::make('Drop-off')
+                                            Section::make('Destination')
                                                 ->schema([
                                                     Grid::make(4)
                                                         ->schema([
@@ -120,9 +120,6 @@ class ViewDelivery extends ViewRecord
                                                             TextEntry::make('recipient_phone')
                                                                 ->label('Phone'),
 
-                                                            TextEntry::make('estimated_distance_km')
-                                                                ->label('Distance')
-                                                                ->suffix(' km'),
 
                                                             TextEntry::make('estimated_delivery')
                                                                 ->label('Est. Delivery')
