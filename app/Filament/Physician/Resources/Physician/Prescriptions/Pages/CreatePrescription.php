@@ -156,8 +156,6 @@ class CreatePrescription extends CreateRecord
                 ->icon('heroicon-o-beaker')
                 ->schema([
                     // ── Column header row ─────────────────────────────────────
-                    // Single Placeholder with raw HTML — no field names rendered,
-                    // just a clean styled header that aligns with the repeater columns.
                     Placeholder::make('_medicine_table_header')
                         ->hiddenLabel()
                         ->dehydrated(false)
@@ -263,8 +261,7 @@ class CreatePrescription extends CreateRecord
                             // Instructions ─ span 2
                             Textarea::make('dosage_instructions')
                                 ->hiddenLabel()
-                                ->required()
-                                ->placeholder('e.g. Take with food…')
+                                ->placeholder('e.g. After meal..')
                                 ->rows(1)
                                 ->columnSpan(2),
 

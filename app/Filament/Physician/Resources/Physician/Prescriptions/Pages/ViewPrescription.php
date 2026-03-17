@@ -214,7 +214,6 @@ class ViewPrescription extends ViewRecord
                     ->collapsible()
                     ->columnSpan(1),
 
-                // ── ROW 3: Medicines full-width ──
                 Section::make('Prescribed Medicines')
                     ->icon('heroicon-o-beaker')
                     ->schema([
