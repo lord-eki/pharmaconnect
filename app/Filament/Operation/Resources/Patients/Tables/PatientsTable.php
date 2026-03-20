@@ -20,8 +20,8 @@ class PatientsTable
                 TextColumn::make('phone'),
                 TextColumn::make('email')->searchable(),
                 TextColumn::make('county')->searchable(),
-                TextColumn::make('insurance_number')->searchable(),
-                TextColumn::make('insurance_provider')->searchable()
+                TextColumn::make('insurance_number')->placeholder('--')->searchable(),
+                TextColumn::make('insurance_provider')->searchable()->getStateUsing(fn($record) => $record->insuranceProvider?->company_name ?? $record->insurance_provider ?? '--' )
 
             ])
             ->filters([
