@@ -65,7 +65,7 @@ class InsuranceClaimsTable
                 TextColumn::make('approved_amount')
                     ->label('Approved')
                     ->money('KES')
-                    ->sortable()
+                    ->sortable()->placeholder('--')
                     ->toggleable()
                     ->summarize([
                         Sum::make()

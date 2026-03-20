@@ -37,134 +37,119 @@ class MedicineResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
-    public static function form(Schema $schema): Schema
-    {
-        return $schema
-            ->schema([
+ public static function form(Schema $schema): Schema
+{
+    return $schema
+        ->schema([
 
-                // ── Row 1: Basic Information — full width ──────────────────────────
-                Section::make('Basic Information')
-                    ->columnSpanFull()
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
-                                Select::make('category_id')
-                                    ->label('Category')
-                                    ->options(MedicineCategory::pluck('name', 'id'))
-                                    ->searchable()
-                                    ->preload()
-                                    ->required(),
+            Section::make('Basic Information')
+                ->columnSpanFull()
+                ->schema([
+                    Grid::make(6)->schema([
 
-                                TextInput::make('generic_name')
-                                    ->required()
-                                    ->maxLength(255)
-                                    ->unique(ignoreRecord: true),
+                        Select::make('category_id')
+                            ->label('Category')
+                            ->options(MedicineCategory::pluck('name', 'id'))
+                            ->searchable()
+                            ->preload()
+                            ->required()
+                            ->columnSpan(2),
 
-                                TextInput::make('brand_name')
-                                    ->maxLength(255),
+                        TextInput::make('generic_name')
+                            ->required()
+                            ->maxLength(255)
+                            ->unique(ignoreRecord: true)
+                            ->columnSpan(2),
 
-                                TextInput::make('strength')
-                                    ->required()
-                                    ->maxLength(255)
-                                    ->placeholder('e.g., 500mg, 10mg/ml'),
+                        TextInput::make('brand_name')
+                            ->maxLength(255)
+                            ->columnSpan(2),
 
-                                Select::make('dosage_form')
-                                    ->options([
-                                        'Tablet'      => 'Tablet',
-                                        'Capsule'     => 'Capsule',
-                                        'Syrup'       => 'Syrup',
-                                        'Suspension'  => 'Suspension',
-                                        'Injection'   => 'Injection',
-                                        'Cream'       => 'Cream',
-                                        'Ointment'    => 'Ointment',
-                                        'Drops'       => 'Drops',
-                                        'Inhaler'     => 'Inhaler',
-                                        'Patch'       => 'Patch',
-                                        'Suppository' => 'Suppository',
-                                        'Solution'    => 'Solution',
-                                    ])
-                                    ->required()
-                                    ->searchable()
-                                    ->live()
-                                    ->afterStateUpdated(function ($state, callable $set) {
-                                        $volumeForms = ['Syrup', 'Suspension', 'Injection', 'Solution', 'Drops'];
-                                        if (in_array($state, $volumeForms)) {
-                                            $set('measurement_type', 'volume');
-                                        } else {
-                                            $set('measurement_type', 'discrete');
-                                        }
-                                    }),
+                        Select::make('dosage_form')
+                            ->options([
+                                'Tablet'      => 'Tablet',
+                                'Capsule'     => 'Capsule',
+                                'Syrup'       => 'Syrup',
+                                'Suspension'  => 'Suspension',
+                                'Injection'   => 'Injection',
+                                'Cream'       => 'Cream',
+                                'Ointment'    => 'Ointment',
+                                'Drops'       => 'Drops',
+                                'Inhaler'     => 'Inhaler',
+                                'Patch'       => 'Patch',
+                                'Suppository' => 'Suppository',
+                                'Solution'    => 'Solution',
+                            ])
+                            ->required()
+                            ->searchable()
+                            ->live()
+                            ->afterStateUpdated(function ($state, callable $set) {
+                                $volumeForms = ['Syrup', 'Suspension', 'Injection', 'Solution', 'Drops'];
+                                $set('measurement_type', in_array($state, $volumeForms) ? 'volume' : 'discrete');
+                            })
+                            ->columnSpan(2),
 
-                                TextInput::make('manufacturer')
-                                    ->required()
-                                    ->maxLength(255),
-                            ]),
+                        TextInput::make('strength')
+                            ->required()
+                            ->maxLength(255)
+                            ->placeholder('e.g., 500mg, 10mg/ml')
+                            ->columnSpan(2),
+
+                        TextInput::make('manufacturer')
+                            ->required()
+                            ->maxLength(255)
+                            ->columnSpan(2),
+
+                        TextInput::make('pack_size')
+                            ->maxLength(255)
+                            ->placeholder('e.g., 10 tablets per strip, 30 capsules per bottle')
+                            ->columnSpan(2),
                     ]),
+                ]),
 
-                // ── Row 2: Measurement Information — full width ────────────────────
-                Section::make('Measurement Information')
-                    ->description('Define how this medicine is measured and dispensed')
-                    ->columnSpanFull()
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
-                                Select::make('measurement_type')
-                                    ->label('Measurement Type')
-                                    ->options([
-                                        'discrete' => 'Discrete (Tablets/Capsules)',
-                                        'volume'   => 'Volume-Based (Syrups/Injections)',
-                                    ])
-                                    ->required()
-                                    ->default('discrete')
-                                    ->live()
-                                    ->helperText('How is this medicine measured?'),
+            Grid::make(2)
+                ->columnSpanFull()
+                ->schema([
 
-                                TextInput::make('volume_per_unit')
-                                    ->label('Volume per Bottle/Vial')
-                                    ->numeric()
-                                    ->suffix('ml')
-                                    ->minValue(1)
-                                    ->step(1)
-                                    ->helperText('For syrups, injections - bottle/vial size in ml')
-                                    ->visible(fn (Get $get) => $get('measurement_type') === 'volume')
-                                    ->required(fn (Get $get) => $get('measurement_type') === 'volume'),
+                    Section::make('Measurement')
+                        ->description('How this medicine is measured and dispensed')
+                        ->schema([
+                            Select::make('measurement_type')
+                                ->label('Measurement Type')
+                                ->options([
+                                    'discrete' => 'Discrete (Tablets/Capsules)',
+                                    'volume'   => 'Volume-Based (Syrups/Injections)',
+                                ])
+                                ->required()
+                                ->default('discrete')
+                                ->live()
+                                ->helperText('How is this medicine measured?'),
 
-                                TextInput::make('unit_of_measurement')
-                                    ->label('Unit of Measurement')
-                                    ->maxLength(20)
-                                    ->placeholder('tablets, capsules, units, etc.')
-                                    ->helperText('Display unit for this medicine')
-                                    ->visible(fn (Get $get) => $get('measurement_type') === 'discrete'),
+                            TextInput::make('volume_per_unit')
+                                ->label('Volume per Bottle/Vial')
+                                ->numeric()
+                                ->suffix('ml')
+                                ->minValue(1)
+                                ->step(1)
+                                ->helperText('Bottle/vial size in ml')
+                                ->visible(fn (Get $get) => $get('measurement_type') === 'volume')
+                                ->required(fn (Get $get) => $get('measurement_type') === 'volume'),
 
-                                TextInput::make('pack_size')
-                                    ->maxLength(255)
-                                    ->placeholder('e.g., 10 tablets per strip, 30 capsules per bottle')
-                                    ->columnSpanFull(),
-                            ]),
-                    ]),
+                            TextInput::make('unit_of_measurement')
+                                ->label('Unit of Measurement')
+                                ->maxLength(20)
+                                ->placeholder('tablets, capsules, units...')
+                                ->helperText('Display unit for this medicine')
+                                ->visible(fn (Get $get) => $get('measurement_type') === 'discrete'),
+                        ]),
 
-                // ── Row 3: Medicine Details + Regulatory Info — side by side ───────
-                Grid::make(2)
-                    ->columnSpanFull()
-                    ->schema([
+                    Section::make('Regulatory & Status')
+                        ->schema([
+                            TextInput::make('ppb_registration_number')
+                                ->label('PPB Registration Number')
+                                ->maxLength(255),
 
-                        // Left column — Medicine Details (active ingredients only)
-                        Section::make('Medicine Details')
-                            ->schema([
-                                Textarea::make('active_ingredients')
-                                    ->required()
-                                    ->rows(4)
-                                    ->columnSpanFull()
-                                    ->placeholder('List all active ingredients'),
-                            ]),
-
-                        // Right column — Regulatory Information
-                        Section::make('Regulatory Information')
-                            ->schema([
-                                TextInput::make('ppb_registration_number')
-                                    ->label('PPB Registration Number')
-                                    ->maxLength(255),
-
+                            Grid::make(2)->schema([
                                 Toggle::make('prescription_required')
                                     ->label('Prescription Required')
                                     ->default(true)
@@ -180,9 +165,21 @@ class MedicineResource extends Resource
                                     ->default(true)
                                     ->inline(false),
                             ]),
-                    ]),
-            ]);
-    }
+                        ]),
+                ]),
+
+            Section::make('Active Ingredients')
+                ->columnSpanFull()
+                ->schema([
+                    Textarea::make('active_ingredients')
+                        ->required()
+                        ->rows(3)
+                        ->columnSpanFull()
+                        ->placeholder('List all active ingredients')
+                        ->hiddenLabel(),
+                ]),
+        ]);
+}
 
     public static function table(Table $table): Table
     {
@@ -238,11 +235,6 @@ class MedicineResource extends Resource
                     ->sortable()
                     ->toggleable()
                     ->limit(20),
-
-                IconColumn::make('prescription_required')
-                    ->label('Rx Required')
-                    ->boolean()
-                    ->toggleable(),
 
                 IconColumn::make('is_active')
                     ->label('Active')

@@ -47,8 +47,7 @@ class MedicineCategoryResource extends Resource
                     Toggle::make('is_active')
                         ->required(),
                     TextInput::make('sort_order')
-                        ->required()
-                        ->numeric()
+                        ->required()->numeric()
                         ->default(0),
                 ])->columns(2)->columnSpanFull(),
             ]);
@@ -67,9 +66,7 @@ class MedicineCategoryResource extends Resource
                     ->searchable(),
                 IconColumn::make('is_active')
                     ->boolean(),
-                TextColumn::make('sort_order')
-                    ->numeric()
-                    ->sortable(),
+              
 
             ])
             ->filters([

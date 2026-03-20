@@ -15,10 +15,13 @@ class QuotationsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->columns([
+            ->columns([ 
+                TextColumn::make('created_at')
+                    ->dateTime()->label('Date')
+                    ->sortable(),
                 TextColumn::make('quotation_number')
                     ->searchable(),
-                TextColumn::make('prescription.id')
+                TextColumn::make('prescription.prescription_number')
                     ->searchable(),
                 TextColumn::make('total_amount')
                     ->numeric()->money('KES')
@@ -32,14 +35,10 @@ class QuotationsTable
                 TextColumn::make('valid_until')
                     ->dateTime()
                     ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+              
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 //

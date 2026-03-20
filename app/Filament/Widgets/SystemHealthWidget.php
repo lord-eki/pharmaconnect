@@ -28,7 +28,6 @@ class SystemHealthWidget extends Widget
 
     protected function getApiSystemsHealth(): array
     {
-        // Check if system is responding by checking recent database activity
         $recentActivity = Cache::remember('api_health_check', 60, function () {
             return DB::table('orders')
                 ->where('created_at', '>=', now()->subMinutes(5))
@@ -36,7 +35,6 @@ class SystemHealthWidget extends Widget
         });
 
         $uptime = Cache::remember('system_uptime', 300, function () {
-            // Calculate uptime based on successful operations in last 24h
             $total = DB::table('orders')->where('created_at', '>=', now()->subDay())->count();
             $failed = DB::table('orders')
                 ->where('created_at', '>=', now()->subDay())

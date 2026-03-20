@@ -22,7 +22,7 @@ class DeliveriesTable
                     ->searchable(),
                 TextColumn::make('order.id')
                     ->searchable()->label('Order'),
-                TextColumn::make('rider.last_name')
+                TextColumn::make('rider.last_name')->placeholder('--')
                     ->searchable()->label('Rider'),
               
         
@@ -37,13 +37,13 @@ class DeliveriesTable
                     ]),
            
                 TextColumn::make('actual_delivery')
-                    ->dateTime()
+                    ->dateTime()->placeholder('--')
                     ->sortable(),
                 TextColumn::make('recipient_name')
                     ->searchable(),
                 TextColumn::make('recipient_phone')
                     ->searchable(),
-                TextColumn::make('proof_of_delivery')
+                TextColumn::make('proof_of_delivery')->placeholder('--')
                     ->searchable(),
          
            

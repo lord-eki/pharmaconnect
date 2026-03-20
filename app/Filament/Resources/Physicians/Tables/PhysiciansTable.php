@@ -20,7 +20,7 @@ class PhysiciansTable
                 TextColumn::make('created_at')
                     ->dateTime()->label('Date')
                     ->sortable(),
-                TextColumn::make('user.name')
+                TextColumn::make('user.name')->label('Name')
                     ->searchable(),
                 TextColumn::make('license_number')
                     ->searchable(),

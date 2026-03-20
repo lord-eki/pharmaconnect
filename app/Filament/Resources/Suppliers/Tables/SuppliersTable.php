@@ -18,7 +18,7 @@ class SuppliersTable
             ->columns([
                 TextColumn::make('created_at')
                     ->date()->label('Date')->sortable(),
-                TextColumn::make('user.name')
+                TextColumn::make('user.name')->label('Name')
                     ->searchable(),
                 TextColumn::make('company_name')
                     ->searchable(),
@@ -41,9 +41,7 @@ class SuppliersTable
                     ->searchable(),
                 IconColumn::make('is_active')
                     ->boolean(),
-                TextColumn::make('fulfillment_sla_hours')
-                    ->numeric()
-                    ->sortable(),
+          
 
             ])
             ->filters([

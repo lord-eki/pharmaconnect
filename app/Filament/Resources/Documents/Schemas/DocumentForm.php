@@ -24,7 +24,7 @@ class DocumentForm
     {
         return $schema
             ->components([
-                      Tabs::make('Complete Document Management')
+                Tabs::make('Complete Document Management')
                     ->tabs([
                         Tabs\Tab::make('Document Information')
                             ->icon('heroicon-o-document-text')
@@ -155,7 +155,7 @@ class DocumentForm
                                                 ->label('File Size')
                                                 ->disabled()
                                                 ->dehydrated()
-                                                ->formatStateUsing(fn ($state) => $state ? number_format($state / 1024, 2) . ' KB' : ''),
+                                                ->formatStateUsing(fn ($state) => $state ? number_format($state / 1024, 2).' KB' : ''),
 
                                             TextInput::make('file_hash')
                                                 ->label('File Hash (SHA-256)')
@@ -177,8 +177,7 @@ class DocumentForm
                                                 ->relationship('prescription', 'prescription_number')
                                                 ->searchable()
                                                 ->preload()
-                                                ->getOptionLabelFromRecordUsing(fn ($record) => 
-                                                    "{$record->prescription_number} - {$record->patient->full_name} ({$record->created_at->format('d/m/Y')})"
+                                                ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->prescription_number} - {$record->patient->full_name} ({$record->created_at->format('d/m/Y')})"
                                                 ),
 
                                             Select::make('order_id')
@@ -186,17 +185,21 @@ class DocumentForm
                                                 ->relationship('order', 'order_number')
                                                 ->searchable()
                                                 ->preload()
-                                                ->getOptionLabelFromRecordUsing(fn ($record) => 
-                                                    "{$record->order_number} - Total: {$record->total_amount} ({$record->created_at->format('d/m/Y')})"
+                                                ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->order_number} - Total: {$record->total_amount} ({$record->created_at->format('d/m/Y')})"
                                                 ),
 
                                             Select::make('insurance_claim_id')
                                                 ->label('Insurance Claim')
-                                                ->relationship('insuranceClaim', 'claim_number')
+                                                ->relationship(
+                                                    name: 'insuranceClaim',
+                                                    titleAttribute: 'claim_number',
+                                                    modifyQueryUsing: fn ($query) => $query->with(['patient', 'insuranceProvider'])
+                                                )
                                                 ->searchable()
                                                 ->preload()
-                                                ->getOptionLabelFromRecordUsing(fn ($record) => 
-                                                    "{$record->claim_number} - {$record->patient->full_name} - {$record->insuranceProvider->company_name}"
+                                                ->getOptionLabelFromRecordUsing(fn ($record) => $record->claim_number
+                                                    .' - '.($record->patient?->last_name ?? 'No Patient')
+                                                    .' - '.($record->insuranceProvider?->company_name ?? 'No Insurer')
                                                 ),
 
                                             Select::make('patient_id')
@@ -204,8 +207,7 @@ class DocumentForm
                                                 ->relationship('patient', 'patient_number')
                                                 ->searchable()
                                                 ->preload()
-                                                ->getOptionLabelFromRecordUsing(fn ($record) => 
-                                                    "{$record->patient_number} - {$record->first_name} {$record->last_name}"
+                                                ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->patient_number} - {$record->first_name} {$record->last_name}"
                                                 ),
                                         ]),
                                     ]),
@@ -219,8 +221,7 @@ class DocumentForm
                                                 ->relationship('supplier', 'company_name')
                                                 ->searchable()
                                                 ->preload()
-                                                ->getOptionLabelFromRecordUsing(fn ($record) => 
-                                                    "{$record->company_name} - {$record->supplier_code}"
+                                                ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->company_name} - {$record->supplier_code}"
                                                 ),
 
                                             Select::make('insurance_provider_id')
@@ -228,8 +229,7 @@ class DocumentForm
                                                 ->relationship('insuranceProvider', 'company_name')
                                                 ->searchable()
                                                 ->preload()
-                                                ->getOptionLabelFromRecordUsing(fn ($record) => 
-                                                    "{$record->company_name} - {$record->provider_code}"
+                                                ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->company_name} - {$record->provider_code}"
                                                 ),
                                         ]),
                                     ]),
@@ -363,12 +363,12 @@ class DocumentForm
                                                         ->label('Version')
                                                         ->disabled()
                                                         ->formatStateUsing(fn ($state) => "v{$state}"),
-                                                    
+
                                                     TextInput::make('created_at')
                                                         ->label('Date')
                                                         ->disabled()
                                                         ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d/m/Y H:i') : ''),
-                                                    
+
                                                     Select::make('created_by')
                                                         ->label('Modified By')
                                                         ->relationship('createdBy', 'name')
@@ -377,9 +377,9 @@ class DocumentForm
                                                     TextInput::make('file_size')
                                                         ->label('Size')
                                                         ->disabled()
-                                                        ->formatStateUsing(fn ($state) => $state ? number_format($state / 1024, 2) . ' KB' : ''),
+                                                        ->formatStateUsing(fn ($state) => $state ? number_format($state / 1024, 2).' KB' : ''),
                                                 ]),
-                                                
+
                                                 Textarea::make('change_notes')
                                                     ->label('Change Notes')
                                                     ->rows(2)
@@ -413,8 +413,7 @@ class DocumentForm
                                                         ->relationship('sharedWith', 'name')
                                                         ->searchable()
                                                         ->required()
-                                                        ->getOptionLabelFromRecordUsing(fn ($record) => 
-                                                            "{$record->name} ({$record->email})"
+                                                        ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->name} ({$record->email})"
                                                         ),
 
                                                     Select::make('permission')
@@ -454,8 +453,7 @@ class DocumentForm
                                             ])
                                             ->columnSpanFull()
                                             ->collapsible()
-                                            ->itemLabel(fn (array $state): ?string => 
-                                                $state['shared_with'] ?? 'New Share'
+                                            ->itemLabel(fn (array $state): ?string => $state['shared_with'] ?? 'New Share'
                                             )
                                             ->defaultItems(0)
                                             ->reorderableWithButtons()
@@ -486,8 +484,7 @@ class DocumentForm
                                                     TextInput::make('accessed_at')
                                                         ->label('Date/Time')
                                                         ->disabled()
-                                                        ->formatStateUsing(fn ($state) => 
-                                                            $state ? \Carbon\Carbon::parse($state)->format('d/m/Y H:i:s') : ''
+                                                        ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d/m/Y H:i:s') : ''
                                                         ),
 
                                                     TextInput::make('user_agent')
@@ -526,8 +523,7 @@ class DocumentForm
                                                     TextInput::make('created_at')
                                                         ->label('Posted At')
                                                         ->disabled()
-                                                        ->formatStateUsing(fn ($state) => 
-                                                            $state ? \Carbon\Carbon::parse($state)->diffForHumans() : ''
+                                                        ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->diffForHumans() : ''
                                                         ),
                                                 ]),
 

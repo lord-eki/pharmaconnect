@@ -46,13 +46,7 @@ class QuickActionsWidget extends Widget
                 ])
                 ->url(fn () => route('filament.Admin.resources.medicines.index')),
 
-            Action::make('transactions')
-                ->label('FINANCIAL REPORTS')
-                ->icon('heroicon-o-currency-dollar')
-                ->extraAttributes([
-                    'class' => 'bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg p-4 text-left w-full transition-colors duration-200'
-                ])
-                // ->url(fn () => route('filament.Admin.resources.transactions.index')),
+          
         ];
     }
 }

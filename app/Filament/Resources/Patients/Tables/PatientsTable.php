@@ -18,8 +18,8 @@ class PatientsTable
                 TextColumn::make('phone'),
                 TextColumn::make('email')->searchable(),
                 TextColumn::make('county')->searchable(),
-                TextColumn::make('insurance_number')->searchable(),
-                TextColumn::make('insurance_provider')->searchable()->formatStateUsing(function ($state) {
+                TextColumn::make('insurance_number')->searchable()->placeholder('--'),
+                TextColumn::make('insurance_provider')->searchable()->placeholder('--')->formatStateUsing(function ($state) {
                     if (is_numeric($state)){
                         $provider = InsuranceProvider::find($state);
                         return $provider ? $provider->company_name : $state;

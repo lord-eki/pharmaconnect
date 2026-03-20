@@ -25,7 +25,7 @@ class UsersTable
                 TextColumn::make('email')
                     ->label('Email address')
                     ->searchable(),
-                TextColumn::make('phone')
+                TextColumn::make('phone')->placeholder('--')
                     ->searchable(),
                 IconColumn::make('is_active')
                     ->boolean()->label('Status'),

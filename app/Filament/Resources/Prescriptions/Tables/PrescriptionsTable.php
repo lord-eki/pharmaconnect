@@ -16,6 +16,9 @@ class PrescriptionsTable
     {
         return $table
             ->columns([
+                   TextColumn::make('created_at')
+                    ->dateTime()->label('Date')
+                    ->sortable(),
                 TextColumn::make('prescription_number')
                     ->searchable(),
                 TextColumn::make('physician.name')
@@ -35,12 +38,8 @@ class PrescriptionsTable
                 TextColumn::make('prescribed_at')
                     ->dateTime()
                     ->sortable(),
-
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable(),
            
-                TextColumn::make('insuranceClaim.id')
+                TextColumn::make('insuranceClaim.claim_number')->placeholder('--')
                     ->searchable(),
             ])
             ->filters([
