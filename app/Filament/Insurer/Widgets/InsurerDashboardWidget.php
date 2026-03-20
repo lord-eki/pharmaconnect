@@ -72,6 +72,12 @@ class InsurerDashboardWidget extends StatsOverviewWidget
                 ->descriptionIcon('heroicon-o-currency-dollar')
                 ->color('info')
                 ->url(route('filament.Insurer.resources.insurance.pricing-catalogues.index')),
+
+                Stat::make('Orders',$activeOrders)
+                ->description('View Orders')
+                ->descriptionIcon('heroicon-o-circle-stack')
+                ->color('primary')
+                ->url(route('filament.Insurer.resources.external-orders.index'))
         ];
     }
 
