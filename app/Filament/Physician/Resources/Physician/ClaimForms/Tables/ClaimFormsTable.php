@@ -119,8 +119,7 @@ class ClaimFormsTable
 
                 Filter::make('my_forms')
                     ->query(fn ($query) => $query->where('physician_id', auth()->id()))
-                    ->label('My Forms')
-                    ->default(),
+                    ->label('My Forms'),
             ])
             ->recordActions([
               ViewAction::make(),
