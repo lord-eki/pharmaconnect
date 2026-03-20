@@ -73,19 +73,19 @@ class DocumentsTable
                 TextColumn::make('patient.full_name')
                     ->label('Patient')
                     ->searchable(['first_name', 'last_name'])
-                    ->sortable()
+                    ->sortable()->placeholder('--')
                     ->toggleable(),
 
                 TextColumn::make('insuranceProvider.company_name')
                     ->label('Insurer')
                     ->searchable()
-                    ->sortable()
+                    ->sortable()->placeholder('--')
                     ->toggleable(),
 
                 TextColumn::make('supplier.company_name')
                     ->label('Supplier')
                     ->searchable()
-                    ->sortable()
+                    ->sortable()->placeholder('--')
                     ->toggleable(),
 
                 IconColumn::make('is_locked')
