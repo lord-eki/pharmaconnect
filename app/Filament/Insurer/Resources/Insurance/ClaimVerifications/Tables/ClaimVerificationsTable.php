@@ -26,27 +26,27 @@ class ClaimVerificationsTable
         return $table
             ->columns([
                 TextColumn::make('submitted_at')
-                    ->label('Submitted')
+                    ->label('Date Submitted')
                     ->dateTime()
                     ->sortable(),
 
                 TextColumn::make('claim_number')
-                    ->searchable()
+                    ->searchable()->placeholder('--')
                     ->sortable()
                     ->copyable(),
 
                 TextColumn::make('patient.full_name')
-                    ->label('Patient')
+                    ->label('Patient')->placeholder('--')
                     ->searchable()
                     ->sortable(),
 
                 TextColumn::make('policy_number')
-                    ->searchable()
+                    ->searchable()->placeholder('--')
                     ->sortable(),
 
                 TextColumn::make('prescription.prescription_number')
                     ->label('Prescription #')
-                    ->searchable()
+                    ->searchable()->placeholder('--')
                     ->sortable()
                     ->copyable()
                     ->action(

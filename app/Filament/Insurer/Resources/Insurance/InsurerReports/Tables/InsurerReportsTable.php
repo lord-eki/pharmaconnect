@@ -35,7 +35,7 @@ class InsurerReportsTable
                     ->sortable(),
 
                 TextColumn::make('patient.full_name')
-                    ->label('Patient')
+                    ->label('Patient')->placeholder('--')
                     ->searchable(),
 
                 TextColumn::make('policy_number')
@@ -52,7 +52,7 @@ class InsurerReportsTable
                     ]),
 
                 TextColumn::make('approved_amount')
-                    ->label('Approved')
+                    ->label('Approved')->placeholder('--')
                     ->money('KES')
                     ->sortable()
                     ->summarize([
@@ -79,7 +79,6 @@ class InsurerReportsTable
                         'danger' => 'rejected',
                         'success' => 'paid',
                     ]),
-                TextColumn::make('pdf_path')->wrap()->label('PDF Generated')->formatStateUsing(fn ($state) => $state ? 'Yes' : 'No'),
             ])
             ->filters([
                 SelectFilter::make('status')

@@ -23,6 +23,9 @@ class InsurerReportsResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentChartBar;
 
     protected static ?string $navigationLabel = 'Reports & Statements';
+    protected static ?string $modelLabel = 'Reports & Statements';
+
+    
 
     protected static string|null|UnitEnum $navigationGroup = 'Reports';
 

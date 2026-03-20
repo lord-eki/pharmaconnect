@@ -42,7 +42,7 @@ class PricingCataloguesTable
                     ->sortable(),
 
                 TextColumn::make('cheapest_price')
-                    ->label('Lowest Price')
+                    ->label('Price')->placeholder('--')
                     ->money('KES')
                     ->sortable()
                     ->getStateUsing(fn ($record) => $record->getCheapestSupplierPrice(1))

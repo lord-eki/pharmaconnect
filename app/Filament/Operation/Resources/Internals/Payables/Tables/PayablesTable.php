@@ -64,7 +64,7 @@ class PayablesTable
                     ->sortable(),
 
                 TextColumn::make('payment_method')
-                    ->badge()
+                    ->badge()->placeholder('--')
                     ->formatStateUsing(fn (?string $state): string => $state ? ucwords(str_replace('_', ' ', $state)) : 'N/A'),
 
                 TextColumn::make('due_date')
@@ -72,7 +72,7 @@ class PayablesTable
                     ->sortable(),
 
                 IconColumn::make('paid_at')
-                    ->label('Paid')
+                    ->label('Paid')->placeholder('--')
                     ->boolean()
                     ->sortable(),
 

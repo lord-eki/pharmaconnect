@@ -3,6 +3,7 @@
 namespace App\Filament\Insurer\Resources\ExternalOrders\Pages;
 
 use App\Filament\Insurer\Resources\ExternalOrders\ExternalOrderResource;
+use App\Models\ExternalOrder;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -10,30 +11,33 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
-use App\Models\ExternalOrder;
 
 class ViewExternalOrder extends ViewRecord
 {
     protected static string $resource = ExternalOrderResource::class;
 
-   public function infolist(Schema $schema): Schema
+    public function infolist(Schema $schema): Schema
     {
         return $schema
             ->components([
-                Section::make('Order Information')
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
+
+                Grid::make(3)->columnSpanFull()->schema([
+
+                    Section::make('Order Information')
+                        ->columnSpan(2)
+                        ->schema([
+                            Grid::make(4)->schema([
                                 TextEntry::make('order_number')
                                     ->label('Order Number')
                                     ->weight(FontWeight::Bold)
-                                    ->copyable(),
+                                    ->copyable()
+                                    ->columnSpan(1),
 
                                 TextEntry::make('status')
+                                    ->label('Status')
                                     ->badge()
                                     ->colors([
                                         'secondary' => 'draft',
@@ -41,101 +45,28 @@ class ViewExternalOrder extends ViewRecord
                                         'info' => 'processing',
                                         'success' => 'fulfilled',
                                         'danger' => 'cancelled',
-                                    ]),
+                                    ])
+                                    ->columnSpan(1),
 
                                 TextEntry::make('reference_number')
                                     ->label('Reference')
-                                    ->placeholder('N/A'),
-                            ]),
-                    ]),
+                                    ->placeholder('N/A')
+                                    ->columnSpan(1),
 
-                Section::make('Recipient & Delivery')
-                    ->schema([
-                        Grid::make(2)
-                            ->schema([
-                                Group::make([
-                                    TextEntry::make('recipient_name')
-                                        ->label('Recipient Name')
-                                        ->icon('heroicon-o-user'),
-
-                                    TextEntry::make('recipient_phone')
-                                        ->label('Phone')
-                                        ->icon('heroicon-o-phone')
-                                        ->copyable(),
-
-                                    TextEntry::make('recipient_email')
-                                        ->label('Email')
-                                        ->icon('heroicon-o-envelope')
-                                        ->placeholder('Not provided')
-                                        ->copyable(),
-                                ]),
-
-                                Group::make([
-                                    TextEntry::make('delivery_address')
-                                        ->label('Delivery Address')
-                                        ->icon('heroicon-o-map-pin'),
-
-                                    TextEntry::make('delivery_city')
-                                        ->label('City')
-                                        ->placeholder('Not specified'),
-
-                                    TextEntry::make('delivery_county')
-                                        ->label('County')
-                                        ->placeholder('Not specified'),
-                                ]),
-                            ]),
-                    ])
-                    ->collapsible(),
-
-                Section::make('Order Items')
-                    ->schema([
-                        RepeatableEntry::make('items')
-                            ->label('')
-                            ->schema([
-                                Grid::make(5)
-                                    ->schema([
-                                        TextEntry::make('medicine.generic_name')
-                                            ->label('Medicine')
-                                            ->weight(FontWeight::Bold)
-                                            ->formatStateUsing(function ($record) {
-                                                $medicine = $record->medicine;
-                                                $brandInfo = $medicine->brand_name ? " ({$medicine->brand_name})" : '';
-                                                return "{$medicine->generic_name}{$brandInfo}";
-                                            })
-                                            ->columnSpan(2),
-
-                                        TextEntry::make('quantity')
-                                            ->label('Qty')
-                                            ->badge()
-                                            ->color('info'),
-
-                                        TextEntry::make('unit_price')
-                                            ->label('Unit Price')
-                                            ->money('KES'),
-
-                                        TextEntry::make('total_price')
-                                            ->label('Total')
-                                            ->money('KES')
-                                            ->weight(FontWeight::Bold),
-                                    ]),
-                            ])
-                            ->contained(false),
-
-                        Grid::make(1)
-                            ->schema([
                                 TextEntry::make('total_amount')
                                     ->label('Order Total')
                                     ->money('KES')
-                                    ->size('lg')
                                     ->weight(FontWeight::Bold)
-                                    ->color('primary'),
+                                    ->color('success')
+                                    ->columnSpan(1),
                             ]),
-                    ])->columnSpanFull(),
+                        ]),
 
-                Section::make('Delivery Information')
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
+                    // Right 1/3 — Delivery status (only when exists)
+                    Section::make('Delivery')
+                        ->visible(fn ($record) => $record->delivery()->exists())
+                        ->schema([
+                            Grid::make(2)->schema([
                                 TextEntry::make('delivery.delivery_number')
                                     ->label('Delivery Number')
                                     ->weight(FontWeight::Bold)
@@ -143,7 +74,7 @@ class ViewExternalOrder extends ViewRecord
                                     ->placeholder('Not created yet'),
 
                                 TextEntry::make('delivery.status')
-                                    ->label('Delivery Status')
+                                    ->label('Status')
                                     ->badge()
                                     ->colors([
                                         'warning' => 'pending',
@@ -152,23 +83,103 @@ class ViewExternalOrder extends ViewRecord
                                         'danger' => 'cancelled',
                                     ])
                                     ->placeholder('N/A'),
-
-                               
                             ]),
-                    ])
-                    ->collapsible()
-                    ->visible(fn ($record) => $record->delivery()->exists()),
 
+                        ]),
+                ]),
+
+                // ── Row 2: Recipient & Delivery address ───────────────────────
+                Section::make('Recipient & Delivery')
+                    ->columnSpanFull()
+                    ->collapsible()
+                    ->schema([
+                        Grid::make(7)->schema([
+                            TextEntry::make('recipient_name')
+                                ->label('Recipient')
+                                ->icon('heroicon-o-user')
+                                ->columnSpan(2),
+
+                            TextEntry::make('recipient_phone')
+                                ->label('Phone')
+                                ->icon('heroicon-o-phone')
+                                ->copyable()
+                                ->columnSpan(1),
+
+                            TextEntry::make('recipient_email')
+                                ->label('Email')
+                                ->icon('heroicon-o-envelope')
+                                ->placeholder('Not provided')
+                                ->copyable()
+                                ->columnSpan(2),
+
+                            TextEntry::make('delivery_city')
+                                ->label('City')
+                                ->placeholder('Not specified')
+                                ->columnSpan(1),
+
+                            TextEntry::make('delivery_address')
+                                ->label('Delivery Address')
+                                ->icon('heroicon-o-map-pin')
+                                ->columnSpan(3),
+
+                            TextEntry::make('delivery_county')
+                                ->label('County')
+                                ->placeholder('Not specified')
+                                ->columnSpan(2),
+                        ]),
+                    ]),
+
+                // ── Row 3: Order Items ────────────────────────────────────────
+                Section::make('Order Items')
+                    ->columnSpanFull()
+                    ->schema([
+                        RepeatableEntry::make('items')
+                            ->label('')
+                            ->contained(false)
+                            ->schema([
+                                Grid::make(5)->schema([
+                                    TextEntry::make('medicine.generic_name')
+                                        ->label('Medicine')
+                                        ->weight(FontWeight::Bold)
+                                        ->formatStateUsing(function ($record) {
+                                            $medicine = $record->medicine;
+                                            $brandInfo = $medicine->brand_name
+                                                ? " ({$medicine->brand_name})"
+                                                : '';
+
+                                            return "{$medicine->generic_name}{$brandInfo}";
+                                        })
+                                        ->columnSpan(2),
+
+                                    TextEntry::make('quantity')
+                                        ->label('Qty')
+                                        ->badge()
+                                        ->color('info'),
+
+                                    TextEntry::make('unit_price')
+                                        ->label('Unit Price')
+                                        ->money('KES'),
+
+                                    TextEntry::make('total_price')
+                                        ->label('Total')
+                                        ->money('KES')
+                                        ->weight(FontWeight::Bold),
+                                ]),
+                            ]),
+                    ]),
+
+                // ── Row 4: Notes (collapsed by default) ───────────────────────
                 Section::make('Notes')
+                    ->columnSpanFull()
+                    ->collapsible()
+                    ->collapsed()
+                    ->visible(fn ($record) => ! empty($record->notes))
                     ->schema([
                         TextEntry::make('notes')
                             ->label('')
                             ->placeholder('No notes')
                             ->columnSpanFull(),
-                    ])
-                    ->collapsible()
-                    ->collapsed()
-                    ->visible(fn ($record) => !empty($record->notes)),
+                    ]),
             ]);
     }
 
@@ -187,19 +198,9 @@ class ViewExternalOrder extends ViewRecord
                 ->action(function (ExternalOrder $record) {
                     try {
                         $record->submit();
-
-                        Notification::make()
-                            ->success()
-                            ->title('Order Submitted')
-                            ->body('Your order has been submitted successfully .')
-                            ->send();
-
+                        Notification::make()->success()->title('Order Submitted')->body('Your order has been submitted successfully.')->send();
                     } catch (\Exception $e) {
-                        Notification::make()
-                            ->danger()
-                            ->title('Submission Failed')
-                            ->body($e->getMessage())
-                            ->send();
+                        Notification::make()->danger()->title('Submission Failed')->body($e->getMessage())->send();
                     }
                 }),
 
@@ -223,19 +224,9 @@ class ViewExternalOrder extends ViewRecord
                 ->action(function (ExternalOrder $record, array $data) {
                     try {
                         $record->cancel($data['cancel_reason']);
-
-                        Notification::make()
-                            ->success()
-                            ->title('Order Cancelled')
-                            ->body('The order has been cancelled successfully.')
-                            ->send();
-
+                        Notification::make()->success()->title('Order Cancelled')->body('The order has been cancelled successfully.')->send();
                     } catch (\Exception $e) {
-                        Notification::make()
-                            ->danger()
-                            ->title('Cancellation Failed')
-                            ->body($e->getMessage())
-                            ->send();
+                        Notification::make()->danger()->title('Cancellation Failed')->body($e->getMessage())->send();
                     }
                 }),
 

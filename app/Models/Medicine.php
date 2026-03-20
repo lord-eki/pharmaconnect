@@ -183,7 +183,7 @@ class Medicine extends Model
                     'supplier_medicines.stock_quantity',
                     'supplier_medicines.expiry_date',
                     'supplier_medicines.batch_number',
-                    'suppliers.name as supplier_name',
+                    'suppliers.company_name as supplier_name',
                     'suppliers.phone as supplier_phone',
                     'suppliers.email as supplier_email',
                 ])

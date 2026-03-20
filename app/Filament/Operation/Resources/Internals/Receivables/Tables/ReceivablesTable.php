@@ -41,13 +41,13 @@ class ReceivablesTable
 
                 TextColumn::make('prescription.prescription_number')
                     ->label('Prescription')
-                    ->searchable()
+                    ->searchable()->placeholder('--')
                     ->sortable(),
                 // ->url(fn ($record) => $record->prescription_id ? route('filament.admin.resources.prescriptions.view', $record->prescription_id) : null),
 
                 TextColumn::make('patient.last_name')
                     ->label('Patient')
-                    ->searchable()
+                    ->searchable()->placeholder('--')
                     ->sortable(),
 
                 BadgeColumn::make('payment_source')
@@ -76,7 +76,7 @@ class ReceivablesTable
 
                 IconColumn::make('received_at')
                     ->label('Received')
-                    ->boolean()
+                    ->boolean()->placeholder('--')
                     ->sortable()
                     ->tooltip(fn ($record) => $record->received_at ? 'Received on '.$record->received_at->format('M d, Y') : 'Not received'),
 

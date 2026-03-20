@@ -14,6 +14,7 @@ class PricingCatalogueForm
         return $schema
             ->components([
                 Section::make('Medicine Details')
+                ->columnSpanFull()
                     ->schema([
                         TextInput::make('generic_name')
                             ->label('Generic Name')
@@ -26,25 +27,15 @@ class PricingCatalogueForm
                         TextInput::make('dosage_form')
                             ->label('Dosage Form')
                             ->disabled(),
-                    ])
-                    ->columns(2),
-
-                Section::make('Pricing Information')
-                    ->schema([
                         Placeholder::make('cheapest_price')
-                            ->label('Lowest Market Price')
-                            ->content(fn ($record) => $record ? 
-                                'KES ' . number_format($record->getCheapestSupplierPrice(1) ?? 0, 2) : 
+                            ->label('Price')
+                            ->content(fn ($record) => $record ?
+                                'KES '.number_format($record->getCheapestSupplierPrice(1) ?? 0, 2) :
                                 'N/A'
                             ),
-                        Placeholder::make('supplier_count')
-                            ->label('Available Suppliers')
-                            ->content(fn ($record) => $record ? 
-                                $record->getAvailableSuppliers(1)->count() . ' supplier(s)' : 
-                                '0'
-                            ),
-                    ])
-                    ->columns(2),
+                    ])->columns(4),
+
+             
             ]);
     }
 }

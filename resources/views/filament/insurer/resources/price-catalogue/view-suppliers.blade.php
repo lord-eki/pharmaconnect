@@ -78,7 +78,5 @@
         </div>
     @endif
 
-    <div class="text-xs text-gray-500 mt-4">
-        <p><strong>Note:</strong> Prices shown are real-time from the PharmaConnect database. Final pricing may include applicable markups based on your insurance agreement.</p>
-    </div>
+ 
 </div>
