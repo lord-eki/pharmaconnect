@@ -170,16 +170,6 @@ class OrderResource extends Resource
                                             ->weight('bold')
                                             ->formatStateUsing(fn (string $state, $record): string => 'KES '.$record->supplier_price * $record->quantity),
 
-                                        TextEntry::make('status')
-                                            ->label('Item Status')
-                                            ->badge()
-                                            ->color(fn (string $state): string => match ($state) {
-                                                'pending' => 'warning',
-                                                'confirmed' => 'info',
-                                                'shipped' => 'success',
-                                                'delivered' => 'success',
-                                                default => 'gray',
-                                            }),
                                     ]),
                             ])
                             ->columns(1)

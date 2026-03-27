@@ -525,7 +525,7 @@ class DeliveriesTable
                         })
                         ->deselectRecordsAfterCompletion(),
 
-                    DeleteBulkAction::make(),
+                    // DeleteBulkAction::make(),
                 ]),
             ])
             ->defaultSort('created_at', 'desc');

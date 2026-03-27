@@ -52,7 +52,7 @@ class PayablesTable
                     ->sortable(),
 
                 BadgeColumn::make('vendor_type')
-                    ->label('Type')
+                    ->label('Payee')
                     ->colors([
                         'primary' => 'supplier',
                         'success' => 'physician',

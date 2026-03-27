@@ -33,7 +33,6 @@ class ClaimFormForm
                                 ->dehydrated(false)
                                 ->visible(fn ($context) => $context === 'edit'),
 
-                            // 1. Prescription — the single source of truth
                             Select::make('prescription_id')
                                 ->label('Prescription')
                                 ->relationship('prescription', 'prescription_number')

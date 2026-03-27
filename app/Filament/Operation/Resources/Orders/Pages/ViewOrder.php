@@ -162,7 +162,7 @@ class ViewOrder extends ViewRecord
                     }
 
                     $fields[] = Textarea::make('reason')
-                        ->label('Reason for Reassignment')
+                        ->label('Reason for Reassignment')->required()
                         ->placeholder('e.g. Current supplier is out of stock')
                         ->rows(2);
 

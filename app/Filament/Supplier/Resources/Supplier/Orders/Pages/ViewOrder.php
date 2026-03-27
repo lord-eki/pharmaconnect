@@ -79,15 +79,14 @@ class ViewOrder extends ViewRecord
                 ->visible(fn ($record) => in_array($record->status, ['pending', 'sent_to_supplier']))
                 ->requiresConfirmation()
                 ->modalHeading('Reject Order')
-                ->modalDescription('Reject this order. The system will attempt to reassign it to another supplier.')
+                ->modalDescription('Reject this order.')
                 ->form([
                     Textarea::make('rejection_reason')
                         ->label('Reason for Rejection')
                         ->required()
                         ->placeholder('e.g., Out of stock, Cannot deliver to location, etc.')
-                        ->helperText('This order will be reassigned to the next available supplier.')
                         ->maxLength(1000)
-                        ->rows(4),
+                        ->rows(3),
                 ])
                 ->action(function ($record, array $data) {
                     try {

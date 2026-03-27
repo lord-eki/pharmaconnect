@@ -55,7 +55,7 @@ class FinancialStatsWidget extends StatsOverviewWidget
                 ->descriptionIcon('heroicon-m-clock')
                 ->color('warning'),
 
-            Stat::make('Total Lifetime Earnings', 'KES ' . number_format($totalEarnings, 2))
+            Stat::make('Total  Earnings', 'KES ' . number_format($totalEarnings, 2))
                 ->description('All completed payments')
                 ->descriptionIcon('heroicon-m-currency-dollar')
                 ->color('success'),

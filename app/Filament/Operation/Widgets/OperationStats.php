@@ -89,7 +89,7 @@ class OperationStats extends StatsOverviewWidget
                 ->descriptionIcon('heroicon-o-banknotes')
                 ->color('success'),
 
-            Stat::make('Net Profit Today', 'KES '.number_format($todayMetrics['net_profit'], 2))
+            Stat::make('Projected Profit Today', 'KES '.number_format($todayMetrics['net_profit'], 2))
                 ->description('Margin: '.$todayMetrics['net_margin_percent'].'%')
                 ->descriptionIcon('heroicon-o-chart-bar')
                 ->color($todayMetrics['net_profit'] > 0 ? 'success' : 'danger'),

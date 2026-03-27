@@ -45,6 +45,8 @@ class AppServiceProvider extends ServiceProvider
      
 
         Model::preventsAccessingMissingAttributes();
+        Model::preventLazyLoading();
+        Model::preventSilentlyDiscardingAttributes();
 
         Prescription::observe(PrescriptionObserver::class);
         ClaimForm::observe(ClaimFormObserver::class);
