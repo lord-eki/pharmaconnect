@@ -35,7 +35,13 @@ class ClaimFormForm
 
                             Select::make('prescription_id')
                                 ->label('Prescription')
-                                ->relationship('prescription', 'prescription_number')
+                                ->relationship(
+                                    name: 'prescription',
+                                    titleAttribute: 'prescription_number',
+                                    modifyQueryUsing: fn ($query) => $query
+                                        ->where('physician_id', auth()->id())
+                                        ->whereHas('patient', fn ($q) => $q->whereNotNull('insurance_provider_id'))
+                                )
                                 ->required()
                                 ->searchable()
                                 ->preload()
@@ -43,7 +49,6 @@ class ClaimFormForm
                                 ->columnSpanFull()
                                 ->afterStateUpdated(function ($state, Set $set) {
                                     if (! $state) {
-                                        // Clear everything if deselected
                                         $set('patient_id', null);
                                         $set('physician_id', null);
                                         $set('insurance_provider_id', null);
@@ -66,17 +71,14 @@ class ClaimFormForm
                                         return;
                                     }
 
-                                    // Hidden IDs for saving
                                     $set('patient_id', $prescription->patient_id);
                                     $set('physician_id', $prescription->physician_id);
 
-                                    // Patient display
                                     $patient = $prescription->patient;
                                     if ($patient) {
                                         $set('_patient_display', "{$patient->patient_number} — {$patient->first_name} {$patient->last_name}");
                                     }
 
-                                    // Insurance provider display + hidden ID
                                     $provider = $patient?->insuranceProvider;
                                     if ($provider) {
                                         $set('insurance_provider_id', $provider->id);
@@ -97,7 +99,6 @@ class ClaimFormForm
                                         $set('template_info', null);
                                     }
 
-                                    // Auto-fill clinical info
                                     if ($prescription->diagnosis) {
                                         $set('diagnosis', $prescription->diagnosis);
                                     }
@@ -131,21 +132,18 @@ class ClaimFormForm
                                     $set('treatment_notes', trim($treatmentNotes));
                                 }),
 
-                            // 2. Patient — read-only display, value stored via Hidden
                             TextInput::make('_patient_display')
                                 ->label('Patient')
                                 ->disabled()
                                 ->dehydrated(false)
                                 ->placeholder('Select a prescription first'),
 
-                            // 3. Insurance Provider — read-only display, value stored via Hidden
                             TextInput::make('_insurance_display')
                                 ->label('Insurance Provider')
                                 ->disabled()
                                 ->dehydrated(false)
                                 ->placeholder('Auto-filled from patient'),
 
-                            // Hidden fields that carry the actual IDs to be saved
                             Hidden::make('patient_id'),
                             Hidden::make('insurance_provider_id'),
 

@@ -110,7 +110,6 @@ class InsuranceProvider extends Model
 
     /**
      * Get the logo URL for use in PDFs and views
-     * Returns full URL for both local storage and external URLs
      */
     public function getLogoUrlAttribute(): ?string
     {
@@ -118,12 +117,10 @@ class InsuranceProvider extends Model
             return null;
         }
 
-        // If it's already a full URL, return it
         if (filter_var($this->logo_path, FILTER_VALIDATE_URL)) {
             return $this->logo_path;
         }
 
-        // Generate full URL from storage path
         return Storage::disk('public')->url($this->logo_path);
     }
 

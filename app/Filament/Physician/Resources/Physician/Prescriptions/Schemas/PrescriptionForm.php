@@ -80,7 +80,6 @@ class PrescriptionForm
                             }),
                     ]),
 
-                // ── Step 2: Diagnosis & Details ───────────────────────────────
                 Section::make('Diagnosis & Details')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->schema([
@@ -95,7 +94,6 @@ class PrescriptionForm
                             ->live(),
                     ])->columns(3),
 
-                // ── Step 3: Medicines ─────────────────────────────────────────
                 Section::make('Medicines')
                     ->icon('heroicon-o-beaker')
                     ->schema([
@@ -205,9 +203,6 @@ class PrescriptionForm
             ]);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Helpers (mirrored from CreatePrescription)
-    // ──────────────────────────────────────────────────────────────────────────
 
     protected static function refreshPreviews(Get $get, Set $set): void
     {
