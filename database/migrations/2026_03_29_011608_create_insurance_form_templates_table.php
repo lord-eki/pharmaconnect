@@ -11,8 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('insurance_form_templates')) {
+            Schema::drop('insurance_from_templates');
 
-        Schema::dropIfExists('insurance_from_templates');
+        }
 
         Schema::create('insurance_form_templates', function (Blueprint $table) {
             $table->id();
@@ -21,7 +23,7 @@ return new class extends Migration
                 ->onDelete('cascade');
             $table->string('template_name');
             $table->string('template_path')->nullable();
-            $table->string('template_type')->default('pdf'); 
+            $table->string('template_type')->default('pdf');
             $table->json('template_config')->nullable();
             $table->string('version')->default('1.0');
             $table->boolean('is_active')->default(true);
