@@ -29,7 +29,6 @@ class InventoryForm
                                 titleAttribute: 'generic_name',
                                 modifyQueryUsing: fn ($query, $record) => $query
                                     ->when(
-                                        // Only filter when creating new record (not editing)
                                         !$record,
                                         fn ($q) => $q->whereDoesntHave('supplierMedicines', function ($subQuery) {
                                             // Get current supplier's ID
@@ -45,16 +44,6 @@ class InventoryForm
                             ->getOptionLabelFromRecordUsing(fn (Medicine $record) => 
                                 "{$record->generic_name} - {$record->brand_name} ({$record->strength})"
                             )
-                            ->createOptionForm([
-                                TextInput::make('generic_name')
-                                    ->required()
-                                    ->maxLength(255),
-                                TextInput::make('brand_name')
-                                    ->maxLength(255),
-                                TextInput::make('strength')
-                                    ->required()
-                                    ->maxLength(255),
-                            ])
                             ->helperText('Only medicines not yet in your inventory are shown')
                             ->columnSpanFull(),
                     ]),
