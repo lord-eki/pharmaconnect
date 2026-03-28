@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         if (Schema::hasTable('insurance_form_templates')) {
-            Schema::drop('insurance_from_templates');
+            Schema::drop('insurance_form_templates');
 
         }
 
