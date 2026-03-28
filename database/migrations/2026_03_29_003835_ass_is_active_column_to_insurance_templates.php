@@ -13,7 +13,7 @@ return new class extends Migration
     {
         if (! Schema::hasColumn('insurance_form_templates', 'is_active')) {
             Schema::table('insurance_form_templates', function (Blueprint $table) {
-                $table->boolean('is_active')->default(false)->after('version');
+                $table->boolean('is_active')->default(false);
             });
         }
 
