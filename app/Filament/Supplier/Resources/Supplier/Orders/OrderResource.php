@@ -34,7 +34,14 @@ class OrderResource extends Resource
 
         return parent::getEloquentQuery()
             ->where('supplier_id', $supplier->id)->whereIn('status', ['sent_to_supplier', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'])
-            ->with(['quotation.prescription.patient', 'quotation.prescription.physician', 'items']);
+            ->with([
+                'quotation.prescription.patient', 'quotation.prescription.physician', 'items',
+                'items.medicine',
+                'items.medicine.supplierMedicines',
+                'quotation',
+                'prescription',
+
+            ]);
     }
 
     public static function form(Schema $schema): Schema
@@ -86,8 +93,8 @@ class OrderResource extends Resource
                                         'shipped' => 'indigo',
                                         'delivered' => 'success',
                                         'cancelled' => 'danger',
-                                        'pending_reassignment' => 'warning',      
-                                        'needs_manual_assignment' => 'danger',    
+                                        'pending_reassignment' => 'warning',
+                                        'needs_manual_assignment' => 'danger',
                                         default => 'gray',
                                     })
                                     ->formatStateUsing(fn (string $state): string => match ($state) {
@@ -98,8 +105,8 @@ class OrderResource extends Resource
                                         'shipped' => 'Shipped',
                                         'delivered' => 'Delivered',
                                         'cancelled' => 'Cancelled',
-                                        'pending_reassignment' => 'Pending Reassignment',          
-                                        'needs_manual_assignment' => 'Needs Manual Assignment',    
+                                        'pending_reassignment' => 'Pending Reassignment',
+                                        'needs_manual_assignment' => 'Needs Manual Assignment',
                                         default => ucfirst(str_replace('_', ' ', $state)),
                                     }),
 

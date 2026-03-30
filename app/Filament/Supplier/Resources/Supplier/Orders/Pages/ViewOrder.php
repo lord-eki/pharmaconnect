@@ -44,9 +44,11 @@ class ViewOrder extends ViewRecord
                             'expected_delivery' => $data['expected_delivery'],
                         ]);
 
+                        $record->load('items.medicine.supplierMedicines');
+
                         // Update stock quantities
                         foreach ($record->items as $item) {
-                            $supplierMedicine = $item->medicine->supplierMedicines()
+                            $supplierMedicine = $item->medicine->supplierMedicines
                                 ->where('supplier_id', $record->supplier_id)
                                 ->first();
 
@@ -94,7 +96,7 @@ class ViewOrder extends ViewRecord
 
                         // Reject the order
                         $reassignmentService->rejectOrder(
-                            $record, 
+                            $record,
                             $data['rejection_reason'],
                             auth()->id()
                         );
