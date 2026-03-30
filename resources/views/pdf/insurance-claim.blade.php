@@ -567,13 +567,12 @@
                         <th style="width: 5%;">#</th>
                         <th style="width: 45%;">Description (Medicine Name, Strength, Form, etc.)</th>
                         <th style="width: 15%; text-align: center;">Quantity</th>
-                        <th style="width: 20%; text-align: center;">Position (Dose, Frequency, etc.)</th>
+                        <th style="width: 20%; text-align: center;"> Frequency / Duration</th>
                         <th style="width: 15%; text-align: right;">Amount (KES)</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if($claim->prescription)
-                        {{-- Prescription-based: items come from the prescription --}}
                         @forelse($claim->prescription->items as $index => $item)
                         <tr>
                             <td class="text-center">{{ $index + 1 }}</td>
@@ -587,7 +586,7 @@
                                 </div>
                             </td>
                             <td class="text-center">{{ $item->quantity }}</td>
-                            <td class="small-text">{{ $item->dosage_instructions ?? 'As prescribed' }}</td>
+                            <td class="small-text">{{ $item->frequency ." - ". $item->duration_days ." Days" ?? 'As prescribed' }}</td>
                             <td class="text-right bold">{{ number_format($item->total_price, 2) }}</td>
                         </tr>
                         @empty

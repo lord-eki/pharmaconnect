@@ -31,7 +31,14 @@ class OrdersTable
 {
     public static function configure(Table $table): Table
     {
-        return $table
+        return $table->modifyQueryUsing(fn (Builder $query) => $query->with([
+                'externalOrder',
+                'supplier',
+                'prescription.patient.insuranceProvider',
+                'delivery',
+                'invoices',
+                'items.medicine',
+            ]))
             ->columns([
                 TextColumn::make('order_number')
                     ->label('Order #')
@@ -422,7 +429,7 @@ class OrdersTable
                         ->label('Send Invoice')
                         ->icon('heroicon-o-envelope')
                         ->color('success')
-                        ->visible(fn (Order $record): bool => $record->invoices()->exists())
+                        ->visible(fn (Order $record): bool => $record->invoices->isNotEmpty())
                         ->form([
                             \Filament\Forms\Components\TagsInput::make('cc')
                                 ->label('CC Email Addresses')
