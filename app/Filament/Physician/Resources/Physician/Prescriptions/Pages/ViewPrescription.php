@@ -16,6 +16,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Split;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Model;
 
 class ViewPrescription extends ViewRecord
 {
@@ -108,7 +109,7 @@ class ViewPrescription extends ViewRecord
 
                         TextEntry::make('items_count')
                             ->label('Medicines')
-                            ->state(fn ($record) => $record->items->count())
+                            ->state(fn ($record) => $record->items_count)
                             ->suffix(' item(s)'),
 
                     ])
@@ -267,5 +268,13 @@ class ViewPrescription extends ViewRecord
                     ->columnSpanFull(),
 
             ]);
+    }
+
+
+    protected function resolveRecord(int|string $key): Model
+    {
+        return $this->getResource()::getEloquentQuery()
+            ->with(['patient', 'items.medicine','orders'])->withCount(['items','orders'])
+            ->findOrFail($key);
     }
 }

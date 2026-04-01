@@ -14,6 +14,7 @@ use App\Services\PricingService;
 use App\Services\RiderAssignmentService;
 use Illuminate\Database\Eloquent\Model;
 use App\Observers\PrescriptionObserver;
+use Illuminate\Database\LazyLoadingViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
@@ -48,7 +49,20 @@ class AppServiceProvider extends ServiceProvider
         Model::preventLazyLoading();
         Model::preventSilentlyDiscardingAttributes();
 
+
+
         Prescription::observe(PrescriptionObserver::class);
         ClaimForm::observe(ClaimFormObserver::class);
+
+
+        Model::handleLazyLoadingViolationUsing(function($model,$relation){
+            $class = get_class($model);
+
+            if(app()->isProduction()){
+                logger()->warning("Lazy loading on [{$relation}] on [{$class}]");
+            }else{
+                throw new LazyLoadingViolationException($model,$relation);
+            }
+        });
     }
 }
