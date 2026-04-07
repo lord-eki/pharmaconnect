@@ -178,7 +178,7 @@ class ReceivablesTable
                         ->color('success')
                         ->requiresConfirmation()
                         ->modalDescription('Record that payment has been received')
-                        ->visible(fn (Receivable $record) => $record->claim_status === 'approved')
+                        ->visible(fn (Receivable $record) => $record->payment_source === 'insurance' ? $record->claim_status === 'approved' :true)
                         ->form([
                             DateTimePicker::make('received_at')
                                 ->label('Payment Received On')
