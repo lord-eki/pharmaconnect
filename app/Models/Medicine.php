@@ -225,7 +225,7 @@ class Medicine extends Model
     }
 
     /**
-     * OPTIMIZED: Clear caches more efficiently
+     *  Clear caches more efficiently
      */
     public function clearCaches(): void
     {

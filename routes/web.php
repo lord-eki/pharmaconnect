@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CommissionStatementController;
 use App\Http\Controllers\InsuranceClaimController;
+use App\Http\Controllers\OrderPrintController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -57,4 +58,14 @@ Route::middleware(['auth'])->group(function () {
             'Content-Disposition' => 'inline',
         ]);
     })->name('delivery-note.view');
+
+    Route::get(
+        '/supplier/orders/{order}/print',
+        [OrderPrintController::class, 'stream']
+    )->name('supplier.orders.print')->middleware(['auth', 'verified']);
+
+    Route::get(
+        '/supplier/orders/{order}/download',
+        [OrderPrintController::class, 'download']
+    )->name('supplier.orders.download')->middleware(['auth', 'verified']);
 });

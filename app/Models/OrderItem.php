@@ -14,6 +14,7 @@ class OrderItem extends Model
         'medicine_id',
         'quantity',
         'unit_price',
+        'supplier_price',
         'total_price',
         'status',
     ];

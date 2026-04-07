@@ -11,6 +11,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Database\Eloquent\Model;
 
 class ViewOrder extends ViewRecord
 {
@@ -38,7 +39,6 @@ class ViewOrder extends ViewRecord
                     try {
                         $fulfillmentService = app(OrderFulfillmentService::class);
 
-                        // Only confirm the order, don't assign rider yet
                         $record->update([
                             'status' => 'confirmed',
                             'expected_delivery' => $data['expected_delivery'],
@@ -46,7 +46,6 @@ class ViewOrder extends ViewRecord
 
                         $record->load('items.medicine.supplierMedicines');
 
-                        // Update stock quantities
                         foreach ($record->items as $item) {
                             $supplierMedicine = $item->medicine->supplierMedicines
                                 ->where('supplier_id', $record->supplier_id)
@@ -62,8 +61,6 @@ class ViewOrder extends ViewRecord
                             ->title('Order Confirmed')
                             ->body('Order confirmed successfully.')
                             ->send();
-
-                        // TODO: Notify operations team about confirmed order
 
                     } catch (\Exception $e) {
                         Notification::make()
@@ -94,14 +91,12 @@ class ViewOrder extends ViewRecord
                     try {
                         $reassignmentService = app(OrderReassignmentService::class);
 
-                        // Reject the order
                         $reassignmentService->rejectOrder(
                             $record,
                             $data['rejection_reason'],
                             auth()->id()
                         );
 
-                        // Attempt auto-reassignment
                         $autoReassigned = $reassignmentService->autoReassignToNextSupplier($record);
 
                         if ($autoReassigned) {
@@ -117,8 +112,6 @@ class ViewOrder extends ViewRecord
                                 ->body('Order rejected. Operations team will manually reassign this order.')
                                 ->send();
                         }
-
-                        // return redirect()->route('filament.supplier.resources.orders.index');
 
                     } catch (\Exception $e) {
                         \Log::error('Order rejection failed', [
@@ -164,18 +157,14 @@ class ViewOrder extends ViewRecord
                         $notes .= "\nNotes: ".$data['shipping_notes'];
                     }
 
-                    $record->update([
-                        'notes' => $notes,
-                    ]);
+                    $record->update(['notes' => $notes]);
 
-                    // Update delivery status
                     if ($record->delivery) {
                         $record->delivery->update([
                             'status' => 'ready_for_pickup',
                             'delivery_notes' => $data['shipping_notes'] ?? null,
                         ]);
 
-                        // Notify rider
                         if ($record->delivery->rider) {
                             $record->delivery->rider->user->notify(
                                 new \App\Notifications\DeliveryStatusUpdatedNotification(
@@ -194,51 +183,27 @@ class ViewOrder extends ViewRecord
                         ->send();
                 }),
 
-            // Action::make('cancel')
-            //     ->label('Cancel Order')
-            //     ->icon('heroicon-o-x-circle')
-            //     ->color('danger')
-            //     ->visible(fn ($record) => ! in_array($record->status, ['delivered', 'cancelled']))
-            //     ->requiresConfirmation()
-            //     ->modalHeading('Cancel Order')
-            //     ->modalDescription('Are you sure you want to cancel this order? Stock will be restored if applicable.')
-            //     ->form([
-            //         Textarea::make('cancellation_reason')
-            //             ->label('Reason for Cancellation')
-            //             ->required()
-            //             ->maxLength(500),
-            //     ])
-            //     ->action(function ($record, array $data) {
-            //         try {
-            //             // Use the model's cancel method which handles stock restoration
-            //             $record->cancel($data['cancellation_reason']);
-
-            //             Notification::make()
-            //                 ->success()
-            //                 ->title('Order Cancelled')
-            //                 ->body('Order cancelled successfully. Stock has been restored if applicable.')
-            //                 ->send();
-
-            //         } catch (\Exception $e) {
-            //             \Log::error('Order cancellation failed', [
-            //                 'order_id' => $record->id,
-            //                 'error' => $e->getMessage(),
-            //                 'trace' => $e->getTraceAsString(),
-            //             ]);
-
-            //             Notification::make()
-            //                 ->danger()
-            //                 ->title('Cancellation Failed')
-            //                 ->body('Failed to cancel order: '.$e->getMessage())
-            //                 ->send();
-            //         }
-            //     }),
-
             Action::make('print')
-                ->label('Print Order')
-                ->icon('heroicon-o-printer')
+                ->label('View PDF')
+                ->icon('heroicon-o-document-text')
                 ->color('gray')
+                ->url(fn ($record) => route('supplier.orders.print', $record))
                 ->openUrlInNewTab(),
+
+            Action::make('download_pdf')
+                ->label('Download PDF')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('gray')
+                ->url(fn ($record) => route('supplier.orders.download', $record))
+                ->openUrlInNewTab(),
+            
         ];
+    }
+
+    public function getRecord(): Model
+    {
+        return parent::getRecord()->loadMissing([
+            'items.medicine',
+        ]);
     }
 }
