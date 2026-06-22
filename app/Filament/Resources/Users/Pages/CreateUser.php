@@ -6,6 +6,7 @@ use App\Filament\Resources\Users\UserResource;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 
 class CreateUser extends CreateRecord
 {
@@ -15,8 +16,10 @@ class CreateUser extends CreateRecord
 
     public function handleRecordCreation(array $data): Model
     {
-        $user = parent::handleRecordCreation($data);
-        $user->assignRole($data['role']);
+        $role = $data['role'];
+        $new_data = Arr::except($data, 'role');
+        $user = parent::handleRecordCreation($new_data);
+        $user->assignRole($role);
         return $user;
     }
 
