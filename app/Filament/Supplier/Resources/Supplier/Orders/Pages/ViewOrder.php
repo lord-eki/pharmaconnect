@@ -97,21 +97,25 @@ class ViewOrder extends ViewRecord
                             auth()->id()
                         );
 
-                        $autoReassigned = $reassignmentService->autoReassignToNextSupplier($record);
+                        Notification::make()->success()->title('Order Cancellation')->body('Order has been cancelled successfully')->send();
 
-                        if ($autoReassigned) {
-                            Notification::make()
-                                ->success()
-                                ->title('Order Rejected & Reassigned')
-                                ->body('Order has been automatically reassigned to the next available supplier.')
-                                ->send();
-                        } else {
-                            Notification::make()
-                                ->warning()
-                                ->title('Order Rejected')
-                                ->body('Order rejected. Operations team will manually reassign this order.')
-                                ->send();
-                        }
+                        // $autoReassigned = $reassignmentService->autoReassignToNextSupplier($record);
+
+                        // if ($autoReassigned) {
+                        //     Notification::make()
+                        //         ->success()
+                        //         ->title('Order Rejected & Reassigned')
+                        //         ->body('Order has been automatically reassigned to the next available supplier.')
+                        //         ->send();
+                        // } else {
+                        //     Notification::make()
+                        //         ->warning()
+                        //         ->title('Order Rejected')
+                        //         ->body('Order rejected. Operations team will manually reassign this order.')
+                        //         ->send();
+                        // }
+
+
 
                     } catch (\Exception $e) {
                         \Log::error('Order rejection failed', [

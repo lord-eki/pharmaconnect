@@ -270,7 +270,7 @@ class Order extends Model
             throw new \Exception('Order must be in pending_review status to send to supplier');
         }
 
-        // ── Stock check before sending ─────────────────────────────────────
+        // ── Stock check before sending 
         $shortages = $this->checkStockShortages();
 
         if (! empty($shortages)) {
@@ -279,7 +279,6 @@ class Order extends Model
                 $shortages
             );
         }
-        // ──────────────────────────────────────────────────────────────────
 
         $this->status = 'sent_to_supplier';
         $this->sent_to_supplier_at = now();
@@ -556,12 +555,7 @@ class Order extends Model
     }
 
     /**
-     * Process receivables for all delivered orders once an insurance claim is approved.
-     *
-     * Call this from InsuranceClaim::approve() after persisting the approved_amount:
-     *
-     *   Order::processApprovedClaimReceivables($this);
-     *
+     * Process receivables for all delivered orders once an insurance claim is approved.     *
      * The approved_amount from the claim is used instead of the claimed (order) total,
      * ensuring we only ever book what the insurer actually agreed to pay.
      */
@@ -754,7 +748,7 @@ class Order extends Model
      */
     public function scopePendingReassignment($query)
     {
-        return $query->whereIn('status', ['pending_reassignment', 'needs_manual_assignment']);
+        return $query->whereIn('status', ['pending_reassignment', 'needs_manual_assignment','cancelled']);
     }
 
     /**

@@ -97,7 +97,7 @@ class OrderReassignmentService
             'item_count' => $orderItems->count(),
         ]);
 
-        // Find suppliers who can fulfill ALL items
+        // Find suppliers who can fulfill all items
         $availableSuppliers = $this->findSuppliersForItems($orderItems, $rejectedSupplierIds);
 
         if (empty($availableSuppliers)) {
@@ -117,7 +117,7 @@ class OrderReassignmentService
     }
 
     /**
-     * Reassign order to a new supplier (manual reassignment by operations)
+     * Reassign order to a new supplier manual reassignment by operations
      */
     public function reassignToSupplier(Order $order, int $newSupplierId, ?string $notes = null): bool
     {
@@ -174,7 +174,7 @@ class OrderReassignmentService
                 'reassignment_count' => $order->reassignment_count,
             ]);
 
-            // Notify new supplier directly (instead of calling notifyStakeholders)
+            // Notify new supplier directly 
             if ($newSupplier->user) {
                 try {
                     $newSupplier->user->notify(new \App\Notifications\NewOrderNotification($order));

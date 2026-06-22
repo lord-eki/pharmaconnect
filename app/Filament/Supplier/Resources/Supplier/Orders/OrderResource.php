@@ -30,7 +30,7 @@ class OrderResource extends Resource
     public static function getEloquentQuery(): Builder
     {
 
-        $supplier = Auth::user();
+        $supplier = Auth::user()->supplier;
 
         return parent::getEloquentQuery()
             ->where('supplier_id', $supplier->id)->whereIn('status', ['sent_to_supplier', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'])

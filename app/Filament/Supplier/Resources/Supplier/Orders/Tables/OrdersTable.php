@@ -293,7 +293,7 @@ class OrdersTable
                                 'notes' => ($record->notes ?? '')."\n\nCancelled: ".now()->toDateTimeString()."\nReason: ".$data['cancellation_reason'],
                             ]);
                         })
-                        ->successNotificationTitle('Order cancelled and stock restored'),
+                        ->successNotificationTitle('Order cancelled successfully'),
                 ]),
             ])
             ->toolbarActions([

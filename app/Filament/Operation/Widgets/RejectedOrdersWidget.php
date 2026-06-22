@@ -38,13 +38,13 @@ class RejectedOrdersWidget extends TableWidget
                     ->copyable(),
 
                 TextColumn::make('supplier.company_name')
-                    ->label('Rejected Supplier')
+                    ->label('Supplier')
                     ->searchable()
                     ->color('danger'),
 
                 TextColumn::make('rejection_reason')
                     ->label('Reason')
-                    ->limit(50)
+                    ->limit(50)->placeholder('No reason provided')
                     ->tooltip(fn ($record) => $record->rejection_reason),
 
                 TextColumn::make('reassignment_count')
@@ -62,15 +62,16 @@ class RejectedOrdersWidget extends TableWidget
                     ->sortable(),
 
                 TextColumn::make('rejected_at')
-                    ->label('Rejected')
+                    ->label('Rejected At')
                     ->dateTime()
-                    ->sortable()
+                    ->sortable()->placeholder('----')
                     ->since(),
 
                 BadgeColumn::make('status')
                     ->colors([
                         'warning' => 'pending_reassignment',
                         'danger' => 'needs_manual_assignment',
+                        'gray' => 'cancelled',
                     ]),
             ])
             ->actions([

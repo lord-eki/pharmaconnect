@@ -168,7 +168,6 @@ class ViewPrescription extends ViewRecord
                     ->collapsible()
                     ->columnSpan(2),
 
-                // ── ROW 2: Clinical (left) + Timeline (right, compact) ──
                 Section::make('Clinical Information')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->schema([
@@ -187,7 +186,7 @@ class ViewPrescription extends ViewRecord
                             ->boolean(),
                     ])
                     ->columns(2)
-                    ->collapsible()
+                    ->collapsed()
                     ->columnSpan(2),
 
                 Section::make('Timeline')
@@ -212,7 +211,7 @@ class ViewPrescription extends ViewRecord
                             ->dateTime('M d, Y H:i'),
                     ])
                     ->columns(1)
-                    ->collapsible()
+                    ->collapsed()
                     ->columnSpan(1),
 
                 Section::make('Prescribed Medicines')
@@ -264,7 +263,7 @@ class ViewPrescription extends ViewRecord
                             ])
                             ->columns(4),
                     ])
-                    ->collapsible()
+                    ->collapsed()
                     ->columnSpanFull(),
 
             ]);
