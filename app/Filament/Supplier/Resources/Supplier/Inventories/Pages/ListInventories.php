@@ -24,6 +24,7 @@ class ListInventories extends ListRecords
     {
         $supplier =  Auth::user()->supplier;
 
+
         return [
             'all' => Tab::make('All Products')
                 ->badge(fn () => \App\Models\SupplierMedicine::where('supplier_id', $supplier->id)->count()),

@@ -38,6 +38,7 @@ class User extends Authenticatable implements FilamentUser, HasEmailAuthenticati
         'two_factor_secret',
         'two_factor_recovery_codes',
         'has_email_authentication',
+        'email_verified_at'
     ];
 
     /**

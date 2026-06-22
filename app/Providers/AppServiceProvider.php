@@ -46,7 +46,7 @@ class AppServiceProvider extends ServiceProvider
      
 
         Model::preventsAccessingMissingAttributes();
-        Model::preventLazyLoading();
+        // Model::preventLazyLoading();
         Model::preventSilentlyDiscardingAttributes();
 
 

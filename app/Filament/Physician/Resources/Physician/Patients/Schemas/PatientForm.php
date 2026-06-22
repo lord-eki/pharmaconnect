@@ -113,7 +113,7 @@ class PatientForm
                             ->placeholder('List any chronic conditions, past surgeries, or relevant medical history')
                             ->columnSpanFull(),
                     ])
-                    ->collapsible(),
+                    ->collapsed(),
                     
                 Section::make('Status')
                     ->schema([
@@ -122,7 +122,7 @@ class PatientForm
                             ->default(true)
                             ->helperText('Inactive patients will not appear in prescription creation'),
                     ])
-                    ->collapsible(),
+                    ->collapsed(),
             ]);
     }
 }

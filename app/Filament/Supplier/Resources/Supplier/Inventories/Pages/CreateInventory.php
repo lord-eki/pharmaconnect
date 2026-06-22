@@ -14,9 +14,8 @@ class CreateInventory extends CreateRecord
 
      protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $supplier = Auth::user()->supplier;
 
-        $data['supplier_id'] = $supplier->id;
+        $data['supplier_id'] = Auth::user()->supplier->id;
         $data['last_updated'] = now();
 
         return $data;

@@ -63,7 +63,7 @@ class InventoryResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $supplierId = Auth::user()->userProfile->id ?? null;
+        $supplierId = Auth::user()->supplier->id;
 
         $lowStock = SupplierMedicine::where('supplier_id', $supplierId)
             ->where('stock_quantity', '<=', 10)

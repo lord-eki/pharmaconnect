@@ -98,7 +98,7 @@ class InventoryForm
                             ->disabled()
                             ->dehydrated(),
                     ])
-                    ->columns(3),
+                    ->columns(3)->collapsed(),
 
                 Section::make('Additional Information')
                     ->schema([
@@ -107,7 +107,7 @@ class InventoryForm
                             ->maxLength(500)
                             ->columnSpanFull(),
                     ])
-                    ->collapsible(),
+                    ->collapsed(),
             ]);
     }
 }

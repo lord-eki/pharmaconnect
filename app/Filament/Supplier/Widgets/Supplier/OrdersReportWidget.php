@@ -11,7 +11,7 @@ class OrdersReportWidget extends StatsOverviewWidget
 {
    protected function getStats(): array
     {
-        $supplier = Auth::user()->supplier;
+        $supplier = Auth::user();
 
         // Get current month data
         $currentMonthOrders = Order::where('supplier_id', $supplier->id)

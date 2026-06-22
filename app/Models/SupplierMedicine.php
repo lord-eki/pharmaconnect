@@ -22,6 +22,7 @@ class SupplierMedicine extends Model
         'batch_number',
         'is_available',
         'last_updated',
+        'notes'
     ];
 
     protected $casts = [
