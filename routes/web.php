@@ -3,6 +3,7 @@
 use App\Http\Controllers\CommissionStatementController;
 use App\Http\Controllers\InsuranceClaimController;
 use App\Http\Controllers\OrderPrintController;
+use App\Http\Controllers\SupplierFinancialsReportController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -43,10 +44,17 @@ Route::middleware(['auth'])->group(function () {
         ]);
     })->name('documents.download');
 
+
+    //Physician Commission Statement Route
     Route::get(
         '/commissions/statement',
         [CommissionStatementController::class, 'download']
     )->name('commissions.statement');
+
+
+    //Supplier Financials Report Route
+    Route::get('/supplier/financials/report', [SupplierFinancialsReportController::class, 'download'])
+    ->name('supplier.financials.report');
 
     Route::get('/delivery-note/{document}', function (\App\Models\Document $document) {
         $path = storage_path('app/private/'.$document->file_path);
@@ -68,4 +76,6 @@ Route::middleware(['auth'])->group(function () {
         '/supplier/orders/{order}/download',
         [OrderPrintController::class, 'download']
     )->name('supplier.orders.download')->middleware(['auth', 'verified']);
+
+    
 });
