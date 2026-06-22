@@ -9,6 +9,7 @@ use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Arr;
 
 class CreateRider extends CreateRecord
 {
@@ -18,7 +19,6 @@ class CreateRider extends CreateRecord
     {
         return DB::transaction((function () use ($data) {
 
-
             $user = User::create([
                 'name' => $data['first_name'].' '.$data['last_name'],
                 'email' => $data['email'],
@@ -26,8 +26,7 @@ class CreateRider extends CreateRecord
                 'password' => Hash::make($data['password']),
             ]);
 
-          
-
+        
             $user->assignRole('Rider');
 
             $lastRider = Rider::latest('id')->first();
@@ -39,7 +38,10 @@ class CreateRider extends CreateRecord
 
             $data['user_id'] = $user->id;
 
-            return $data;
+            $new_data = Arr::except($data, 'password');
+
+
+            return $new_data;
         }));
     }
 }
