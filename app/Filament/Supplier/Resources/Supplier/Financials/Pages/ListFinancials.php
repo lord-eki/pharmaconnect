@@ -11,43 +11,54 @@ use Illuminate\Database\Eloquent\Builder;
 use Filament\Forms\Components\Select;
 use Filament\Actions\Action;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Payable;
 
 class ListFinancials extends ListRecords
 {
     protected static string $resource = FinancialResource::class;
 
+    public function getTableQuery(): ?Builder
+    {
+       $supplier_id = Auth::user()->supplier->user_id;
+
+       if($this->activeTab === 'pending')
+        {
+            return Payable::where('vendor_id',$supplier_id)->where('paid_at',null);
+        }
+
+        return parent::getTableQuery();
+
+    }
+
     public function getTabs(): array
     {
-        $supplierId = Auth::user()->supplier->user_id;
+        $supplier_id = Auth::user()->supplier->user_id;
 
         return [
             'all' => Tab::make('All Payments')
-                ->badge(fn () => Payment::where('payee_id', $supplierId)->count()),
+                ->badge(fn () => Payment::where('payee_id', $supplier_id)->count()),
 
             'pending' => Tab::make('Pending')
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'pending'))
-                ->badge(fn () => Payment::where('payee_id', $supplierId)
-                    ->where('status', 'pending')
-                    ->count())
-                ->badgeColor('warning'),
+                 ->badge(fn () => Payable::where('vendor_id', $supplier_id)->count())
+                 ->badgeColor('warning'),
 
             'processing' => Tab::make('Processing')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'processing'))
-                ->badge(fn () => Payment::where('payee_id', $supplierId)
+                ->badge(fn () => Payment::where('payee_id', $supplier_id)
                     ->where('status', 'processing')
                     ->count())
                 ->badgeColor('info'),
 
             'completed' => Tab::make('Completed')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'completed'))
-                ->badge(fn () => Payment::where('payee_id', $supplierId)
+                ->badge(fn () => Payment::where('payee_id', $supplier_id)
                     ->where('status', 'completed')
                     ->count())
                 ->badgeColor('success'),
 
             'failed' => Tab::make('Failed')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'failed'))
-                ->badge(fn () => Payment::where('payee_id', $supplierId)
+                ->badge(fn () => Payment::where('payee_id', $supplier_id)
                     ->where('status', 'failed')
                     ->count())
                 ->badgeColor('danger'),
