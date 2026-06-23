@@ -15,6 +15,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Filament\Notifications\Notification;
 use UnitEnum;
 
 class ClaimVerificationResource extends Resource
@@ -67,11 +68,24 @@ class ClaimVerificationResource extends Resource
     }
 
     public static function getNavigationBadge(): ?string
+
     {
-        $count = static::getModel()::where('status', 'submitted')
+
+
+        if(auth()->user()->insuranceProvider == null)
+            {
+                Notification::make()->icon('heroicon-o-user-circle')->body('Your account is yet to be set up.')
+                ->info()->send();
+
+                return null;
+
+            }else{
+            $count = static::getModel()::where('status', 'submitted')
             ->where('insurance_provider_id', auth()->user()->insuranceProvider->id)
             ->count();
 
-        return $count > 0 ? (string) $count : null;
+             return $count > 0 ? (string) $count : null;
+            }
+   
     }
 }

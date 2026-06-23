@@ -14,6 +14,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
+use Illuminate\Support\Facades\Log;
 
 class ViewExternalOrder extends ViewRecord
 {
@@ -88,7 +89,6 @@ class ViewExternalOrder extends ViewRecord
                         ]),
                 ]),
 
-                // ── Row 2: Recipient & Delivery address ───────────────────────
                 Section::make('Recipient & Delivery')
                     ->columnSpanFull()
                     ->collapsible()
@@ -129,7 +129,6 @@ class ViewExternalOrder extends ViewRecord
                         ]),
                     ]),
 
-                // ── Row 3: Order Items ────────────────────────────────────────
                 Section::make('Order Items')
                     ->columnSpanFull()
                     ->schema([
@@ -168,7 +167,6 @@ class ViewExternalOrder extends ViewRecord
                             ]),
                     ]),
 
-                // ── Row 4: Notes (collapsed by default) ───────────────────────
                 Section::make('Notes')
                     ->columnSpanFull()
                     ->collapsible()
@@ -198,9 +196,10 @@ class ViewExternalOrder extends ViewRecord
                 ->action(function (ExternalOrder $record) {
                     try {
                         $record->submit();
-                        Notification::make()->success()->title('Order Submitted')->body('Your order has been submitted successfully.')->send();
+                        Notification::make()->success()->icon('heroicon-o-check-circle')->title('Order Submitted')->body('Your order has been submitted successfully.')->send();
                     } catch (\Exception $e) {
-                        Notification::make()->danger()->title('Submission Failed')->body($e->getMessage())->send();
+                        Log::error($e->getMessage());
+                        Notification::make()->danger()->icon('heroicon-o-exclamation-circle')->body('Unable to submit order')->send();
                     }
                 }),
 

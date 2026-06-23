@@ -209,17 +209,17 @@ class ExternalOrder extends Model
                 'markup_total'      => $orderTotal - $supplierTotal,
             ]);
 
+
             foreach ($supplierItems as $data) {
+                
                 OrderItem::create([
                     'order_id'             => $order->id,
                     'medicine_id'          => $data['item']->medicine_id,
-                    'supplier_medicine_id' => $data['supplier_medicine']->id,
                     'quotation_item_id'    => null,
                     'quantity'             => $data['item']->quantity,
                     'unit_price'           => $data['item']->unit_price,
                     'supplier_price'       => $data['supplier_medicine']->unit_price,
                     'total_price'          => $data['item']->total_price,
-                    'supplier_total'       => $data['supplier_medicine']->unit_price * $data['item']->quantity,
                     'is_delivery_fee'      => false,
                 ]);
             }
@@ -228,13 +228,11 @@ class ExternalOrder extends Model
                 OrderItem::create([
                     'order_id'             => $order->id,
                     'medicine_id'          => $data['item']->medicine_id,
-                    'supplier_medicine_id' => null,
                     'quotation_item_id'    => null,
                     'quantity'             => 1,
                     'unit_price'           => $deliveryFee,
                     'supplier_price'       => 0.00,
                     'total_price'          => $deliveryFee,
-                    'supplier_total'       => 0.00,
                     'is_delivery_fee'      => true,
                 ]);
             }

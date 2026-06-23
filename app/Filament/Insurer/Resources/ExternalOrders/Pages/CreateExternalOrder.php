@@ -107,14 +107,14 @@ class CreateExternalOrder extends CreateRecord
                                                 ->columnSpan(1),
 
                                             TextInput::make('unit_price')
-                                                ->label('Unit Price (Ksh)')
+                                                ->label('Unit Price')
                                                 ->numeric()
                                                 ->disabled()
                                                 ->dehydrated()
                                                 ->columnSpan(1),
 
                                             TextInput::make('total_price')
-                                                ->label('Line Total (Ksh)')
+                                                ->label('Line Total')
                                                 ->numeric()
                                                 ->disabled()
                                                 ->dehydrated()
@@ -265,7 +265,7 @@ class CreateExternalOrder extends CreateRecord
                             Textarea::make('delivery_address')
                                 ->label('Delivery Address')
                                 ->required()
-                                ->rows(3)
+                                ->rows(2)
                                 ->columnSpanFull()
                                 ->placeholder('Enter the complete delivery address'),
 
@@ -288,7 +288,7 @@ class CreateExternalOrder extends CreateRecord
                                 ->rows(3)
                                 ->columnSpanFull()
                                 ->placeholder('Member details, authorisation notes, special instructions, etc.'),
-                        ]),
+                        ])->collapsed(),
 
                 ])
                 ->columns(2),
