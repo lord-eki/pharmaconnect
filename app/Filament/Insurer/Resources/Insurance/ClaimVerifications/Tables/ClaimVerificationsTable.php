@@ -118,9 +118,7 @@ class ClaimVerificationsTable
                         ->label('Download Claim Form')
                         ->icon('heroicon-o-document-arrow-down')
                         ->color('success')
-                        ->action(function ($record) {
-                            return InsuranceClaimPDFService::download($record);
-                        }),
+                        ->url(fn ($record) => route('insurance-claims.download',$record))->openUrlInNewTab(),
 
                     // View Claim Form PDF 
                     Action::make('view_claim')

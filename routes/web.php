@@ -20,6 +20,7 @@ Route::middleware(['auth'])->group(function () {
         InsuranceClaimController::class,
         'downloadPDF',
     ])->name('insurance-claims.download');
+    
 
     Route::get('/documents/{document}/preview', function (App\Models\Document $document) {
         $fullPath = storage_path('app/private/'.$document->file_path);
