@@ -175,7 +175,6 @@ class Medicine extends Model
                 ->where('supplier_medicines.medicine_id', $this->id)
                 ->where('supplier_medicines.is_available', true)
                 ->where('supplier_medicines.stock_quantity', '>=', $quantity)
-                ->where('supplier_medicines.expiry_date', '>', now()->addMonths(1))
                 ->select([
                     'supplier_medicines.id',
                     'supplier_medicines.supplier_id',
@@ -190,7 +189,14 @@ class Medicine extends Model
                 ->orderBy('supplier_medicines.unit_price', 'asc')
                 ->limit(10)
                 ->get();
+
+
+               
         });
+
+          if ($results->isEmpty()) {
+                    Cache::forget($cacheKey);
+            }
     }
 
     public function scopeActive($query)

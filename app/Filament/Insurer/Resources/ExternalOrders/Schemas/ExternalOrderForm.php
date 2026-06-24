@@ -14,7 +14,13 @@ class ExternalOrderForm
     {
         return $schema
             ->components([
-                
+                TextInput::make('order_number')
+                    ->label('Order Number')
+                    ->required()
+                    ->maxLength(255),
+                TextInput::make('customer_name')
+                    ->label('Customer Name')
+                    ->required()
             ]);
     }
 }

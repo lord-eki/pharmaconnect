@@ -50,11 +50,11 @@ class PricingService
                     'markup' => $markup,
                 ]);
                 
-                return $markup; // Return first matching rule
+                return $markup; 
             }
         }
 
-        // Default markup if no rules match (e.g., 15%)
+        // Default markup if no rules match (15%)
         $defaultMarkup = $basePrice * 0.15;
         
         Log::info('Default markup applied', [

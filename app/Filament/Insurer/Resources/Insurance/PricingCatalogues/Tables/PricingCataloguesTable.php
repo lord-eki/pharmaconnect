@@ -11,9 +11,12 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use App\Services\PricingService;
 
 class PricingCataloguesTable
 {
+
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -41,11 +44,21 @@ class PricingCataloguesTable
                     ->label('Category')
                     ->sortable(),
 
-                TextColumn::make('cheapest_price')
-                    ->label('Price')->placeholder('--')
+               TextColumn::make('cheapest_price')
+                    ->label('Price')
+                    ->placeholder('--')
                     ->money('KES')
                     ->sortable()
-                    ->getStateUsing(fn ($record) => $record->getCheapestSupplierPrice(1))
+                    ->getStateUsing(function ($record) {
+                        $supplierPrice = $record->getCheapestSupplierPrice(1);
+
+                        if (!$supplierPrice) return null;
+
+                        $pricing = app(PricingService::class)
+                            ->calculateFinalPrice((float) $supplierPrice, $record, 1);
+
+                        return $pricing['final_unit_price'];
+                    })
                     ->color('success'),
 
                 IconColumn::make('has_stock')
@@ -89,10 +102,23 @@ class PricingCataloguesTable
             ->recordActions([
                 ViewAction::make()
                     ->modalHeading(fn ($record) => $record->display_name)
-                    ->modalContent(fn ($record) => view('filament.insurer.resources.price-catalogue.view-suppliers', [
-                        'medicine' => $record,
-                        'suppliers' => $record->getAvailableSuppliers(1),
-                    ])),
+                    ->modalContent(function ($record) {
+                        $pricingService = app(PricingService::class);
+                        $suppliers = $record->getAvailableSuppliers(1);
+                        $suppliersWithPricing = $suppliers->map(function($supplier) use($pricingService, $record) {
+                            $pricing = $pricingService->calculateFinalPrice($supplier->unit_price, $record, 1);
+                           $supplier->pricing = $pricing;
+                           return $supplier;
+                        });
+
+                        return view('filament.insurer.resources.price-catalogue.view-suppliers', [
+                            'medicine' => $record,
+                            'suppliers' => $suppliersWithPricing,
+                        ]);
+
+
+
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

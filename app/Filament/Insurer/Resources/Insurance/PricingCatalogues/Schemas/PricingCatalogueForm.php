@@ -6,6 +6,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use App\Services\PricingService;
 
 class PricingCatalogueForm
 {
@@ -27,12 +28,20 @@ class PricingCatalogueForm
                         TextInput::make('dosage_form')
                             ->label('Dosage Form')
                             ->disabled(),
-                        Placeholder::make('cheapest_price')
-                            ->label('Price')
-                            ->content(fn ($record) => $record ?
-                                'KES '.number_format($record->getCheapestSupplierPrice(1) ?? 0, 2) :
-                                'N/A'
-                            ),
+                      Placeholder::make('cheapest_price')
+                        ->label('Price')
+                        ->content(function ($record) {
+                            if (!$record) return 'N/A';
+
+                            $supplierPrice = $record->getCheapestSupplierPrice(1);
+
+                            if (!$supplierPrice) return 'N/A';
+
+                            $pricing = app(PricingService::class)
+                                ->calculateFinalPrice((float) $supplierPrice, $record, 1);
+
+                            return 'KES ' . number_format($pricing['final_unit_price'], 2);
+                        }),
                     ])->columns(4),
 
              

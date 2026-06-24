@@ -359,11 +359,8 @@ class Order extends Model
     }
 
     /**
-     * Reassign this order (and its items) to a different supplier.
-     *
-     * The new supplier must be able to fulfil every non-delivery-fee item.
+     * Reassign this order  to a different supplier.
      * Prices are updated from the supplier_medicines pivot table.
-     * The order stays in `pending_review` so the operation can review before sending.
      */
     public function reassignToSupplier(int $newSupplierId, ?string $reason = null): bool
     {

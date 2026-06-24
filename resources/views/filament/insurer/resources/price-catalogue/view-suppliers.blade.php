@@ -18,6 +18,7 @@
     </div>
 
     @if($suppliers->count() > 0)
+  
         <div class="bg-white rounded-lg shadow overflow-hidden">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
@@ -28,9 +29,7 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Unit Price
                         </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Stock
-                        </th>
+                      
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Expiry
                         </th>
@@ -51,16 +50,11 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm font-semibold text-green-600">
-                                    KES {{ number_format($supplier->unit_price, 2) }}
-                                </div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                    {{ $supplier->stock_quantity > 100 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800' }}">
-                                    {{ $supplier->stock_quantity }} units
-                                </span>
-                            </td>
+                                    <div class="text-sm font-semibold text-green-600">
+                                        KES {{ number_format($supplier->pricing['final_unit_price'], 2) }}
+                                    </div>
+                                </td>
+                  
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 {{ \Carbon\Carbon::parse($supplier->expiry_date)->format('M d, Y') }}
                             </td>
@@ -73,9 +67,7 @@
             </table>
         </div>
     @else
-        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p class="text-yellow-800">No suppliers currently have this medicine in stock.</p>
-        </div>
+       
     @endif
 
  
