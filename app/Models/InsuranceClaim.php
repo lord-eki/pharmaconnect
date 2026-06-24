@@ -224,6 +224,7 @@ class InsuranceClaim extends Model
         $this->update([
             'status' => 'approved',
             'approved_amount' => $approvedAmount,
+            'deductible_amount' => $this->claimed_amount - $approvedAmount,
             'reviewed_at' => now(),
             'reviewed_by' => $reviewedBy ?? auth()->id(),
             'notes' => $notes ?? $this->notes,
