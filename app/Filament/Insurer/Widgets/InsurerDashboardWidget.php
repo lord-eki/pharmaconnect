@@ -51,7 +51,7 @@ class InsurerDashboardWidget extends StatsOverviewWidget
                 ->description('Total submitted')
                 ->descriptionIcon('heroicon-o-currency-dollar')
                 ->color('info')
-                ->chart([7, 4, 8, 12, 15, 10, 9]) // Sample trend
+                ->chart([7, 4, 8, 12, 15, 10, 9]) 
                 ->url(route('filament.Insurer.resources.insurance.insurer-reports.index')),
 
             Stat::make('This Month Approved', 'KES '.number_format($totalApproved, 2))
