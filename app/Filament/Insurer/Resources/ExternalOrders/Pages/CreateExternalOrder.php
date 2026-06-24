@@ -36,7 +36,6 @@ class CreateExternalOrder extends CreateRecord
                 ->schema([
                     Grid::make(12)
                         ->schema([
-                            // Main content area - 8 columns
                             Section::make('Order Items')
                                 ->schema([
                                     Repeater::make('items')
@@ -47,7 +46,6 @@ class CreateExternalOrder extends CreateRecord
                                                 ->label('Medicine')
                                                 ->helperText('Search by generic name, brand, or strength')
                                                 ->options(function ($get) {
-                                                    // Get already selected medicines to exclude them
                                                     $selected = collect($get('../../items') ?? [])
                                                         ->pluck('medicine_id')
                                                         ->filter()
@@ -121,7 +119,6 @@ class CreateExternalOrder extends CreateRecord
                                                 ->extraAttributes(['class' => 'font-bold text-primary-600'])
                                                 ->columnSpan(1),
 
-                                            // Hidden field to store supplier price for order processing
                                             TextInput::make('supplier_price')
                                                 ->numeric()
                                                 ->default(0)
@@ -147,7 +144,7 @@ class CreateExternalOrder extends CreateRecord
                                 ])
                                 ->columnSpan(8),
 
-                            Section::make('Order Summary')
+                              Section::make('Order Summary')
                                 ->schema([
                                     Placeholder::make('order_summary')
                                         ->label('')
