@@ -144,7 +144,6 @@ class DeliveriesTable
                                     $record->update([
                                         'rider_id' => $data['rider_id'],
                                         'status' => 'assigned',
-                                        'assigned_at' => now(),
                                     ]);
                                 });
 
