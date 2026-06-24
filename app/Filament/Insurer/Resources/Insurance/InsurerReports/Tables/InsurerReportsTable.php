@@ -151,7 +151,7 @@ class InsurerReportsTable
                     ->color('success')->visible((fn ($record) => ! filled($record->pdf_path)))
                     ->action(function ($record) {
                         return static::downloadClaimPdf($record);
-                    }),
+                    })->openUrlInNewTab(),
             ])
             ->toolbarActions([
                 BulkAction::make('export_statement')
@@ -210,9 +210,9 @@ class InsurerReportsTable
      */
     protected static function generateAndSaveClaimPdf(InsuranceClaim $claim, bool $forceRegenerate = false): string
     {
-        // Check if PDF exists and is recent (within last hour) unless force regenerate
+        // Check if PDF exists and is recent  unless force regenerate
         if (! $forceRegenerate && $claim->pdf_path && Storage::disk('public')->exists($claim->pdf_path)) {
-            // Check if PDF is recent (within last hour)
+            // Check if PDF is recent 
             if ($claim->pdf_generated_at && $claim->pdf_generated_at->diffInMinutes(now()) < 60) {
                 \Log::info('Using cached PDF', [
                     'claim_id' => $claim->id,
