@@ -62,8 +62,7 @@ class InsuranceProviderForm
 
                         Textarea::make('address')
                             ->required()
-                            ->rows(3)
-                            ->columnSpanFull()
+                            ->rows(1)
                             ->placeholder('Complete physical address'),
 
                         TextInput::make('website')
@@ -77,7 +76,7 @@ class InsuranceProviderForm
                             ->default(true)
                             ->required(),
                     ])
-                    ->columns(2)
+                    ->columns(3)
                     ->columnSpanFull(),
 
                 Section::make('API Configuration')
@@ -118,8 +117,7 @@ class InsuranceProviderForm
                                 '4:3',
                                 '3:2',
                             ])
-                            ->live(onBlur: true)
-                            ->columnSpanFull(),
+                            ->live(onBlur: true),
 
                         Textarea::make('header_text')
                             ->label('Claim Form Header Text')
@@ -127,8 +125,7 @@ class InsuranceProviderForm
                             ->maxLength(500)
                             ->placeholder('Text to display at the top of claim forms')
                             ->helperText('Leave empty to use: "Insurance Claim Form - [Company Name]"')
-                            ->live(onBlur: true)
-                            ->columnSpanFull(),
+                            ->live(onBlur: true),
 
                         Textarea::make('footer_text')
                             ->label('Claim Form Footer Text')
@@ -136,8 +133,7 @@ class InsuranceProviderForm
                             ->maxLength(500)
                             ->placeholder('Text to display at the bottom of claim forms')
                             ->helperText('Leave empty to use default contact information')
-                            ->live(onBlur: true)
-                            ->columnSpanFull(),
+                            ->live(onBlur: true),
 
                         ColorPicker::make('primary_color')
                             ->label('Primary Brand Color')
@@ -151,7 +147,7 @@ class InsuranceProviderForm
                             ->helperText('Used for secondary text and borders')
                             ->live(onBlur: true),
                     ])
-                    ->columns(2)
+                    ->columns(3)
                     ->columnSpanFull()
                     ->collapsible(),
             ]);
