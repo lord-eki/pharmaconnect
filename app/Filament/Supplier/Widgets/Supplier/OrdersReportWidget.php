@@ -9,98 +9,120 @@ use Illuminate\Support\Facades\Auth;
 
 class OrdersReportWidget extends StatsOverviewWidget
 {
+
+    protected  ?string $pollingInterval = '60s'; 
+
+
    protected function getStats(): array
-    {
-        $supplier = Auth::user()->supplier;
+{
+    $supplier = Auth::user()->supplier;
 
-        // Get current month data
-        $currentMonthOrders = Order::where('supplier_id', $supplier->id)
-            ->whereMonth('ordered_at', now()->month)
-            ->whereYear('ordered_at', now()->year)
-            ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered']);
+    if (! $supplier) {
+        return [];
+    }
 
-        // Get previous month data for comparison
-        $previousMonthOrders = Order::where('supplier_id', $supplier->id)
-            ->whereMonth('ordered_at', now()->subMonth()->month)
-            ->whereYear('ordered_at', now()->subMonth()->year)
-            ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered']);
+    return cache()->remember("supplier_orders_report_{$supplier->id}", now()->addMinutes(5), function () use ($supplier) {
 
-        $currentMonthRevenue = $currentMonthOrders->sum('supplier_total');
-        $previousMonthRevenue = $previousMonthOrders->sum('supplier_total');
+        $stats = Order::where('supplier_id', $supplier->id)
+            ->selectRaw("
+                SUM(CASE WHEN MONTH(ordered_at) = ? AND YEAR(ordered_at) = ?
+                    AND status IN ('confirmed','processing','shipped','delivered') THEN supplier_total ELSE 0 END) as current_revenue,
+                SUM(CASE WHEN MONTH(ordered_at) = ? AND YEAR(ordered_at) = ?
+                    AND status IN ('confirmed','processing','shipped','delivered') THEN supplier_total ELSE 0 END) as previous_revenue,
+                SUM(CASE WHEN MONTH(ordered_at) = ? AND YEAR(ordered_at) = ?
+                    AND status IN ('confirmed','processing','shipped','delivered') THEN 1 ELSE 0 END) as current_count,
+                SUM(CASE WHEN MONTH(ordered_at) = ? AND YEAR(ordered_at) = ?
+                    AND status IN ('confirmed','processing','shipped','delivered') THEN 1 ELSE 0 END) as previous_count,
+                SUM(CASE WHEN status = 'delivered'
+                    AND MONTH(ordered_at) = ? AND YEAR(ordered_at) = ? THEN 1 ELSE 0 END) as delivered_count,
+                SUM(CASE WHEN status IN ('confirmed','processing','shipped','pending','sent_to_supplier') THEN 1 ELSE 0 END) as pending_count
+            ", [
+                now()->month, now()->year,
+                now()->subMonth()->month, now()->subMonth()->year,
+                now()->month, now()->year,
+                now()->subMonth()->month, now()->subMonth()->year,
+                now()->month, now()->year,
+            ])
+            ->first();
 
-        $currentMonthCount = $currentMonthOrders->count();
-        $previousMonthCount = $previousMonthOrders->count();
+        // Single query for both charts
+        $chartData = Order::where('supplier_id', $supplier->id)
+            ->where('ordered_at', '>=', now()->subDays(6)->startOfDay())
+            ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
+            ->selectRaw("
+                DATE(ordered_at) as day,
+                SUM(supplier_total) as revenue,
+                COUNT(*) as order_count
+            ")
+            ->groupBy('day')
+            ->orderBy('day')
+            ->get()
+            ->keyBy('day');
 
-        // Calculate percentage changes
-        $revenueChange = $previousMonthRevenue > 0 
-            ? (($currentMonthRevenue - $previousMonthRevenue) / $previousMonthRevenue) * 100 
+        $revenueChart = [];
+        $ordersChart = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $day = now()->subDays($i)->toDateString();
+            $revenueChart[] = $chartData->get($day)?->revenue ?? 0;
+            $ordersChart[]  = $chartData->get($day)?->order_count ?? 0;
+        }
+
+        $currentRevenue  = $stats->current_revenue ?? 0;
+        $previousRevenue = $stats->previous_revenue ?? 0;
+        $currentCount    = $stats->current_count ?? 0;
+        $previousCount   = $stats->previous_count ?? 0;
+        $deliveredCount  = $stats->delivered_count ?? 0;
+        $pendingCount    = $stats->pending_count ?? 0;
+
+        $revenueChange = $previousRevenue > 0
+            ? (($currentRevenue - $previousRevenue) / $previousRevenue) * 100
             : 0;
 
-        $ordersChange = $previousMonthCount > 0 
-            ? (($currentMonthCount - $previousMonthCount) / $previousMonthCount) * 100 
+        $ordersChange = $previousCount > 0
+            ? (($currentCount - $previousCount) / $previousCount) * 100
             : 0;
 
-        // Get delivered orders
-        $deliveredOrders = Order::where('supplier_id', $supplier->id)
-            ->where('status', 'delivered')
-            ->whereMonth('ordered_at', now()->month)
-            ->whereYear('ordered_at', now()->year)
-            ->count();
-
-        // Get pending orders
-        $pendingOrders = Order::where('supplier_id', $supplier->id)
-            ->whereIn('status', ['confirmed', 'processing', 'shipped','pending','sent_to_supplier'])
-            ->count();
-
-
-        // Average order value
-        $avgOrderValue = $currentMonthCount > 0 
-            ? $currentMonthRevenue / $currentMonthCount 
-            : 0;
+        $avgOrderValue = $currentCount > 0 ? $currentRevenue / $currentCount : 0;
 
         return [
-            Stat::make('Monthly Revenue', 'KES ' . number_format($currentMonthRevenue, 2))
-                ->description($revenueChange >= 0 
-                    ? number_format(abs($revenueChange), 1) . '% increase' 
-                    : number_format(abs($revenueChange), 1) . '% decrease')
+            Stat::make('Monthly Revenue', 'KES ' . number_format($currentRevenue, 2))
+                ->description(number_format(abs($revenueChange), 1) . '% ' . ($revenueChange >= 0 ? 'increase' : 'decrease'))
                 ->descriptionIcon($revenueChange >= 0 ? 'heroicon-m-arrow-trending-up' : 'heroicon-m-arrow-trending-down')
                 ->color($revenueChange >= 0 ? 'success' : 'danger')
-                ->chart($this->getRevenueChart($supplier->id)),
+                ->chart($revenueChart),
 
-            Stat::make('Orders This Month', $currentMonthCount)
-                ->description($ordersChange >= 0 
-                    ? number_format(abs($ordersChange), 1) . '% increase' 
-                    : number_format(abs($ordersChange), 1) . '% decrease')
+            Stat::make('Orders This Month', $currentCount)
+                ->description(number_format(abs($ordersChange), 1) . '% ' . ($ordersChange >= 0 ? 'increase' : 'decrease'))
                 ->descriptionIcon($ordersChange >= 0 ? 'heroicon-m-arrow-trending-up' : 'heroicon-m-arrow-trending-down')
                 ->color($ordersChange >= 0 ? 'success' : 'danger')
-                ->chart($this->getOrdersChart($supplier->id)),
+                ->chart($ordersChart),
 
-            Stat::make('Delivered Orders', $deliveredOrders)
+            Stat::make('Delivered Orders', $deliveredCount)
                 ->description('Successfully completed')
                 ->descriptionIcon('heroicon-m-check-circle')
                 ->color('success'),
 
-            Stat::make('Pending Orders', $pendingOrders)
+            Stat::make('Pending Orders', $pendingCount)
                 ->description('Awaiting fulfillment')
                 ->descriptionIcon('heroicon-m-clock')
-                ->color('warning')
-                ->url(route('filament.Supplier.resources.supplier.orders.index', ['tableFilters' => ['status' => ['values' => ['confirmed', 'processing', 'shipped']]]])),
+                ->color('warning'),
 
             Stat::make('Avg Order Value', 'KES ' . number_format($avgOrderValue, 2))
                 ->description('This month')
                 ->descriptionIcon('heroicon-m-calculator')
                 ->color('info'),
 
-            Stat::make('Fulfillment Rate', 
-                $currentMonthCount > 0 
-                    ? number_format(($deliveredOrders / $currentMonthCount) * 100, 1) . '%' 
+            Stat::make('Fulfillment Rate',
+                $currentCount > 0
+                    ? number_format(($deliveredCount / $currentCount) * 100, 1) . '%'
                     : '0%'
             )
-                ->description('Orders completed on time')
+                ->description('Orders completed')
                 ->descriptionIcon('heroicon-m-chart-bar')
                 ->color('success'),
         ];
-    }
+    });
+}
 
     protected function getRevenueChart(int $supplierId): array
     {

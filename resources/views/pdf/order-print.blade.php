@@ -203,14 +203,15 @@
 </head>
 <body>
 
-{{-- ── HEADER ── --}}
 <div class="header">
     <div class="brand">
-        <h1>MediSupply</h1>
-        <p>Order Invoice &amp; Packing Slip</p>
+        <h1>{{$order->supplier->company_name}}</h1>
+         <p>{{ $order->supplier->phone}}</p>
+         <p> {{ $order->supplier->email }}</p>
+        <p>{{ $order->supplier->address }} - {{$order->supplier->city}}</p>
     </div>
     <div class="order-meta">
-        <div class="order-id">Order #{{ $order->id }}</div>
+        <div class="order-id">LPO #{{ $order->id }}</div>
         <div class="order-date">
             Placed: {{ $order->created_at?->format('d M Y, H:i') ?? '—' }}
         </div>
@@ -224,53 +225,10 @@
             ];
             $cls = $statusClasses[$order->status] ?? 'badge-default';
         @endphp
-        <span class="badge {{ $cls }}">{{ ucfirst(str_replace('_', ' ', $order->status)) }}</span>
     </div>
 </div>
-
-{{-- ── SUPPLIER / CUSTOMER INFO ── --}}
-<div class="info-grid">
-    {{-- Supplier --}}
-    <div class="info-col">
-        <h3>Supplier</h3>
-        @if($order->supplier)
-            <p><strong>{{ $order->supplier->name ?? '—' }}</strong></p>
-            @if($order->supplier->address)
-                <p>{{ $order->supplier->address }}</p>
-            @endif
-            @if($order->supplier->phone)
-                <p>{{ $order->supplier->phone }}</p>
-            @endif
-            @if($order->supplier->email)
-                <p>{{ $order->supplier->email }}</p>
-            @endif
-        @else
-            <p>—</p>
-        @endif
-    </div>
-
-    {{-- Customer / Delivery address --}}
-    <div class="info-col">
-        <h3>Customer / Delivery</h3>
-        @if($order->customer)
-            <p><strong>{{ $order->customer->name ?? '—' }}</strong></p>
-            @if($order->customer->phone)
-                <p>{{ $order->customer->phone }}</p>
-            @endif
-            @if($order->customer->email)
-                <p>{{ $order->customer->email }}</p>
-            @endif
-        @endif
-        @if($order->delivery_address)
-            <p>{{ $order->delivery_address }}</p>
-        @endif
-        @if($order->expected_delivery)
-            <p><strong>Expected:</strong> {{ \Carbon\Carbon::parse($order->expected_delivery)->format('d M Y, H:i') }}</p>
-        @endif
-    </div>
 </div>
 
-{{-- ── ORDER ITEMS ── --}}
 <div class="section-title">Order Items</div>
 <table class="items">
     <thead>
@@ -287,8 +245,8 @@
         @forelse($order->items as $i => $item)
             <tr>
                 <td>{{ $i + 1 }}</td>
-                <td>{{ $item->medicine?->name ?? '—' }}</td>
-                <td>{{ $item->medicine?->sku ?? $item->medicine?->code ?? '—' }}</td>
+                <td>{{ $item->medicine?->generic_name ?? '—' }}</td>
+                <td>{{ $item->medicine?->ppb_registration_number ??  '—' }}</td>
                 <td>{{ number_format($item->unit_price ?? 0, 2) }}</td>
                 <td>{{ $item->quantity }}</td>
                 <td>{{ number_format(($item->unit_price ?? 0) * $item->quantity, 2) }}</td>
@@ -321,13 +279,6 @@
     @if($order->delivery->delivery_notes)
         <p><strong>Notes:</strong> {{ $order->delivery->delivery_notes }}</p>
     @endif
-</div>
-@endif
-
-@if($order->notes)
-<div class="notes-box">
-    <h3>📋 Order Notes</h3>
-    <p>{{ $order->notes }}</p>
 </div>
 @endif
 

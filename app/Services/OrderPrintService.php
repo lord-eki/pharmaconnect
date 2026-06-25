@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
+use App\Models\Supplier;
 
 class OrderPrintService
 {
@@ -18,6 +19,8 @@ class OrderPrintService
             'supplier',
             'delivery.rider.user',
         ]);
+
+
 
         $pdf = Pdf::loadView('pdf.order-print', ['order' => $order])
             ->setPaper('a4', 'portrait');
@@ -35,6 +38,11 @@ class OrderPrintService
             'supplier',
             'delivery.rider.user',
         ]);
+
+
+
+        
+
 
         $pdf = Pdf::loadView('pdf.order-print', ['order' => $order])
             ->setPaper('a4', 'portrait');
