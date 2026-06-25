@@ -259,7 +259,6 @@ class Order extends Model
                 'pending_orders' => $pendingCount,
             ]);
 
-            // dispatch a notification here
         }
     }
 
@@ -300,17 +299,7 @@ class Order extends Model
         return $saved;
     }
 
-    /**
-     * Check whether the current supplier has sufficient stock for every item.
-     *
-     * Returns an array of shortage entries, each containing:
-     *   - order_item_id
-     *   - medicine_id
-     *   - medicine_name
-     *   - required_quantity
-     *   - available_stock
-     *   - alternative_suppliers  — collection of suppliers who have stock, sorted cheapest first
-     */
+
     public function checkStockShortages(): array
     {
         $this->loadMissing('items.medicine');
@@ -360,7 +349,6 @@ class Order extends Model
 
     /**
      * Reassign this order  to a different supplier.
-     * Prices are updated from the supplier_medicines pivot table.
      */
     public function reassignToSupplier(int $newSupplierId, ?string $reason = null): bool
     {

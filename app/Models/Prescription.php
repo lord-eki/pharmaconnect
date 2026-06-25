@@ -375,9 +375,7 @@ class Prescription extends Model
         // Single query to get all relevant supplier medicines
         $medicineIds = $this->items->pluck('medicine_id')->toArray();
 
-        // Fetch ALL active suppliers for each medicine — including out-of-stock ones.
-        // Out-of-stock suppliers are still included so we can assign the cheapest price
-        // at prescription time. Stock is re-checked at the "Send to Supplier" step.
+       
         $supplierMedicines = DB::table('supplier_medicines')
             ->whereIn('medicine_id', $medicineIds)
             ->where('is_available', true)

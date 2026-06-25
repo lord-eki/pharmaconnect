@@ -188,11 +188,17 @@ class OrderResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $supplier = Auth::user();
+        $supplier = Auth::user()->supplier;
+
+        if(!$supplier) {
+            return null;
+        }
+
 
         $pending = Order::where('supplier_id', $supplier->id)
-            ->where('status', ['sent_to_supplier'])
+            ->whereIn('status', ['sent_to_supplier','pending'])
             ->count();
+
 
         return $pending > 0 ? (string) $pending : null;
     }
