@@ -105,7 +105,7 @@ class ManageRejectedOrder extends Page
 
                                         if (isset($this->reassignmentOptions['recommended']) &&
                                             $this->reassignmentOptions['recommended']['supplier_id'] === $option['supplier_id']) {
-                                            $label .= ' ⭐ (Recommended - Cheapest)';
+                                            $label .= '  (Recommended - Cheapest)';
                                         }
 
                                         $options[$option['supplier_id']] = $label;

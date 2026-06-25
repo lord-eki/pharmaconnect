@@ -8,5 +8,4 @@ return [
     App\Providers\Filament\PhysicianPanelProvider::class,
     App\Providers\Filament\RiderPanelProvider::class,
     App\Providers\Filament\SupplierPanelProvider::class,
-    App\Providers\TelescopeServiceProvider::class,
 ];
