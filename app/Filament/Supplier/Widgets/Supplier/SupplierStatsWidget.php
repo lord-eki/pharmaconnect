@@ -79,11 +79,7 @@ class SupplierStatsWidget extends StatsOverviewWidget
             ->avg('total_amount') ?? 0;
 
         return [
-            // Stat::make('Pending Quotations', $pendingQuotations)
-            //     ->description($lastWeekPendingQuotations.' new this week')
-            //     ->descriptionIcon('heroicon-m-arrow-trending-up')
-            //     ->color('warning')
-            //     ->chart([7, 3, 4, 5, 6, 3, $lastWeekPendingQuotations]),
+        
 
             Stat::make('Active Orders', $activeOrders)
                 ->description($lastWeekActiveOrders.' orders this week')
@@ -91,19 +87,6 @@ class SupplierStatsWidget extends StatsOverviewWidget
                 ->color('success')
                 ->chart([12, 8, 15, 10, 9, 11, $lastWeekActiveOrders]),
 
-            // Stat::make('This Month Revenue', 'KES '.number_format($thisMonthRevenue, 2))
-            //     ->description(($revenueChange >= 0 ? '+' : '').number_format($revenueChange, 1).'% from last month')
-            //     ->descriptionIcon($revenueChange >= 0 ? 'heroicon-m-arrow-trending-up' : 'heroicon-m-arrow-trending-down')
-            //     ->color($revenueChange >= 0 ? 'success' : 'danger')
-            //     ->chart([
-            //         $lastMonthRevenue * 0.7,
-            //         $lastMonthRevenue * 0.8,
-            //         $lastMonthRevenue * 0.9,
-            //         $lastMonthRevenue,
-            //         $thisMonthRevenue * 0.8,
-            //         $thisMonthRevenue * 0.9,
-            //         $thisMonthRevenue,
-            //     ]),
 
             Stat::make('Low Stock Alert', $lowStockItems)
                 ->description($totalProducts.' total products')

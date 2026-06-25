@@ -11,7 +11,7 @@ class OrdersReportWidget extends StatsOverviewWidget
 {
    protected function getStats(): array
     {
-        $supplier = Auth::user();
+        $supplier = Auth::user()->supplier;
 
         // Get current month data
         $currentMonthOrders = Order::where('supplier_id', $supplier->id)
@@ -49,8 +49,9 @@ class OrdersReportWidget extends StatsOverviewWidget
 
         // Get pending orders
         $pendingOrders = Order::where('supplier_id', $supplier->id)
-            ->whereIn('status', ['confirmed', 'processing', 'shipped'])
+            ->whereIn('status', ['confirmed', 'processing', 'shipped','pending','sent_to_supplier'])
             ->count();
+
 
         // Average order value
         $avgOrderValue = $currentMonthCount > 0 
