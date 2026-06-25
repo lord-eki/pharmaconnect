@@ -326,10 +326,10 @@
                 <table>
                     <tr>
                         <td class="company-info">
-                            <h1>Pharmaconnect</h1>
-                            <p>P.O. Box 12345, Nairobi, Kenya</p>
-                            <p>Tel: +254 700 000 000 | Email: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="5b32353d341b2b333a29363a383435353e382f75383436">[email&#160;protected]</a></p>
-                            <p>Website: www.pharmaconnect.com</p>
+                            <h1>{{ $company_info['company_name'] ?? 'Pharmaconnect' }}</h1>
+                            <p>{{ $company_info['company_address'] ?? 'P.O. Box 12345, Nairobi, Kenya' }}</p>
+                            <p>Tel: {{ $company_info['company_phone'] ?? '+254 700 000 000' }} | Email: {{ $company_info['company_email'] ?? 'info@pharmaconnect.com' }}</p>
+                            <p>Website: {{ $company_info['company_website'] ?? 'www.pharmaconnect.com' }}</p>
                         </td>
                         <td class="lpo-title">
                             <h2>LPO</h2>
@@ -536,7 +536,7 @@
         <!-- Footer -->
         <div class="footer">
             <p>This is a computer-generated document. No signature is required.</p>
-            <p>&copy; {{ date('Y') }} PharmaConnect. All rights reserved.</p>
+            <p>&copy; {{ date('Y') }} {{ $company_info['company_name'] ?? 'PharmaConnect' }}. All rights reserved.</p>
         </div>
     </div><!-- /.page-wrapper -->
 </body>

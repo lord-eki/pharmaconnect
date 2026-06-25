@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\DeliveryNoteMail;
+use App\Models\Setup;
 
 class DeliveryNoteService
 {
@@ -120,7 +121,6 @@ class DeliveryNoteService
     {
         $data = $this->prepareDeliveryNoteData($delivery);
         
-        // Use pdf.delivery-note-pdf for PDF generation, or pdf.delivery-note if that's your preferred view
         return Pdf::loadView('pdf.delivery-note-pdf', $data)
             ->setPaper('a4')
             ->setOption('margin-top', 10)
@@ -138,7 +138,7 @@ class DeliveryNoteService
         
         // Get orders - handle both single order and multiple orders
         $orders = $delivery->orders ?? collect([$delivery->order])->filter();
-        
+        $company_data = Setup::first()->toArray();
         return [
             'delivery' => $delivery,
             'orders' => $orders,
@@ -148,10 +148,11 @@ class DeliveryNoteService
             'items' => $orders->flatMap->items ?? collect(),
             'generated_at' => now(),
             'company_info' => [
-                'name' => config('app.name'),
-                'address' => config('company.address'),
-                'phone' => config('company.phone'),
-                'email' => config('company.email'),
+                'logo' => $company_data['company_logo'],
+                'name' => $company_data['company_name'],
+                'address' => $company_data['company_address'],
+                'phone' => $company_data['company_phone'],
+                'email' => $company_data['company_email'],
             ],
         ];
     }

@@ -295,10 +295,10 @@
                 <table>
                     <tr>
                         <td class="company-info">
-                            <h1>Pharmaconnect</h1>
-                            <p>P.O. Box 12345, Nairobi, Kenya</p>
-                            <p>Tel: +254 700 000 000 | Email: info@pharmaconnect.com</p>
-                            <p>Website: www.pharmaconnect.com</p>
+                            <h1>{{ e($company_info['name'] ?? 'PharmaConnect') }}</h1>
+                            <p>{{ e($company_info['address'] ?? 'N/A') }}</p>
+                            <p>Tel: {{ e($company_info['phone'] ?? '+254700000000') }} | Email: {{ e($company_info['email'] ?? 'info@pharmaconnect.com') }}</p>
+                            <p>Website: {{ e($company_info['website'] ?? 'www.pharmaconnect.com') }}</p>
                         </td>
                         <td class="lpo-title">
                             <h2>LPO</h2>

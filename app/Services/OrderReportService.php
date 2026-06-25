@@ -6,6 +6,7 @@ use App\Models\Order;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use App\Models\Setup;
 
 class OrderReportService
 {
@@ -130,9 +131,11 @@ class OrderReportService
     {
         try {
             $order = $this->prepareOrderData($order);
+            $company_info = Setup::first()->toArray();
             
             $pdf = Pdf::loadView('reports.lpo', [
-                'order' => $order
+                'order' => $order,
+                'company_info' => $company_info
             ]);
 
             $pdf->setPaper('a4', 'portrait');
@@ -162,9 +165,11 @@ class OrderReportService
     {
         try {
             $order = $this->prepareSupplierOrderData($order);
+            $company_info = Setup::first()->toArray();
             
             $pdf = Pdf::loadView('reports.supplier-lpo', [
-                'order' => $order
+                'order' => $order,
+                'company_info' => $company_info
             ]);
 
             $pdf->setPaper('a4', 'portrait');
