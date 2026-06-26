@@ -659,15 +659,12 @@
                 <div class="amount-value">(KES {{ number_format($claim->deductible_amount ?? 0, 2) }})</div>
             </div>
             @if($claim->approved_amount)
-            <div class="amount-row">
-                <div class="amount-label">Approved Amount:</div>
-                <div class="amount-value" style="color: #10b981;">KES {{ number_format($claim->approved_amount, 2) }}</div>
-            </div>
-            @endif
+                    
             <div class="amount-row amount-total">
-                <div class="amount-label">NET PAYABLE AMOUNT:</div>
-                <div class="amount-value">KES {{ number_format($claim->getNetAmountAttribute(), 2) }}</div>
+                <div class="amount-label">APPROVED AMOUNT:</div>
+                <div class="amount-value">KES {{ number_format($claim->approved_amount, 2) }}</div>
             </div>
+             @endif
         </div>
 
         {{-- Additional Information --}}
