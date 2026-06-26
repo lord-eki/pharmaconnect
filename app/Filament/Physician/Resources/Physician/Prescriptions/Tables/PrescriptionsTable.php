@@ -170,9 +170,7 @@ protected static function getOrdersForm(Prescription $prescription): array
 
         return '
             <tr>
-                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top; font-size:12px; color:#64748b;">
-                    ' . e($order->order_number) . '
-                </td>
+              
                 <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top;">
                     <div style="font-weight:600; color:#1a1a2e;">
                         ' . e($item->medicine->generic_name) .
@@ -198,7 +196,6 @@ protected static function getOrdersForm(Prescription $prescription): array
         <table style="width:100%; border-collapse:collapse; font-size:13px;">
             <thead>
                 <tr style="background:#f8fafc;">
-                    <th style="padding:8px 12px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#64748b; border-bottom:2px solid #e2e8f0;">Order #</th>
                     <th style="padding:8px 12px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#64748b; border-bottom:2px solid #e2e8f0;">Medicine</th>
                     <th style="padding:8px 12px; text-align:center; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#64748b; border-bottom:2px solid #e2e8f0;">Qty</th>
                     <th style="padding:8px 12px; text-align:right; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#64748b; border-bottom:2px solid #e2e8f0;">Unit Price</th>
@@ -208,7 +205,7 @@ protected static function getOrdersForm(Prescription $prescription): array
             <tbody>' . $rows . '</tbody>
             <tfoot>
                 <tr style="background:#f8fafc;">
-                    <td colspan="4" style="padding:10px 12px; text-align:right; font-weight:700; color:#374151; border-top:2px solid #e2e8f0;">Grand Total</td>
+                    <td colspan="3" style="padding:10px 12px; text-align:right; font-weight:700; color:#374151; border-top:2px solid #e2e8f0;">Grand Total</td>
                     <td style="padding:10px 12px; text-align:right; font-weight:700; color:#f97316; border-top:2px solid #e2e8f0;">KES ' . number_format($grandTotal, 2) . '</td>
                 </tr>
             </tfoot>
