@@ -17,7 +17,7 @@
         </div>
     </div>
 
-    @if($suppliers->count() > 0)
+    @if(isset($suppliers) && $suppliers->count() > 0)
   
         <div class="bg-white rounded-lg shadow overflow-hidden">
             <table class="min-w-full divide-y divide-gray-200">

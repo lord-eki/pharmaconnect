@@ -307,6 +307,8 @@ class InsurerReportsTable
             // Generate or get cached PDF
             $path = static::generateAndSaveClaimPdf($claim);
 
+            dd($path);
+
             // Check if file exists
             if (! Storage::disk('public')->exists($path)) {
                 Notification::make()

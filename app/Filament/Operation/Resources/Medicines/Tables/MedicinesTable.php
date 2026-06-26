@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Insurer\Resources\Insurance\PricingCatalogues\Tables;
+namespace App\Filament\Operation\Resources\Medicines\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -13,10 +13,8 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use App\Services\PricingService;
 
-class PricingCataloguesTable
+class MedicinesTable
 {
-
-
     public static function configure(Table $table): Table
     {
         return $table
@@ -113,7 +111,7 @@ class PricingCataloguesTable
 
                         return view('filament.insurer.resources.price-catalogue.view-suppliers', [
                             'medicine' => $record,
-                            // 'suppliers' => $suppliersWithPricing,
+                            'suppliers' => $suppliersWithPricing,
                         ]);
 
 
