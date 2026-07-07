@@ -468,7 +468,6 @@ class DeliveriesTable
 
                             try {
                                 if ($data['use_queue'] ?? true) {
-                                    // Use queue for large batches
                                     BulkGenerateDeliveryNotesJob::dispatch(
                                         $deliveryIds,
                                         auth()->user(),

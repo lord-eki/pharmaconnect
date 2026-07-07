@@ -150,7 +150,7 @@ class InsurerReportsTable
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('success')->visible((fn ($record) => ! filled($record->pdf_path)))
                     ->action(function ($record) {
-                        return static::downloadClaimPdf($record);
+                         return static::downloadClaimPdf($record);
                     })->openUrlInNewTab(),
             ])
             ->toolbarActions([
@@ -233,12 +233,16 @@ class InsurerReportsTable
             'insuranceProvider',
         ]);
 
+        dump($claim);
+
+
         // Get the insurance provider
         $insuranceProvider = $claim->insuranceProvider;
 
         // Get branding data
         if (method_exists($insuranceProvider, 'getBrandingData')) {
             $branding = $insuranceProvider->getBrandingData();
+            dump('Get branding exists');
         } else {
             $branding = [
                 'logo_url' => $insuranceProvider->logo_path ? Storage::disk('public')->url($insuranceProvider->logo_path) : null,
@@ -251,6 +255,7 @@ class InsurerReportsTable
                 'primary_color' => $insuranceProvider->primary_color ?? '#000000',
                 'secondary_color' => $insuranceProvider->secondary_color ?? '#666666',
             ];
+            dump('Custom branding ');
         }
 
         // Generate PDF
@@ -270,6 +275,8 @@ class InsurerReportsTable
         $directory = "insurance-claims/{$insuranceProvider->id}/{$date->format('Y')}/{$date->format('m')}";
         $filename = "claim-{$claim->claim_number}.pdf";
         $path = "{$directory}/{$filename}";
+
+        dump($pdf);
 
         // Delete old PDF if exists
         if ($claim->pdf_path && Storage::disk('public')->exists($claim->pdf_path)) {
@@ -294,6 +301,8 @@ class InsurerReportsTable
             'path' => $path,
             'size' => Storage::disk('public')->size($path),
         ]);
+        
+        dd($path);
 
         return $path;
     }
@@ -307,7 +316,6 @@ class InsurerReportsTable
             // Generate or get cached PDF
             $path = static::generateAndSaveClaimPdf($claim);
 
-            dd($path);
 
             // Check if file exists
             if (! Storage::disk('public')->exists($path)) {
@@ -346,8 +354,10 @@ class InsurerReportsTable
     protected static function downloadClaimPdf(InsuranceClaim $claim)
     {
         try {
-            // Generate and save PDF (uses cache if recent)
+            // Generate and save PDF uses cache if recent
             $path = static::generateAndSaveClaimPdf($claim);
+
+
 
             // Check if file exists
             if (! Storage::disk('public')->exists($path)) {

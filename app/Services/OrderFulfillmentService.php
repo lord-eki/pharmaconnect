@@ -87,7 +87,7 @@ class OrderFulfillmentService
                     }
                 }
             } else {
-                // External order — delivery tracking is at ExternalOrder level
+                // External order
                 $results['delivery_exists'] = (bool) $order->externalOrder?->delivery;
                 $results['all_orders_confirmed'] = $order->externalOrder
                     ? $order->externalOrder->orders()->whereNotIn('status', ['confirmed', 'delivered'])->doesntExist()
@@ -162,21 +162,12 @@ class OrderFulfillmentService
     }
 
     /**
-     * Handle delivery completion - processes ALL orders
+     * Handle delivery completion - processes all orders
      */
     public function handleDeliveryCompletion(Delivery $delivery, array $data): array
     {
         try {
             DB::beginTransaction();
-
-            // ── DIAGNOSTIC: dump delivery identity up front ──────────────────
-            Log::info('[CLAIM-DIAG] handleDeliveryCompletion started', [
-                'delivery_id'       => $delivery->id,
-                'delivery_number'   => $delivery->delivery_number,
-                'prescription_id'   => $delivery->prescription_id,
-                'external_order_id' => $delivery->external_order_id,
-                'is_external'       => $delivery->external_order_id !== null,
-            ]);
 
             $results = [
                 'delivery_completed' => false,
@@ -215,22 +206,14 @@ class OrderFulfillmentService
 
             foreach ($delivery->orders as $order) {
                 try {
-                    // ── DIAGNOSTIC: per-order identity ───────────────────────
-                    Log::info('[CLAIM-DIAG] Processing order in delivery', [
-                        'delivery_id'       => $delivery->id,
-                        'order_id'          => $order->id,
-                        'order_number'      => $order->order_number,
-                        'external_order_id' => $order->external_order_id,
-                        'prescription_id'   => $order->prescription_id,
-                    ]);
-
+           
                     // Process payments
                     $paymentResults = $this->paymentService->processOrderPayments($order);
                     if ($paymentResults) {
                         $totalPaymentsProcessed++;
                     }
 
-                    // Calculate commission (prescription orders only)
+                    // Calculate commission
                     if (! $order->external_order_id) {
                         $commission = $this->commissionService->calculateCommissionForOrder($order);
                         if ($commission) {

@@ -17,6 +17,8 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Facades\DB;
+use App\Services\OrderFulfillmentService;
 
 class DeliveriesTable
 {
@@ -298,8 +300,28 @@ class DeliveriesTable
                         ])
                         ->action(function (Delivery $record, array $data) {
                             try {
+
+                            DB::transaction(function() use ($record , $data ){
+
+                           
+                            $fulfilmentService =  app(OrderFulfillmentService::class);
+                            $results = $fulfilmentService->handleDeliveryCompletion($record,$data);
+                                  
+                            if ($results['orders_processed'] > 0 && $record->prescription_id && $record->prescription) {
+                            $physician = $record->prescription->physician;
+
+                            if ($physician && $physician->user) {
+                                $commissions = $record->prescription->commissions()
+                                    ->whereIn('order_id', $record->orders->pluck('id'))
+                                    ->get();
+
+                                foreach ($commissions as $commission) {
+                                    $physician->user->notify(new CommissionEarnedNotification($commission));
+                                }
+                            }
+                        }
                                 // Update delivery
-                                $record->update([
+                         $record->update([
                                     'status' => 'delivered',
                                     'actual_delivery' => $data['actual_delivery'],
                                     'proof_of_delivery' => $data['proof_of_delivery'] ?? null,
@@ -353,11 +375,13 @@ class DeliveriesTable
                                     'orders_delivered' => $deliveredCount,
                                     'total_orders' => $orders->count(),
                                 ]);
+
+                             });
                             } catch (\Exception $e) {
                                 Notification::make()
                                     ->danger()
                                     ->title('Error')
-                                    ->body('Failed to complete delivery: '.$e->getMessage())
+                                    ->body('Failed to complete delivery')
                                     ->send();
 
                                 Log::error('Failed to complete delivery', [
