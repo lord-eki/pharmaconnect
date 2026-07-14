@@ -18,6 +18,9 @@ use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Storage;
+use App\Jobs\SaveInsurerClaimPdfJob;
+use Illuminate\Support\Facades\Log;
+
 
 class InsurerReportsTable
 {
@@ -211,13 +214,17 @@ class InsurerReportsTable
     protected static function generateAndSaveClaimPdf(InsuranceClaim $claim, bool $forceRegenerate = false): string
     {
         // Check if PDF exists and is recent  unless force regenerate
+            
         if (! $forceRegenerate && $claim->pdf_path && Storage::disk('public')->exists($claim->pdf_path)) {
-            // Check if PDF is recent 
+            // Check if PDF is recent
+                dump('After first check...');
             if ($claim->pdf_generated_at && $claim->pdf_generated_at->diffInMinutes(now()) < 60) {
                 \Log::info('Using cached PDF', [
                     'claim_id' => $claim->id,
                     'pdf_path' => $claim->pdf_path,
                 ]);
+
+                dump('Second check done ....');
 
                 return $claim->pdf_path;
             }
@@ -233,17 +240,18 @@ class InsurerReportsTable
             'insuranceProvider',
         ]);
 
-        dump($claim);
+
 
 
         // Get the insurance provider
         $insuranceProvider = $claim->insuranceProvider;
 
+
         // Get branding data
         if (method_exists($insuranceProvider, 'getBrandingData')) {
             $branding = $insuranceProvider->getBrandingData();
-            dump('Get branding exists');
-        } else {
+        } 
+        else {
             $branding = [
                 'logo_url' => $insuranceProvider->logo_path ? Storage::disk('public')->url($insuranceProvider->logo_path) : null,
                 'header_text' => $insuranceProvider->header_text
@@ -255,54 +263,24 @@ class InsurerReportsTable
                 'primary_color' => $insuranceProvider->primary_color ?? '#000000',
                 'secondary_color' => $insuranceProvider->secondary_color ?? '#666666',
             ];
-            dump('Custom branding ');
         }
 
-        // Generate PDF
-        $pdf = Pdf::loadView('pdf.insurance-claim', [
-            'claim' => $claim,
-            'branding' => $branding,
-        ])
-            ->setPaper('a4')
-            ->setOptions([
-                'defaultFont' => 'DejaVu Sans',
-                'isHtml5ParserEnabled' => true,
-                'isRemoteEnabled' => true,
-            ]);
-
-        // Define storage path - organized by provider and date
         $date = now();
         $directory = "insurance-claims/{$insuranceProvider->id}/{$date->format('Y')}/{$date->format('m')}";
         $filename = "claim-{$claim->claim_number}.pdf";
         $path = "{$directory}/{$filename}";
-
-        dump($pdf);
 
         // Delete old PDF if exists
         if ($claim->pdf_path && Storage::disk('public')->exists($claim->pdf_path)) {
             Storage::disk('public')->delete($claim->pdf_path);
         }
 
-        // Ensure directory exists
+         // Ensure directory exists
         Storage::disk('public')->makeDirectory($directory);
-
-        // Save to storage
-        Storage::disk('public')->put($path, $pdf->output());
-
-        // Update claim record with PDF path
-        $claim->update([
-            'pdf_path' => $path,
-            'pdf_generated_at' => now(),
-        ]);
-
-        \Log::info('Insurance claim PDF generated and saved', [
-            'claim_id' => $claim->id,
-            'claim_number' => $claim->claim_number,
-            'path' => $path,
-            'size' => Storage::disk('public')->size($path),
-        ]);
-        
-        dd($path);
+         
+       //Save to storage on queue 
+        SaveInsurerClaimPdfJob::dispatch($claim , $branding ,$path);
+      
 
         return $path;
     }
@@ -357,6 +335,7 @@ class InsurerReportsTable
             // Generate and save PDF uses cache if recent
             $path = static::generateAndSaveClaimPdf($claim);
 
+            
 
 
             // Check if file exists
@@ -381,7 +360,7 @@ class InsurerReportsTable
             );
 
         } catch (\Exception $e) {
-            \Log::error('Failed to download claim PDF', [
+            Log::error('Failed to download claim PDF', [
                 'claim_id' => $claim->id,
                 'claim_number' => $claim->claim_number,
                 'error' => $e->getMessage(),
@@ -390,7 +369,7 @@ class InsurerReportsTable
 
             Notification::make()
                 ->title('Download Failed')
-                ->body('Unable to generate the PDF: '.$e->getMessage())
+                ->body('Unable to generate the PDF document. Please try again later!')
                 ->danger()
                 ->send();
 
