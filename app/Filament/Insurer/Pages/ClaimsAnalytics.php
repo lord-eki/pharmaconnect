@@ -186,5 +186,7 @@ class ClaimsAnalytics extends Page
         Cache::forget("claims_analytics_medicines_{$providerId}");
 
         $this->mount();
+
+        $this->dispatch('laims-analytics-refreshed',status: $this->statusData, trend: $this->trendData);
     }
 }

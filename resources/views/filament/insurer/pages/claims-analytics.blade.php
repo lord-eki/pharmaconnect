@@ -124,6 +124,8 @@
     <script>
         window.__claimsStatus = @json($statusData);
         window.__claimsTrend  = @json($trendData);
+        window.__statusChartInstance =  null;
+        window.__trendChartInstance =  null;
     </script>
 
     <script
@@ -133,19 +135,25 @@
     ></script>
 
     <script>
-        window.__initClaimsCharts = function () {
-            const statusData = window.__claimsStatus;
-            const trendData  = window.__claimsTrend;
+        window.__initClaimsCharts = function (statusData , trendData) {
+            const statusData = statusData || window.__claimsStatus;
+            const trendData  = trendData || window.__claimsTrend;
 
             const statusCanvas = document.getElementById('statusChart');
             const statusSkeleton = document.getElementById('status-skeleton');
+
+
+            if(window.__statusChartInstance){
+                window.__statusChartInstance.destroy();
+                window.__statusChartInstance = null;
+            }
 
             if (statusCanvas && Object.keys(statusData).length) {
                 const statusLabels = Object.keys(statusData).map(
                     s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
                 );
 
-                new Chart(statusCanvas, {
+                window.__statusChartInstance = new Chart(statusCanvas, {
                     type: 'doughnut',
                     data: {
                         labels: statusLabels,
@@ -186,8 +194,14 @@
             const trendCanvas   = document.getElementById('trendChart');
             const trendSkeleton = document.getElementById('trend-skeleton');
 
+
+            if(window.__trendChartInstance){
+                window.__trendChartInstance.destroy();
+                window.__trendChartInstance = null;
+            }
+
             if (trendCanvas && trendData.labels?.length) {
-                new Chart(trendCanvas, {
+                window.__trendChartInstance = new Chart(trendCanvas, {
                     type: 'line',
                     data: {
                         labels: trendData.labels,
@@ -252,6 +266,15 @@
         if (typeof Chart !== 'undefined') {
             window.__initClaimsCharts();
         }
+
+        document.addEventListener('livewire:init', ()=>{
+            Livewire.on('claims-analytics-refreshed',(event)=>{
+                const payload = Array.isArray(event) ? event[0] : event ;
+                window.__claimsStatus =  payload.status;
+                window.__claimsTrend = payload.trend;
+                window.__initClaimsCharts(payload.status, payload.trend);
+            });
+        });
     </script>
 
 </x-filament-panels::page>
