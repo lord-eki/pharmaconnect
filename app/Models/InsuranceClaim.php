@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class InsuranceClaim extends Model
 {
@@ -65,7 +66,7 @@ class InsuranceClaim extends Model
 
         $number = $lastClaim ? ((int) substr($lastClaim->claim_number, -6)) + 1 : 1;
 
-        return 'CLM-'.$year.'-'.str_pad($number, 6, '0', STR_PAD_LEFT);
+        return 'CLM-' . $year . '-' . str_pad($number, 6, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -140,18 +141,18 @@ class InsuranceClaim extends Model
             return null;
         }
 
-        return \Storage::disk('public')->url($this->pdf_path);
+        return Storage::disk('public')->url($this->pdf_path);
     }
 
     public function hasPdf(): bool
     {
-        return $this->pdf_path && \Storage::disk('public')->exists($this->pdf_path);
+        return $this->pdf_path && Storage::disk('public')->exists($this->pdf_path);
     }
 
     public function deletePdf(): bool
     {
         if ($this->hasPdf()) {
-            \Storage::disk('public')->delete($this->pdf_path);
+            Storage::disk('public')->delete($this->pdf_path);
             $this->update([
                 'pdf_path' => null,
                 'pdf_generated_at' => null,
@@ -185,11 +186,11 @@ class InsuranceClaim extends Model
 
     public function getNetAmountAttribute(): float
     {
-        if ($this->approved_amount) {
-            return $this->approved_amount - $this->deductible_amount;
+        if ($this->approved_amount !== null) {
+            return (float)$this->approved_amount;
         }
 
-        return $this->claimed_amount - $this->deductible_amount;
+        return (float)$this->claimed_amount;
     }
 
     /**
@@ -237,6 +238,12 @@ class InsuranceClaim extends Model
                     'claim_status' => 'approved',
                     'amount' => $approvedAmount,
                 ]);
+        }
+
+        if ($this->external_order_id) {
+            Receivable::where('external_order_id', $this->external_order_id)
+                ->whereNull('received_at')
+                ->update(['claim_status' => 'approved']);
         }
     }
 

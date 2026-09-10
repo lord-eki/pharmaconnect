@@ -64,7 +64,6 @@ class PaymentService
             ]);
 
             return $results;
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -85,12 +84,20 @@ class PaymentService
     protected function createReceivableForOrder(Order $order, ?float $approvedAmountOverride = null): ?Receivable
     {
         try {
-            // ── External (insurer-originated) order ──────────────────────────
+            $existing = Receivable::where('order_id', $order->id)->first();
+            if ($existing) {
+                Log::info('Receivable already exists for order -- skipping duplicate creation', [
+                    'order_id' => $order->id,
+                    'existing_receivable' => $existing->id,
+                ]);
+                return $existing;
+            }
+            // External (insurer-originated) order
             if ($order->external_order_id && ! $order->prescription_id) {
                 return $this->createReceivableForExternalOrder($order, $approvedAmountOverride);
             }
 
-            // ── Prescription-based order ──────────────────────────────────────
+            // Prescription-based order 
             $order->load(['prescription.patient.insuranceProvider']);
 
             $prescription = $order->prescription;
@@ -116,9 +123,11 @@ class PaymentService
 
             $paymentSource = 'patient';
 
-            if ($prescription->insurance_covered &&
+            if (
+                $prescription->insurance_covered &&
                 $patient->insurance_provider_id &&
-                $patient->insurance_number) {
+                $patient->insurance_number
+            ) {
                 $paymentSource = 'insurance';
 
                 Log::info('Receivable will be from insurance', [
@@ -165,7 +174,6 @@ class PaymentService
             ]);
 
             return $receivable;
-
         } catch (\Exception $e) {
             Log::error('Error creating receivable', [
                 'order_id' => $order->id,
@@ -238,6 +246,15 @@ class PaymentService
     protected function createPayableToSupplier(Order $order): ?Payable
     {
         try {
+            $existing = Payable::where('order_id', $order->id)->where('vendor_type', 'supplier')->first();
+            if ($existing) {
+                Log::info('Supplier payable already exists for order -- skipping duplicate creation', [
+                    'order_id' => $order->id,
+                    'existing_payable_id' => $existing->id
+                ]);
+
+                return $existing;
+            }
             // Supplier gets the supplier_total
             $supplierAmount = $order->supplier_total;
 
@@ -262,7 +279,6 @@ class PaymentService
             ]);
 
             return $payable;
-
         } catch (\Exception $e) {
             Log::error('Error creating supplier payable', [
                 'order_id' => $order->id,
@@ -281,6 +297,15 @@ class PaymentService
         try {
 
             if ($order->prescription != null) {
+
+                $existing = Payable::where('order_id', $order->id)->where('vendor_type', 'physician')->first();
+                if ($existing) {
+                    Log::info('Commission payable already exists for order — skipping duplicate creation', [
+                        'order_id' => $order->id,
+                        'existing_payable_id' => $existing->id,
+                    ]);
+                    return $existing;
+                }
 
                 $prescription = $order->prescription;
                 $physician = $prescription->physician;
@@ -309,7 +334,7 @@ class PaymentService
                     'vendor_id' => $physician->id,
                     'vendor_type' => 'physician',
                     'amount' => $commissionAmount,
-                    'due_date' => now()->addDays(15), 
+                    'due_date' => now()->addDays(15),
                     'description' => "Commission for Dr. {$physician->name} - Order {$order->order_number}",
                     'metadata' => [
                         'commission_rate' => $commissionRate,
@@ -336,7 +361,6 @@ class PaymentService
 
                 return null;
             }
-
         } catch (\Exception $e) {
             Log::error('Error creating commission payable', [
                 'order_id' => $order->id,
@@ -401,7 +425,6 @@ class PaymentService
             ]);
 
             return true;
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -472,7 +495,6 @@ class PaymentService
             ]);
 
             return true;
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -506,17 +528,17 @@ class PaymentService
      */
     protected function generateReference(string $prefix): string
     {
-        return $prefix.'-'.date('Ymd').'-'.strtoupper(Str::random(8));
+        return $prefix . '-' . date('Ymd') . '-' . strtoupper(Str::random(8));
     }
 
     protected function generatePayableReference(): string
     {
-        return 'PAY-'.date('Ymd').'-'.strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 8));
+        return 'PAY-' . date('Ymd') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 8));
     }
 
     protected function generateReceivableReference(): string
     {
-        return 'REC-'.date('Ymd').'-'.strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 8));
+        return 'REC-' . date('Ymd') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 8));
     }
 
     /**
