@@ -208,6 +208,7 @@ class ViewOrder extends ViewRecord
     {
         return parent::getRecord()->loadMissing([
             'items.medicine',
+            'medicineItems.medicine'
         ]);
     }
 }

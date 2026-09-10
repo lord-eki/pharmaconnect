@@ -635,6 +635,18 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function medicineItems(): HasMany
+    {
+        return $this->items()->where('is_delivery_fee', false);
+    }
+
+    public function deliveryFeeItem(): HasOne
+    {
+        return $this->hasOne(OrderItem::class)->where('is_delivery_fee',true);
+    }
+
+
+
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);

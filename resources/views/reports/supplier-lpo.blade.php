@@ -369,7 +369,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($order->items as $index => $item)
+                @foreach($order->items->where('is_delivery_fee', false))
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td>
@@ -382,9 +382,9 @@
                         @endif
                     </td>
                     <td class="text-center">{{ number_format($item->quantity, 0) }} {{ $item->unit ?? 'pcs' }}</td>
-                    <td class="text-right">KES {{ number_format($item->unit_price ?? 0, 2) }}</td>
+                    <td class="text-right">KES {{ number_format($item->supplier_price ?? 0, 2) }}</td>
                     <td class="text-right">KES {{ number_format($item->tax_amount ?? 0, 2) }}</td>
-                    <td class="text-right"><strong>KES {{ number_format($item->total_price ?? 0, 2) }}</strong></td>
+                    <td class="text-right"><strong>KES {{ number_format(($item->supplier_price ?? 0) * $item->quantity, 2) }}</strong></td>
                 </tr>
                 @endforeach
             </tbody>
@@ -395,8 +395,9 @@
             <div class="totals-wrapper">
                 <table class="totals-table">
                     @php
-                        $subtotal = $order->items->sum('total_price');
-                        $taxAmount = $order->items->sum(function($item) {
+                        $medicineItems = $order->items->where('is_delivery_fee', false);
++                        $subtotal = $medicineItems->sum(fn ($item) => ($item->supplier_price ?? 0) * $item->quantity);
++                        $taxAmount = $medicineItems->sum(function($item) {
                             return $item->tax_amount ?? 0;
                         });
                         $shippingCost = $order->delivery->delivery_fee ?? 0;
@@ -419,7 +420,7 @@
                     @endif
                     <tr class="grand-total">
                         <td class="label">Grand Total:</td>
-                        <td class="amount">KES {{ number_format($order->total_amount, 2) }}</td>
++                        <td class="amount">KES {{ number_format($subtotal + $taxAmount + $shippingCost, 2) }}</td>
                     </tr>
                 </table>
             </div>

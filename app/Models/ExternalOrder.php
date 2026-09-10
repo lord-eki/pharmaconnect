@@ -227,7 +227,7 @@ class ExternalOrder extends Model
             if ($isFirstOrder) {
                 OrderItem::create([
                     'order_id'             => $order->id,
-                    'medicine_id'          => $data['item']->medicine_id,
+                    'medicine_id'          => $supplierItems[0]['item']->medicine_id,
                     'quotation_item_id'    => null,
                     'quantity'             => 1,
                     'unit_price'           => $deliveryFee,

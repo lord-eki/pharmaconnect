@@ -145,7 +145,7 @@ class OrderResource extends Resource
 
                 Section::make('Order Items')
                     ->schema([
-                        RepeatableEntry::make('items')
+                        RepeatableEntry::make('medicineItems')
                             ->label('')
                             ->schema([
                                 Grid::make(4)

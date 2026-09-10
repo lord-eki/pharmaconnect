@@ -22,7 +22,7 @@
             <div>
                 <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Grand Total</p>
                 <p class="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                    KES {{ number_format($orders->sum('total_amount') + $delivery->delivery_fee, 2) }}
+                    KES {{ number_format($orders->sum('total_amount'), 2) }}
                 </p>
             </div>
         </div>
@@ -151,7 +151,7 @@
               
 
                 <div class="space-y-2">
-                    @foreach ($order->items as $item)
+                    @foreach ($order->items->where('is_delivery_fee',false) as $item)
                         <div
                             class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
                             <div class="flex-1">
@@ -203,7 +203,7 @@
             <div class="flex justify-between items-center text-sm">
                 <span class="text-gray-600 dark:text-gray-400">Subtotal ({{ $orders->count() }} orders):</span>
                 <span class="font-semibold text-gray-900 dark:text-white">
-                    KES {{ number_format($orders->sum('total_amount'), 2) }}
+                    KES {{ number_format($orders->sum('total_amount') - $delivery->delivery_fee, 2) }}
                 </span>
             </div>
             <div class="flex justify-between items-center text-sm">
@@ -215,7 +215,7 @@
             <div class="pt-2 border-t border-primary-200 dark:border-primary-800 flex justify-between items-center">
                 <span class="text-base font-bold text-gray-900 dark:text-white">Grand Total:</span>
                 <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                    KES {{ number_format($orders->sum('total_amount') + $delivery->delivery_fee, 2) }}
+                    KES {{ number_format($orders->sum('total_amount'), 2) }}
                 </span>
             </div>
         </div>
