@@ -143,18 +143,16 @@ class InsurerReportsTable
                 Action::make('view_pdf')
                     ->label('View PDF')
                     ->icon('heroicon-o-eye')
-                    ->color('info')->visible((fn ($record) => filled($record->pdf_path)))
-                    ->action(function ($record) {
-                        return static::viewClaimPdf($record);
-                    }),
+                    ->color('info')
+                    ->url(fn ($record) =>route('insurance-claims.pdf', $record))
+                    ->openUrlInNewTab(),
 
                 Action::make('download_pdf')
                     ->label('Download')
                     ->icon('heroicon-o-arrow-down-tray')
-                    ->color('success')->visible((fn ($record) => ! filled($record->pdf_path)))
-                    ->action(function ($record) {
-                         return static::downloadClaimPdf($record);
-                    })->openUrlInNewTab(),
+                    ->color('success')
+                    ->url(fn ($record) => route('insurance-claims.download', $record))
+                    ->openUrlInNewTab(),
             ])
             ->toolbarActions([
                 BulkAction::make('export_statement')
