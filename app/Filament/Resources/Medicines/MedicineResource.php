@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Medicines;
 use App\Filament\Resources\Medicines\Pages\ManageMedicines;
 use App\Models\Medicine;
 use App\Models\MedicineCategory;
+use App\Services\PricingService;
 use BackedEnum;
 use Filament\Schemas\Components\Section;
 use Filament\Actions\DeleteBulkAction;
@@ -18,6 +19,8 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -37,149 +40,149 @@ class MedicineResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
- public static function form(Schema $schema): Schema
-{
-    return $schema
-        ->schema([
+    public static function form(Schema $schema): Schema
+    {
+        return $schema
+            ->schema([
 
-            Section::make('Basic Information')
-                ->columnSpanFull()
-                ->schema([
-                    Grid::make(6)->schema([
+                Section::make('Basic Information')
+                    ->columnSpanFull()
+                    ->schema([
+                        Grid::make(6)->schema([
 
-                        Select::make('category_id')
-                            ->label('Category')
-                            ->options(MedicineCategory::pluck('name', 'id'))
-                            ->searchable()
-                            ->preload()
-                            ->required()
-                            ->columnSpan(2),
+                            Select::make('category_id')
+                                ->label('Category')
+                                ->options(MedicineCategory::pluck('name', 'id'))
+                                ->searchable()
+                                ->preload()
+                                ->required()
+                                ->columnSpan(2),
 
-                        TextInput::make('generic_name')
-                            ->required()
-                            ->maxLength(255)
-                            ->unique(ignoreRecord: true)
-                            ->columnSpan(2),
+                            TextInput::make('generic_name')
+                                ->required()
+                                ->maxLength(255)
+                                ->unique(ignoreRecord: true)
+                                ->columnSpan(2),
 
-                        TextInput::make('brand_name')
-                            ->maxLength(255)
-                            ->columnSpan(2),
+                            TextInput::make('brand_name')
+                                ->maxLength(255)
+                                ->columnSpan(2),
 
-                        Select::make('dosage_form')
-                            ->options([
-                                'Tablet'      => 'Tablet',
-                                'Capsule'     => 'Capsule',
-                                'Syrup'       => 'Syrup',
-                                'Suspension'  => 'Suspension',
-                                'Injection'   => 'Injection',
-                                'Cream'       => 'Cream',
-                                'Ointment'    => 'Ointment',
-                                'Drops'       => 'Drops',
-                                'Inhaler'     => 'Inhaler',
-                                'Patch'       => 'Patch',
-                                'Suppository' => 'Suppository',
-                                'Solution'    => 'Solution',
-                            ])
-                            ->required()
-                            ->searchable()
-                            ->live()
-                            ->afterStateUpdated(function ($state, callable $set) {
-                                $volumeForms = ['Syrup', 'Suspension', 'Injection', 'Solution', 'Drops'];
-                                $set('measurement_type', in_array($state, $volumeForms) ? 'volume' : 'discrete');
-                            })
-                            ->columnSpan(2),
-
-                        TextInput::make('strength')
-                            ->required()
-                            ->maxLength(255)
-                            ->placeholder('e.g., 500mg, 10mg/ml')
-                            ->columnSpan(2),
-
-                        TextInput::make('manufacturer')
-                            ->required()
-                            ->maxLength(255)
-                            ->columnSpan(2),
-
-                        TextInput::make('pack_size')
-                            ->maxLength(255)
-                            ->placeholder('e.g., 10 tablets per strip, 30 capsules per bottle')
-                            ->columnSpan(2),
-                    ]),
-                ]),
-
-            Grid::make(2)
-                ->columnSpanFull()
-                ->schema([
-
-                    Section::make('Measurement')
-                        ->description('How this medicine is measured and dispensed')
-                        ->schema([
-                            Select::make('measurement_type')
-                                ->label('Measurement Type')
+                            Select::make('dosage_form')
                                 ->options([
-                                    'discrete' => 'Discrete (Tablets/Capsules)',
-                                    'volume'   => 'Volume-Based (Syrups/Injections)',
+                                    'Tablet'      => 'Tablet',
+                                    'Capsule'     => 'Capsule',
+                                    'Syrup'       => 'Syrup',
+                                    'Suspension'  => 'Suspension',
+                                    'Injection'   => 'Injection',
+                                    'Cream'       => 'Cream',
+                                    'Ointment'    => 'Ointment',
+                                    'Drops'       => 'Drops',
+                                    'Inhaler'     => 'Inhaler',
+                                    'Patch'       => 'Patch',
+                                    'Suppository' => 'Suppository',
+                                    'Solution'    => 'Solution',
                                 ])
                                 ->required()
-                                ->default('discrete')
+                                ->searchable()
                                 ->live()
-                                ->helperText('How is this medicine measured?'),
+                                ->afterStateUpdated(function ($state, callable $set) {
+                                    $volumeForms = ['Syrup', 'Suspension', 'Injection', 'Solution', 'Drops'];
+                                    $set('measurement_type', in_array($state, $volumeForms) ? 'volume' : 'discrete');
+                                })
+                                ->columnSpan(2),
 
-                            TextInput::make('volume_per_unit')
-                                ->label('Volume per Bottle/Vial')
-                                ->numeric()
-                                ->suffix('ml')
-                                ->minValue(1)
-                                ->step(1)
-                                ->helperText('Bottle/vial size in ml')
-                                ->visible(fn (Get $get) => $get('measurement_type') === 'volume')
-                                ->required(fn (Get $get) => $get('measurement_type') === 'volume'),
+                            TextInput::make('strength')
+                                ->required()
+                                ->maxLength(255)
+                                ->placeholder('e.g., 500mg, 10mg/ml')
+                                ->columnSpan(2),
 
-                            TextInput::make('unit_of_measurement')
-                                ->label('Unit of Measurement')
-                                ->maxLength(20)
-                                ->placeholder('tablets, capsules, units...')
-                                ->helperText('Display unit for this medicine')
-                                ->visible(fn (Get $get) => $get('measurement_type') === 'discrete'),
+                            TextInput::make('manufacturer')
+                                ->required()
+                                ->maxLength(255)
+                                ->columnSpan(2),
+
+                            TextInput::make('pack_size')
+                                ->maxLength(255)
+                                ->placeholder('e.g., 10 tablets per strip, 30 capsules per bottle')
+                                ->columnSpan(2),
                         ]),
+                    ]),
 
-                    Section::make('Regulatory & Status')
-                        ->schema([
-                            TextInput::make('ppb_registration_number')
-                                ->label('PPB Registration Number')
-                                ->maxLength(255),
+                Grid::make(2)
+                    ->columnSpanFull()
+                    ->schema([
 
-                            Grid::make(2)->schema([
-                                Toggle::make('prescription_required')
-                                    ->label('Prescription Required')
-                                    ->default(true)
-                                    ->inline(false),
+                        Section::make('Measurement')
+                            ->description('How this medicine is measured and dispensed')
+                            ->schema([
+                                Select::make('measurement_type')
+                                    ->label('Measurement Type')
+                                    ->options([
+                                        'discrete' => 'Discrete (Tablets/Capsules)',
+                                        'volume'   => 'Volume-Based (Syrups/Injections)',
+                                    ])
+                                    ->required()
+                                    ->default('discrete')
+                                    ->live()
+                                    ->helperText('How is this medicine measured?'),
 
-                                Toggle::make('controlled_substance')
-                                    ->label('Controlled Substance')
-                                    ->default(false)
-                                    ->inline(false),
+                                TextInput::make('volume_per_unit')
+                                    ->label('Volume per Bottle/Vial')
+                                    ->numeric()
+                                    ->suffix('ml')
+                                    ->minValue(1)
+                                    ->step(1)
+                                    ->helperText('Bottle/vial size in ml')
+                                    ->visible(fn(Get $get) => $get('measurement_type') === 'volume')
+                                    ->required(fn(Get $get) => $get('measurement_type') === 'volume'),
 
-                                Toggle::make('is_active')
-                                    ->label('Active')
-                                    ->default(true)
-                                    ->inline(false),
+                                TextInput::make('unit_of_measurement')
+                                    ->label('Unit of Measurement')
+                                    ->maxLength(20)
+                                    ->placeholder('tablets, capsules, units...')
+                                    ->helperText('Display unit for this medicine')
+                                    ->visible(fn(Get $get) => $get('measurement_type') === 'discrete'),
                             ]),
-                        ]),
-                ]),
 
-            Section::make('Active Ingredients')
-                ->columnSpanFull()
-                ->schema([
-                    Textarea::make('active_ingredients')
-                        ->required()
-                        ->rows(3)
-                        ->columnSpanFull()
-                        ->placeholder('List all active ingredients')
-                        ->hiddenLabel(),
-                ]),
-        ]);
-}
+                        Section::make('Regulatory & Status')
+                            ->schema([
+                                TextInput::make('ppb_registration_number')
+                                    ->label('PPB Registration Number')
+                                    ->maxLength(255),
+
+                                Grid::make(2)->schema([
+                                    Toggle::make('prescription_required')
+                                        ->label('Prescription Required')
+                                        ->default(true)
+                                        ->inline(false),
+
+                                    Toggle::make('controlled_substance')
+                                        ->label('Controlled Substance')
+                                        ->default(false)
+                                        ->inline(false),
+
+                                    Toggle::make('is_active')
+                                        ->label('Active')
+                                        ->default(true)
+                                        ->inline(false),
+                                ]),
+                            ]),
+                    ]),
+
+                Section::make('Active Ingredients')
+                    ->columnSpanFull()
+                    ->schema([
+                        Textarea::make('active_ingredients')
+                            ->required()
+                            ->rows(3)
+                            ->columnSpanFull()
+                            ->placeholder('List all active ingredients')
+                            ->hiddenLabel(),
+                    ]),
+            ]);
+    }
 
     public static function table(Table $table): Table
     {
@@ -207,12 +210,12 @@ class MedicineResource extends Resource
                 TextColumn::make('measurement_type')
                     ->label('Type')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'discrete' => 'info',
                         'volume'   => 'success',
                         default    => 'gray',
                     })
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                    ->formatStateUsing(fn(string $state): string => match ($state) {
                         'discrete' => 'Discrete',
                         'volume'   => 'Volume',
                         default    => $state,
@@ -224,11 +227,22 @@ class MedicineResource extends Resource
                     ->suffix(' ml')
                     ->toggleable()
                     ->sortable()
-                    ->visible(fn ($record) => $record?->measurement_type === 'volume'),
+                    ->visible(fn($record) => $record?->measurement_type === 'volume'),
 
                 TextColumn::make('category.name')
                     ->sortable()
                     ->toggleable(),
+                TextColumn::make('cheapest_price')
+                    ->label('Price')
+                    ->placeholder('---')
+                    ->money('KES')
+                    ->sortable()
+                    ->getStateUsing(function ($record) {
+                        $supplierPrice = $record->getCheapestSupplierPrice(1);
+                        if (!$supplierPrice) return null;
+                        $pricing =  app(PricingService::class)->calculateFInalPrice((float) $supplierPrice, $record, 1);
+                        return $pricing['final_unit_price'];
+                    })->color('success'),
 
                 TextColumn::make('manufacturer')
                     ->searchable()
@@ -257,7 +271,7 @@ class MedicineResource extends Resource
                         'Tablet'   => 'Tablet',
                         'Capsule'  => 'Capsule',
                         'Syrup'    => 'Syrup',
-                        'Injection'=> 'Injection',
+                        'Injection' => 'Injection',
                     ]),
 
                 SelectFilter::make('measurement_type')
@@ -282,7 +296,18 @@ class MedicineResource extends Resource
                     ]),
             ])
             ->actions([
-                \Filament\Actions\EditAction::make(),
+                ViewAction::make()
+                ->modalHeading(fn($record) => $record->display_name)
+                ->modalWidth('4xl')
+                ->modalContent(function($record){
+                    $pricingService =  app(PricingService::class);
+                    $suppliers = $record->getAvailableSuppliers(1);
+                    $suppliersWithPricing = $suppliers->map(function($supplier) use ($pricingService , $record){
+                        $supplier->pricing = $pricingService->calculateFinalPrice($supplier->unit_price,$record , 1);
+                        return $supplier;
+                    });
+                }),
+                EditAction::make(),
             ])
             ->bulkActions([
                 BulkActionGroup::make([

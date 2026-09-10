@@ -100,6 +100,7 @@ class MedicinesTable
             ->recordActions([
                 ViewAction::make()
                     ->modalHeading(fn ($record) => $record->display_name)
+                    ->modalWidth('4xl')
                     ->modalContent(function ($record) {
                         $pricingService = app(PricingService::class);
                         $suppliers = $record->getAvailableSuppliers(1);

@@ -17,29 +17,29 @@ class RevenueService
         $startDate = $startDate ?? now()->startOfDay();
         $endDate = $endDate ?? now()->endOfDay();
 
-        // 1. GROSS REVENUE (Total Receivables from delivered orders)
+        // Total Receivables from delivered orders
         $grossRevenue = $this->getGrossRevenue($startDate, $endDate);
 
-        // 2. COLLECTED REVENUE (Actually received payments)
+        // Actually received payments
         $collectedRevenue = $this->getCollectedRevenue($startDate, $endDate);
 
-        // 3. PENDING REVENUE (Delivered but not yet paid)
+        // Delivered but not yet paid
         $pendingRevenue = $this->getPendingRevenue($startDate, $endDate);
 
-        // 4. COST OF GOODS SOLD (Supplier payables)
+        // Supplier payables
         $cogs = $this->getCostOfGoodsSold($startDate, $endDate);
 
-        // 5. COMMISSION EXPENSES (Physician commissions)
+        // Physician commissions
         $commissionExpense = $this->getCommissionExpense($startDate, $endDate);
 
-        // 6. GROSS PROFIT (Revenue - COGS)
+        // Revenue - COGS
         $grossProfit = $grossRevenue - $cogs;
 
-        // 7. NET PROFIT (Gross Profit - Commissions - Delivery Costs)
+        // Gross Profit - Commissions - Delivery Costs
         $deliveryCosts = $this->getDeliveryCosts($startDate, $endDate);
         $netProfit = $grossProfit - $commissionExpense;
 
-        // 8. PROFIT MARGINS
+        // Profit margins
         $grossMargin = $grossRevenue > 0 ? ($grossProfit / $grossRevenue) * 100 : 0;
         $netMargin = $grossRevenue > 0 ? ($netProfit / $grossRevenue) * 100 : 0;
 
@@ -66,7 +66,7 @@ class RevenueService
     {
         return Receivable::whereHas('order', function ($query) use ($startDate, $endDate) {
             $query->where('status', 'delivered')
-                  ->whereBetween('delivered_at', [$startDate, $endDate]);
+                ->whereBetween('delivered_at', [$startDate, $endDate]);
         })->sum('amount');
     }
 
@@ -77,8 +77,10 @@ class RevenueService
     public function getCollectedRevenue($startDate, $endDate): float
     {
         return Receivable::whereNotNull('received_at')
-            ->whereBetween('received_at', [$startDate, $endDate])
-            ->sum('amount');
+            ->whereHas('order', function ($query) use ($startDate, $endDate) {
+                $query->where('status', 'delivered')
+                    ->whereBetween('delivered_at', [$startDate, $endDate]);
+            })->sum('amount');
     }
 
     /**
@@ -89,7 +91,7 @@ class RevenueService
         return Receivable::whereNull('received_at')
             ->whereHas('order', function ($query) use ($startDate, $endDate) {
                 $query->where('status', 'delivered')
-                      ->whereBetween('delivered_at', [$startDate, $endDate]);
+                    ->whereBetween('delivered_at', [$startDate, $endDate]);
             })->sum('amount');
     }
 
@@ -101,7 +103,7 @@ class RevenueService
         return Payable::where('vendor_type', 'supplier')
             ->whereHas('order', function ($query) use ($startDate, $endDate) {
                 $query->where('status', 'delivered')
-                      ->whereBetween('delivered_at', [$startDate, $endDate]);
+                    ->whereBetween('delivered_at', [$startDate, $endDate]);
             })->sum('amount');
     }
 
@@ -113,7 +115,7 @@ class RevenueService
         return Payable::where('vendor_type', 'physician')
             ->whereHas('order', function ($query) use ($startDate, $endDate) {
                 $query->where('status', 'delivered')
-                      ->whereBetween('delivered_at', [$startDate, $endDate]);
+                    ->whereBetween('delivered_at', [$startDate, $endDate]);
             })->sum('amount');
     }
 
@@ -139,7 +141,7 @@ class RevenueService
     {
         $receivables = Receivable::whereHas('order', function ($query) use ($startDate, $endDate) {
             $query->where('status', 'delivered')
-                  ->whereBetween('delivered_at', [$startDate, $endDate]);
+                ->whereBetween('delivered_at', [$startDate, $endDate]);
         })->get();
 
         return [
@@ -214,12 +216,12 @@ class RevenueService
         return [
             'current' => [
                 'amount' => $receivables->filter(function ($r) use ($now) {
-                    return $r->order && $r->order->delivered_at && 
-                           $r->order->delivered_at->diffInDays($now) <= 30;
+                    return $r->order && $r->order->delivered_at &&
+                        $r->order->delivered_at->diffInDays($now) <= 30;
                 })->sum('amount'),
                 'count' => $receivables->filter(function ($r) use ($now) {
-                    return $r->order && $r->order->delivered_at && 
-                           $r->order->delivered_at->diffInDays($now) <= 30;
+                    return $r->order && $r->order->delivered_at &&
+                        $r->order->delivered_at->diffInDays($now) <= 30;
                 })->count(),
             ],
             '31_60_days' => [
@@ -248,12 +250,12 @@ class RevenueService
             ],
             'over_90_days' => [
                 'amount' => $receivables->filter(function ($r) use ($now) {
-                    return $r->order && $r->order->delivered_at && 
-                           $r->order->delivered_at->diffInDays($now) > 90;
+                    return $r->order && $r->order->delivered_at &&
+                        $r->order->delivered_at->diffInDays($now) > 90;
                 })->sum('amount'),
                 'count' => $receivables->filter(function ($r) use ($now) {
-                    return $r->order && $r->order->delivered_at && 
-                           $r->order->delivered_at->diffInDays($now) > 90;
+                    return $r->order && $r->order->delivered_at &&
+                        $r->order->delivered_at->diffInDays($now) > 90;
                 })->count(),
             ],
         ];
@@ -265,7 +267,7 @@ class RevenueService
     public function getDailyRevenueTrend($days = 30): array
     {
         $startDate = now()->subDays($days)->startOfDay();
-        
+
         return Order::where('status', 'delivered')
             ->whereBetween('delivered_at', [$startDate, now()])
             ->selectRaw('DATE(delivered_at) as date')

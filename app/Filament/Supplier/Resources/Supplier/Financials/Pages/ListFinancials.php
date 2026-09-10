@@ -83,7 +83,8 @@ class ListFinancials extends ListRecords
                         ->options(function(){
                             $start = 2024;
                             $end = now()->year;
-                            return array_combine(range($end,$start), range($start,$end));
+                            $years =  range($end , $start);
+                            return array_combine($years , $years);
                         })
                         ->default(now()->year)
                         ->required(),
