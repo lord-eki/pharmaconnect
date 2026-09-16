@@ -6,7 +6,7 @@ use App\Filament\Exports\PayableExporter;
 use App\Models\Commission;
 use App\Models\Payable;
 use App\Models\Payment;
-use Auth;
+use Illuminate\Support\Facades\Auth;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -75,6 +75,26 @@ class PayablesTable
                     ->label('Paid')->placeholder('--')
                     ->boolean()
                     ->sortable(),
+
+                TextColumn::make('related_commission_note')
+                    ->label('Related')
+                    ->placeholder('--')
+                    ->getStateUsing(function (Payable $record) {
+                        if ($record->vendor_type !== 'physician') {
+                            return null;
+                        }
+
+                        $siblings = PayablesTable::siblingCommissionPayables($record);
+
+                        if ($siblings->isEmpty()) {
+                            return null;
+                        }
+
+                        $total = $siblings->sum('amount') + $record->amount;
+
+                        return '+'.$siblings->count().' more for this Rx — KES '.number_format($total, 2).' total';
+                    })
+                    ->color('warning'),
 
             ])
             ->filters([

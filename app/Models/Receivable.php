@@ -10,7 +10,7 @@ class Receivable extends Model
         'reference', 'order_id', 'prescription_id', 'patient_id',
         'insurance_provider_id', 'amount', 'payment_source',
         'claim_status', 'claim_reference', 'claim_submitted_at',
-        'received_at',
+        'received_at', 'external_order_id',
     ];
 
     protected $casts = [
@@ -27,6 +27,11 @@ class Receivable extends Model
     public function order()
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function externalOrder()
+    {
+        return $this->belongsTo(ExternalOrder::class);
     }
 
     public function prescription()

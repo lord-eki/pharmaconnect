@@ -17,9 +17,12 @@ use Filament\Notifications\Notification;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
 
 class ReceivablesTable
@@ -72,7 +75,8 @@ class ReceivablesTable
                     ->label('Amount')
                     ->money('KES')
                     ->sortable()
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->summarize(Sum::make()->label('Total')->money('KES')),
 
                 IconColumn::make('received_at')
                     ->label('Received')
@@ -81,6 +85,19 @@ class ReceivablesTable
                     ->tooltip(fn ($record) => $record->received_at ? 'Received on '.$record->received_at->format('M d, Y') : 'Not received'),
 
             ])
+            ->groups([
+                Group::make('external_order_id')
+                    ->label('By Insurance Claim')
+                    ->getTitleFromRecordUsing(fn (Receivable $record) => $record->external_order_id
+                        ? 'Claim — Order #' . $record->external_order_id
+                        : 'Not Insurance-Claim Based'),
+                Group::make('prescription_id')
+                    ->label('By Prescription')
+                    ->getTitleFromRecordUsing(fn (Receivable $record) => $record->prescription_id
+                        ? 'Prescription — ' . ($record->prescription?->prescription_number ?? "#{$record->prescription_id}")
+                        : 'Not Prescription-Based'),
+            ])
+            ->defaultGroup('external_order_id')
             ->filters([
                 SelectFilter::make('payment_source')
                     ->label('Payer Type')
@@ -177,7 +194,19 @@ class ReceivablesTable
                         ->icon('heroicon-o-check-circle')
                         ->color('success')
                         ->requiresConfirmation()
-                        ->modalDescription('Record that payment has been received')
+                        ->modalDescription(function (Receivable $record) {
+                            $siblings = static::siblingReceivables($record);
+
+                            if ($siblings->isEmpty()) {
+                                return 'Record that payment has been received';
+                            }
+
+                            $total = $siblings->sum('amount') + $record->amount;
+
+                            return 'This claim/prescription has '.($siblings->count() + 1).' receivables from split orders. '
+                                .'Recording this payment will mark all of them as received together — total KES '
+                                .number_format($total, 2).' — since they represent a single payment from the payer.';
+                        })
                         ->visible(fn (Receivable $record) => $record->payment_source === 'insurance' ? $record->claim_status === 'approved' :true)
                         ->form([
                             DateTimePicker::make('received_at')
@@ -191,30 +220,38 @@ class ReceivablesTable
                                 ->label('Payment Notes'),
                         ])
                         ->action(function (Receivable $record, array $data) {
-                            $record->update([
-                                'received_at' => $data['received_at'],
-                            ]);
+                            $siblings = static::siblingReceivables($record);
+                            $group = $siblings->push($record);
 
-                            // Update claim status to paid if insurance
-                            if ($record->payment_source === 'insurance') {
-                                $record->update(['claim_status' => 'paid']);
-                            }
+                            DB::transaction(function () use ($group, $data) {
+                                foreach ($group as $receivable) {
+                                    $receivable->update([
+                                        'received_at' => $data['received_at'],
+                                    ]);
 
-                            // Create transaction record
-                            $record->transaction()->create([
-                                'reference' => 'TXN-'.strtoupper(uniqid()),
-                                'amount' => $record->amount,
-                                'currency' => 'KES',
-                                'type' => 'receivable',
-                                'status' => 'completed',
-                                'completed_at' => $data['received_at'],
-                                'notes' => $data['notes'] ?? null,
-                            ]);
+                                    if ($receivable->payment_source === 'insurance') {
+                                        $receivable->update(['claim_status' => 'paid']);
+                                    }
+
+                                    $receivable->transaction()->create([
+                                        'reference' => 'TXN-'.strtoupper(uniqid()),
+                                        'amount' => $receivable->amount,
+                                        'currency' => 'KES',
+                                        'type' => 'receivable',
+                                        'status' => 'completed',
+                                        'completed_at' => $data['received_at'],
+                                        'notes' => $data['notes'] ?? null,
+                                    ]);
+                                }
+                            });
+
+                            $total = $group->sum('amount');
 
                             Notification::make()
                                 ->success()
                                 ->title('Payment Recorded')
-                                ->body('KES '.number_format($record->amount, 2).' received from '.($record->payment_source === 'insurance' ? $record->insuranceProvider->company_name : $record->patient->last_name))
+                                ->body('KES '.number_format($total, 2).' received from '.($record->payment_source === 'insurance' ? $record->insuranceProvider->company_name : $record->patient->last_name)
+                                    .($group->count() > 1 ? ' ('.$group->count().' receivables confirmed together)' : ''))
                                 ->send();
                         }),
 
@@ -253,5 +290,31 @@ class ReceivablesTable
                     DeleteBulkAction::make(),
                 ]),
             ])->defaultSort('created_at', 'desc');
+    }
+
+    /**
+     * Other unreceived receivables that belong to the same claim (or, for
+     * patient-pay orders, the same prescription) as $record — i.e. siblings
+     * created when an order was split across multiple suppliers. Used so
+     * confirming payment on one always confirms the whole group together,
+     * rather than letting the same underlying payment be confirmed piecemeal.
+     */
+    protected static function siblingReceivables(Receivable $record)
+    {
+        if ($record->external_order_id) {
+            return Receivable::where('id', '!=', $record->id)
+                ->where('external_order_id', $record->external_order_id)
+                ->whereNull('received_at')
+                ->get();
+        }
+
+        if ($record->prescription_id) {
+            return Receivable::where('id', '!=', $record->id)
+                ->where('prescription_id', $record->prescription_id)
+                ->whereNull('received_at')
+                ->get();
+        }
+
+        return $record->newCollection();
     }
 }
