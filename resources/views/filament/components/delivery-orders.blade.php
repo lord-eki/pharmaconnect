@@ -1,3 +1,12 @@
+
+@php
+
+$ordersSubtotal = $orders->sum(fn($o) => $o->items->sum('total_price'));
+$deliveryFee = (float) $delivery->delivery_fee;
+$grandTotal = $ordersSubtotal + $deliveryFee;
+
+@endphp
+
 <div class="space-y-4">
 
     {{-- Summary Card --}}
@@ -10,19 +19,19 @@
             <div>
                 <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Orders Total</p>
                 <p class="text-2xl font-bold text-green-600 dark:text-green-400">
-                    KES {{ number_format($orders->sum('total_amount'), 2) }}
+                    KES {{ number_format($ordersSubtotal, 2) }}
                 </p>
             </div>
             <div>
                 <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Delivery Fee</p>
                 <p class="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                    KES {{ number_format($delivery->delivery_fee, 2) }}
+                    KES {{ number_format($deliveryFee, 2) }}
                 </p>
             </div>
             <div>
                 <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Grand Total</p>
                 <p class="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                    KES {{ number_format($orders->sum('total_amount'), 2) }}
+                    KES {{ number_format($grandTotal, 2) }}
                 </p>
             </div>
         </div>
@@ -188,7 +197,7 @@
                 <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
                     <span class="font-semibold text-gray-900 dark:text-white">Order Total:</span>
                     <span class="text-xl font-bold text-primary-600 dark:text-primary-400">
-                        KES {{ number_format($order->total_amount, 2) }}
+                        KES {{ number_format($order->items->sum('total_price'), 2) }}
                     </span>
                 </div>
             </div>
@@ -203,7 +212,7 @@
             <div class="flex justify-between items-center text-sm">
                 <span class="text-gray-600 dark:text-gray-400">Subtotal ({{ $orders->count() }} orders):</span>
                 <span class="font-semibold text-gray-900 dark:text-white">
-                    KES {{ number_format($orders->sum('total_amount') - $delivery->delivery_fee, 2) }}
+                    KES {{ number_format($ordersSubtotal, 2) }}
                 </span>
             </div>
             <div class="flex justify-between items-center text-sm">
@@ -215,7 +224,7 @@
             <div class="pt-2 border-t border-primary-200 dark:border-primary-800 flex justify-between items-center">
                 <span class="text-base font-bold text-gray-900 dark:text-white">Grand Total:</span>
                 <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                    KES {{ number_format($orders->sum('total_amount'), 2) }}
+                    KES {{ number_format($grandTotal, 2) }}
                 </span>
             </div>
         </div>

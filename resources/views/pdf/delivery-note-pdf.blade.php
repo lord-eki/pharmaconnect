@@ -257,7 +257,7 @@
                     </tr>
                     <tr>
                         <td colspan="3" style="text-align: right; font-size: 14px;">TOTAL:</td>
-                        <td style="text-align: right; font-size: 14px;">{{ number_format($orders->sum('total_amount') + $delivery->delivery_fee, 2) }}</td>
+                        <td style="text-align: right; font-size: 14px;">{{ number_format($delivery->grand_total, 2) }}</td>
                     </tr>
                 </tfoot>
                 @endif

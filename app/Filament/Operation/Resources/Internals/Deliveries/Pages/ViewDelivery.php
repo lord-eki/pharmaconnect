@@ -69,7 +69,7 @@ class ViewDelivery extends ViewRecord
 
                                 TextEntry::make('total_amount')
                                     ->label('Orders Total')
-                                    ->state(fn ($record) => $record->orders->sum('total_amount'))
+                                    ->state(fn ($record) => $record->orders_subtotal)
                                     ->money('KES')
                                     ->weight('bold'),
                             ]),

@@ -112,7 +112,7 @@
                     </tr>
                     <tr style="border-top: 2px solid #ff6b35;">
                         <td colspan="2" style="padding: 10px 0; text-align: right; font-weight: bold; font-size: 16px;">Total:</td>
-                        <td style="padding: 10px 0; text-align: right; font-weight: bold; font-size: 16px; color: #ff6b35;">KES {{ number_format($orders->sum('total_amount') + $delivery->delivery_fee, 2) }}</td>
+                        <td style="padding: 10px 0; text-align: right; font-weight: bold; font-size: 16px; color: #ff6b35;">KES {{ number_format($delivery->grand_total, 2) }}</td>
                     </tr>
                 </tfoot>
             </table>

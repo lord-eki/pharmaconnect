@@ -231,4 +231,17 @@ class Delivery extends Model
 
         return $this->deliveryNoteDocument->getDownloadUrl();
     }
+
+    public function getOrdersSubtotalAttribute(): float
+    {
+        $this->loadMissing('orders.items');
+        
+        return (float) $this->orders->sum(fn($order) => $order->items->sum('total_price'));
+
+    }
+
+    public function getGrandTotalAttribute(): float
+    {
+        return $this->orders_subtotal + (float) $this->delivery_fee;
+    }
 }

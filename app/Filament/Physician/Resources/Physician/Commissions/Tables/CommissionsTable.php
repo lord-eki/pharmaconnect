@@ -111,9 +111,6 @@ class CommissionsTable
                                 fn ($q, $date) => $q->whereDate('created_at', '<=', $date));
                     }),
             ])
-            ->filters([
-                //
-            ])
             ->recordActions([
                 ViewAction::make()
             ])

@@ -46,7 +46,6 @@ class MedicinesTable
                     ->label('Price')
                     ->placeholder('--')
                     ->money('KES')
-                    ->sortable()
                     ->getStateUsing(function ($record) {
                         $supplierPrice = $record->getCheapestSupplierPrice(1);
 
@@ -102,17 +101,13 @@ class MedicinesTable
                     ->modalHeading(fn ($record) => $record->display_name)
                     ->modalWidth('4xl')
                     ->modalContent(function ($record) {
-                        $pricingService = app(PricingService::class);
-                        $suppliers = $record->getAvailableSuppliers(1);
-                        $suppliersWithPricing = $suppliers->map(function($supplier) use($pricingService, $record) {
-                            $pricing = $pricingService->calculateFinalPrice($supplier->unit_price, $record, 1);
-                           $supplier->pricing = $pricing;
-                           return $supplier;
-                        });
+                        $cheapest = $record->getAvailableSuppliers(1)->first();
+                        $pricing = $cheapest ? app(PricingService::class)->calculateFinalPrice((float) $cheapest->unit_price,$record,1) : null;
 
-                        return view('filament.insurer.resources.price-catalogue.view-suppliers', [
+                        return view('filament.operation.modals.medicine-price', [
                             'medicine' => $record,
-                            'suppliers' => $suppliersWithPricing,
+                            'cheapest' => $cheapest,
+                            'pricing' => $pricing,
                         ]);
 
 
