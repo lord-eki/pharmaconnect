@@ -16,15 +16,15 @@ class InsuranceClaimPDFService
         $claim->load([
             'prescription.items.medicine',
             'prescription.physician',
-            'prescription.orders',       
+            'prescription.orders',
             'externalOrder.items.medicine',
-            'externalOrder.orders',       
+            'externalOrder.orders',
             'patient',
             'insuranceProvider',
         ]);
 
         $provider = $claim->insuranceProvider;
-        
+
         // Prepare branding data
         $branding = [
             'logo_url' => $provider->logo ? asset('storage/' . $provider->logo) : null,
@@ -46,7 +46,7 @@ class InsuranceClaimPDFService
         if ($parentOrders) {
             $firstOrder = $parentOrders->sortBy('id')->first();
             if ($firstOrder) {
-                $firstOrder->load(['items' => fn ($q) => $q->orderBy('id', 'asc')]);
+                $firstOrder->load(['items' => fn($q) => $q->orderBy('id', 'asc')]);
 
                 $deliveryFeeItem = $firstOrder->items->firstWhere('is_delivery_fee', true);
 
@@ -66,9 +66,9 @@ class InsuranceClaimPDFService
             'branding'        => $branding,
             'deliveryFeeItem' => $deliveryFeeItem,
         ])
-        ->setPaper('a4', 'portrait')
-        ->setOption('margin-top', 10)
-        ->setOption('margin-bottom', 10);
+            ->setPaper('a4', 'portrait')
+            ->setOption('margin-top', 10)
+            ->setOption('margin-bottom', 10);
     }
 
     /**
@@ -77,19 +77,19 @@ class InsuranceClaimPDFService
     protected static function getDefaultFooter($provider): string
     {
         $parts = [];
-        
+
         if ($provider->phone) {
             $parts[] = "Tel: {$provider->phone}";
         }
-        
+
         if ($provider->email) {
             $parts[] = "Email: {$provider->email}";
         }
-        
+
         if ($provider->website) {
             $parts[] = "Web: {$provider->website}";
         }
-        
+
         if ($provider->address) {
             $parts[] = $provider->address;
         }
@@ -104,8 +104,10 @@ class InsuranceClaimPDFService
     {
         $pdf = self::generate($claim);
         $filename = "claim-{$claim->claim_number}.pdf";
-        
-        return $pdf->download($filename);
+
+        return response()->streamDownload(function () use ($pdf) {
+            echo $pdf->output();
+        }, $filename, ['Content-Type' => 'application/pdf']);
     }
 
     /**
@@ -115,7 +117,7 @@ class InsuranceClaimPDFService
     {
         $pdf = self::generate($claim);
         $filename = "claim-{$claim->claim_number}.pdf";
-        
+
         return $pdf->stream($filename);
     }
 
@@ -127,14 +129,14 @@ class InsuranceClaimPDFService
         $pdf = self::generate($claim);
         $filename = "claim-{$claim->claim_number}.pdf";
         $fullPath = storage_path("app/public/{$path}/{$filename}");
-        
+
         // Ensure directory exists
         if (!file_exists(dirname($fullPath))) {
             mkdir(dirname($fullPath), 0755, true);
         }
-        
+
         $pdf->save($fullPath);
-        
+
         return "{$path}/{$filename}";
     }
 }

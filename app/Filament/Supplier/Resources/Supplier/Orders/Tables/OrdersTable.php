@@ -24,6 +24,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class OrdersTable
 {
@@ -52,7 +53,7 @@ class OrdersTable
                 TextColumn::make('status')
                     ->badge()
                     ->sortable()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'pending' => 'warning',
                         'confirmed' => 'info',
                         'processing' => 'primary',
@@ -61,7 +62,7 @@ class OrdersTable
                         'cancelled' => 'danger',
                         'sent_to_supplier' => 'gray',
                         default => 'gray',
-                    })->formatStateUsing(fn (string $state): string => match ($state) {
+                    })->formatStateUsing(fn(string $state): string => match ($state) {
                         'pending' => 'Pending',
                         'confirmed' => 'Confirmed',
                         'processing' => 'Processing',
@@ -80,11 +81,12 @@ class OrdersTable
                     ->label('Expected Delivery')
                     ->dateTime()
                     ->sortable()
-                    ->color(fn ($state, $record) => $state && $state->isPast() && $record->status !== 'delivered'
-                                            ? 'danger'
-                                            : 'success'
+                    ->color(
+                        fn($state, $record) => $state && $state->isPast() && $record->status !== 'delivered'
+                            ? 'danger'
+                            : 'success'
                     )
-                    ->description(fn ($state) => $state ? $state->diffForHumans() : null),
+                    ->description(fn($state) => $state ? $state->diffForHumans() : null),
 
                 IconColumn::make('is_overdue')
                     ->label('Overdue')
@@ -108,9 +110,10 @@ class OrdersTable
 
                 Filter::make('overdue')
                     ->label('Overdue Orders')
-                    ->query(fn (Builder $query) => $query
-                        ->where('expected_delivery', '<', now())
-                        ->whereNotIn('status', ['delivered', 'cancelled'])
+                    ->query(
+                        fn(Builder $query) => $query
+                            ->where('expected_delivery', '<', now())
+                            ->whereNotIn('status', ['delivered', 'cancelled'])
                     ),
 
                 Filter::make('ordered_at')
@@ -124,11 +127,11 @@ class OrdersTable
                         return $query
                             ->when(
                                 $data['ordered_from'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('ordered_at', '>=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('ordered_at', '>=', $date),
                             )
                             ->when(
                                 $data['ordered_until'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('ordered_at', '<=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('ordered_at', '<=', $date),
                             );
                     }),
             ])
@@ -142,37 +145,18 @@ class OrdersTable
                         ->color('success')
                         ->action(function (Order $record) {
                             try {
-                                $reportService = app(OrderReportService::class);
-
-                                $path = $reportService->generateSupplierLPO($record);
-
-                                $url = Storage::url($path);
-
-                                Notification::make()
-                                    ->title('LPO Ready')
-                                    ->body('Your LPO has been generated successfully.')
-                                    ->success()
-                                    ->actions([
-                                        Action::make('download')
-                                            ->label('Download PDF')
-                                            ->url($url)
-                                            ->openUrlInNewTab(),
-                                    ])
-                                    ->persistent()
-                                    ->send();
-
-                            } catch (\Exception $e) {
-                                Log::error('Supplier LPO Generation Error', [
+                                return app(OrderReportService::class)->downloadSupplierLPO($record);
+                            } catch (Throwable $e) {
+                                Log::error('Supplier LPO download error', [
                                     'order_id' => $record->id,
-                                    'error' => $e->getMessage(),
-                                    'trace' => $e->getTraceAsString(),
+                                    'error' => $e->getMessage()
                                 ]);
 
                                 Notification::make()
-                                    ->title('Error generating LPO')
-                                    ->body('Unable to generate PDF. Please try again or contact support.')
-                                    ->danger()
-                                    ->send();
+                                ->title('Error generating LPO')
+                                ->body('Unable to generate PDF. Please try again later')
+                                ->danger()
+                                ->send();
                             }
                         })
                         ->requiresConfirmation(false)
@@ -182,7 +166,7 @@ class OrdersTable
                         ->label('Confirm Order')
                         ->icon('heroicon-o-check-circle')
                         ->color('success')
-                        ->visible(fn ($record) => $record->status === 'pending')
+                        ->visible(fn($record) => $record->status === 'pending')
                         ->requiresConfirmation()
                         ->modalHeading('Confirm Order')
                         ->modalDescription('Confirm that you can fulfill this order. Stock will be deducted.')
@@ -222,16 +206,16 @@ class OrdersTable
                         ->label('Start Processing')
                         ->icon('heroicon-o-arrow-path')
                         ->color('info')
-                        ->visible(fn ($record) => $record->status === 'confirmed')
+                        ->visible(fn($record) => $record->status === 'confirmed')
                         ->requiresConfirmation()
-                        ->action(fn (Order $record) => $record->update(['status' => 'processing']))
+                        ->action(fn(Order $record) => $record->update(['status' => 'processing']))
                         ->successNotificationTitle('Order marked as processing'),
 
                     Action::make('mark_shipped')
                         ->label('Mark as Shipped')
                         ->icon('heroicon-o-truck')
                         ->color('primary')
-                        ->visible(fn ($record) => in_array($record->status, ['confirmed', 'processing']))
+                        ->visible(fn($record) => in_array($record->status, ['confirmed', 'processing']))
                         ->requiresConfirmation()
                         ->modalHeading('Mark Order as Shipped')
                         ->form([
@@ -244,12 +228,12 @@ class OrdersTable
                         ])
                         ->action(function (Order $record, array $data) {
                             $notes = $record->notes ?? '';
-                            $notes .= "\n\nShipped: ".now()->toDateTimeString();
+                            $notes .= "\n\nShipped: " . now()->toDateTimeString();
                             if (! empty($data['tracking_number'])) {
-                                $notes .= "\nTracking: ".$data['tracking_number'];
+                                $notes .= "\nTracking: " . $data['tracking_number'];
                             }
                             if (! empty($data['shipping_notes'])) {
-                                $notes .= "\nNotes: ".$data['shipping_notes'];
+                                $notes .= "\nNotes: " . $data['shipping_notes'];
                             }
 
                             $record->update([
@@ -263,7 +247,7 @@ class OrdersTable
                         ->label('Cancel Order')
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
-                        ->visible(fn ($record) => ! in_array($record->status, ['delivered', 'cancelled']))
+                        ->visible(fn($record) => ! in_array($record->status, ['delivered', 'cancelled']))
                         ->requiresConfirmation()
                         ->modalHeading('Cancel Order')
                         ->modalDescription('Are you sure you want to cancel this order? Stock will be restored.')
@@ -290,7 +274,7 @@ class OrdersTable
 
                             $record->update([
                                 'status' => 'cancelled',
-                                'notes' => ($record->notes ?? '')."\n\nCancelled: ".now()->toDateTimeString()."\nReason: ".$data['cancellation_reason'],
+                                'notes' => ($record->notes ?? '') . "\n\nCancelled: " . now()->toDateTimeString() . "\nReason: " . $data['cancellation_reason'],
                             ]);
                         })
                         ->successNotificationTitle('Order cancelled successfully'),
@@ -316,9 +300,4 @@ class OrdersTable
             ])->defaultSort('ordered_at', 'desc')
             ->poll('60s');
     }
-
-
-
-
-    
 }

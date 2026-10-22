@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InvoiceService
 {
@@ -20,12 +21,12 @@ class InvoiceService
     {
         $prefix = 'INV';
         $date = now()->format('Ym');
-        
+
         // Get the last invoice number for this month
         $lastInvoice = Invoice::where('invoice_number', 'LIKE', "{$prefix}{$date}%")
             ->orderBy('invoice_number', 'desc')
             ->first();
-        
+
         if ($lastInvoice) {
             // Extract sequence number and increment
             $lastSequence = (int) substr($lastInvoice->invoice_number, -5);
@@ -33,7 +34,7 @@ class InvoiceService
         } else {
             $sequence = '00001';
         }
-        
+
         return "{$prefix}{$date}-{$sequence}";
     }
 
@@ -61,7 +62,7 @@ class InvoiceService
 
         // Calculate amounts
         $subtotal = $order->items->sum('total_price');
-        $taxAmount = $order->items->sum(function($item) {
+        $taxAmount = $order->items->sum(function ($item) {
             return $item->tax_amount ?? 0;
         });
         $discountAmount = $data['discount_amount'] ?? 0;
@@ -116,9 +117,9 @@ class InvoiceService
 
             $fileName = "Invoice_" . preg_replace('/[^A-Za-z0-9_-]/', '_', $invoice->invoice_number) . "_" . time() . ".pdf";
             $path = "reports/invoices/{$fileName}";
-            
+
             Storage::disk('public')->put($path, $pdf->output());
-            
+
             Log::info('Invoice PDF generated', [
                 'invoice_id' => $invoice->id,
                 'path' => $path,
@@ -138,7 +139,7 @@ class InvoiceService
     /**
      * Download invoice PDF
      */
-    public function downloadInvoicePDF(Invoice $invoice): \Illuminate\Http\Response
+    public function downloadInvoicePDF(Invoice $invoice): StreamedResponse
     {
         try {
             $invoice->load([
@@ -157,8 +158,10 @@ class InvoiceService
             $pdf->setOption('isRemoteEnabled', false);
 
             $fileName = "Invoice_" . preg_replace('/[^A-Za-z0-9_-]/', '_', $invoice->invoice_number) . ".pdf";
-            
-            return $pdf->download($fileName);
+
+            return response()->streamDownload(function () use ($pdf) {
+                echo $pdf->output();
+            }, $fileName, ['Content-Type' => 'application/pdf']);
         } catch (\Exception $e) {
             Log::error('Error downloading invoice PDF', [
                 'invoice_id' => $invoice->id,
@@ -183,7 +186,7 @@ class InvoiceService
 
             // Get insurance provider
             $insuranceProvider = $invoice->order->prescription->patient->insuranceProvider;
-            
+
             if (!$insuranceProvider) {
                 throw new \Exception('Insurance provider not found');
             }
@@ -317,7 +320,7 @@ class InvoiceService
             }
 
             DB::commit();
-            
+
             Log::info('Bulk invoice generation completed', [
                 'success_count' => count($results['success']),
                 'failed_count' => count($results['failed']),
@@ -347,7 +350,7 @@ class InvoiceService
             try {
                 $invoice = Invoice::findOrFail($invoiceId);
                 $this->sendInvoiceToInsurance($invoice, $options);
-                
+
                 $results['success'][] = [
                     'invoice_id' => $invoiceId,
                     'invoice_number' => $invoice->invoice_number,

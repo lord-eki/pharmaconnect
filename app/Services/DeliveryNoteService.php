@@ -138,7 +138,7 @@ class DeliveryNoteService
         
         // Get orders - handle both single order and multiple orders
         $orders = $delivery->orders ?? collect([$delivery->order])->filter();
-        $company_data = Setup::first()->toArray();
+        $company_data = Setup::first()?->toArray() ?? [];
         return [
             'delivery' => $delivery,
             'orders' => $orders,

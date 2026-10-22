@@ -295,10 +295,10 @@
                 <table>
                     <tr>
                         <td class="company-info">
-                            <h1>{{ e($company_info['name'] ?? 'PharmaConnect') }}</h1>
-                            <p>{{ e($company_info['address'] ?? 'N/A') }}</p>
-                            <p>Tel: {{ e($company_info['phone'] ?? '+254700000000') }} | Email: {{ e($company_info['email'] ?? 'info@pharmaconnect.com') }}</p>
-                            <p>Website: {{ e($company_info['website'] ?? 'www.pharmaconnect.com') }}</p>
+                            <h1>{{ e($company_info['company_name'] ?? 'PharmaConnect') }}</h1>
+                            <p>{{ e($company_info['company_address'] ?? 'N/A') }}</p>
+                            <p>Tel: {{ e($company_info['company_phone'] ?? '+254700000000') }} | Email: {{ e($company_info['company_email'] ?? 'info@pharmaconnect.com') }}</p>
+                            <p>Website: {{ e($company_info['company_website'] ?? 'www.pharmaconnect.com') }}</p>
                         </td>
                         <td class="lpo-title">
                             <h2>LPO</h2>
@@ -369,7 +369,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($order->items->where('is_delivery_fee', false))
+                @foreach($order->items->where('is_delivery_fee', false)->values() as $index => $item)
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td>
@@ -396,8 +396,8 @@
                 <table class="totals-table">
                     @php
                         $medicineItems = $order->items->where('is_delivery_fee', false);
-+                        $subtotal = $medicineItems->sum(fn ($item) => ($item->supplier_price ?? 0) * $item->quantity);
-+                        $taxAmount = $medicineItems->sum(function($item) {
+                       $subtotal = $medicineItems->sum(fn ($item) => ($item->supplier_price ?? 0) * $item->quantity);
+                       $taxAmount = $medicineItems->sum(function($item) {
                             return $item->tax_amount ?? 0;
                         });
                         $shippingCost = $order->delivery->delivery_fee ?? 0;

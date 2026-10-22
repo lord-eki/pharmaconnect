@@ -34,8 +34,10 @@ class OrderPrintController extends Controller
     /** Ensure the authenticated supplier owns this order. */
     private function authorizeAccess(Order $order): void
     {
+        $supplier =  auth()->user()->supplier;
+
         abort_unless(
-            $order->supplier_id === auth()->user()->supplier?->id,
+            $supplier && (int)$order->supplier_id === (int) $supplier->id,
             403,
             'You do not have access to this order.'
         );

@@ -7,6 +7,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Setup;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OrderReportService
 {
@@ -18,21 +19,21 @@ class OrderReportService
         if (empty($text)) {
             return '';
         }
-        
+
         // Convert to UTF-8 if not already
         if (!mb_check_encoding($text, 'UTF-8')) {
             $text = mb_convert_encoding($text, 'UTF-8', 'auto');
         }
-        
+
         // Remove any invalid UTF-8 characters
         $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
-        
+
         // Remove control characters except newlines and tabs
         $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text);
-        
+
         return $text;
     }
-    
+
     /**
      * Prepare order data for PDF generation (full details)
      */
@@ -46,19 +47,19 @@ class OrderReportService
             'items.medicine',
             'delivery'
         ]);
-        
+
         // Clean text fields that might have encoding issues
         if ($order->notes) {
             $order->notes = $this->cleanText($order->notes);
         }
-        
+
         // Clean supplier data
         if ($order->supplier) {
             $order->supplier->company_name = $this->cleanText($order->supplier->company_name);
             $order->supplier->contact_person = $this->cleanText($order->supplier->contact_person ?? '');
             $order->supplier->address = $this->cleanText($order->supplier->address ?? '');
         }
-        
+
         // Clean patient data
         if ($order->prescription && $order->prescription->patient) {
             $patient = $order->prescription->patient;
@@ -66,14 +67,14 @@ class OrderReportService
             $patient->last_name = $this->cleanText($patient->last_name ?? '');
             $patient->address = $this->cleanText($patient->address ?? '');
         }
-        
+
         // Clean physician data
         if ($order->prescription && $order->prescription->physician) {
             $physician = $order->prescription->physician;
             $physician->first_name = $this->cleanText($physician->first_name ?? '');
             $physician->last_name = $this->cleanText($physician->last_name ?? '');
         }
-        
+
         // Clean items data
         foreach ($order->items as $item) {
             if ($item->medicine) {
@@ -83,7 +84,7 @@ class OrderReportService
                 }
             }
         }
-        
+
         return $order;
     }
 
@@ -98,19 +99,19 @@ class OrderReportService
             'items.medicine',
             'delivery'
         ]);
-        
+
         // Clean text fields
         if ($order->notes) {
             $order->notes = $this->cleanText($order->notes);
         }
-        
+
         // Clean supplier data
         if ($order->supplier) {
             $order->supplier->company_name = $this->cleanText($order->supplier->company_name);
             $order->supplier->contact_person = $this->cleanText($order->supplier->contact_person ?? '');
             $order->supplier->address = $this->cleanText($order->supplier->address ?? '');
         }
-        
+
         // Clean items data
         foreach ($order->items as $item) {
             if ($item->medicine) {
@@ -120,7 +121,7 @@ class OrderReportService
                 }
             }
         }
-        
+
         return $order;
     }
 
@@ -131,25 +132,25 @@ class OrderReportService
     {
         try {
             $order = $this->prepareOrderData($order);
-            $company_info = Setup::first()->toArray();
-            
+            $company_info = Setup::first()?->toArray() ?? [];
+
             $pdf = Pdf::loadView('reports.lpo', [
                 'order' => $order,
-                'company_info' => $company_info
+                'company_info' => $company_info,
             ]);
 
             $pdf->setPaper('a4', 'portrait');
             $pdf->setOption('isHtml5ParserEnabled', true);
             $pdf->setOption('isRemoteEnabled', false);
-            
+
             $fileName = "LPO_" . preg_replace('/[^A-Za-z0-9_-]/', '_', $order->order_number) . "_" . time() . ".pdf";
-            
+
             $path = "reports/lpo/{$fileName}";
             Storage::disk('public')->put($path, $pdf->output());
-            
+
             return $path;
         } catch (\Exception $e) {
-            \Log::error('Error generating LPO PDF', [
+            Log::error('Error generating LPO PDF', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -165,8 +166,8 @@ class OrderReportService
     {
         try {
             $order = $this->prepareSupplierOrderData($order);
-            $company_info = Setup::first()->toArray();
-            
+            $company_info = Setup::first()?->toArray() ?? [];
+
             $pdf = Pdf::loadView('reports.supplier-lpo', [
                 'order' => $order,
                 'company_info' => $company_info
@@ -175,15 +176,15 @@ class OrderReportService
             $pdf->setPaper('a4', 'portrait');
             $pdf->setOption('isHtml5ParserEnabled', true);
             $pdf->setOption('isRemoteEnabled', false);
-            
+
             $fileName = "LPO_" . preg_replace('/[^A-Za-z0-9_-]/', '_', $order->order_number) . "_" . time() . ".pdf";
-            
+
             $path = "reports/lpo/supplier/{$fileName}";
             Storage::disk('public')->put($path, $pdf->output());
-            
+
             return $path;
         } catch (\Exception $e) {
-            \Log::error('Error generating Supplier LPO PDF', [
+            Log::error('Error generating Supplier LPO PDF', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -195,24 +196,27 @@ class OrderReportService
     /**
      * Download LPO PDF (Operations)
      */
-    public function downloadLPO(Order $order): \Illuminate\Http\Response
+    public function downloadLPO(Order $order): StreamedResponse
     {
         try {
             $order = $this->prepareOrderData($order);
-            
+
             $pdf = Pdf::loadView('reports.lpo', [
-                'order' => $order
+                'order' => $order,
+                'company_info' => Setup::first()?->toArray() ?? []
             ]);
 
             $pdf->setPaper('a4', 'portrait');
             $pdf->setOption('isHtml5ParserEnabled', true);
             $pdf->setOption('isRemoteEnabled', false);
-            
+
             $fileName = "LPO_" . preg_replace('/[^A-Za-z0-9_-]/', '_', $order->order_number) . ".pdf";
-            
-            return $pdf->download($fileName);
+
+            return response()->streamDownload(function () use ($pdf) {
+                echo $pdf->output();
+            }, $fileName, ['Content-Type' => 'application/pdf']);
         } catch (\Exception $e) {
-            \Log::error('Error downloading LPO PDF', [
+            Log::error('Error downloading LPO PDF', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -224,24 +228,27 @@ class OrderReportService
     /**
      * Download LPO PDF for supplier 
      */
-    public function downloadSupplierLPO(Order $order): \Illuminate\Http\Response
+    public function downloadSupplierLPO(Order $order): StreamedResponse
     {
         try {
             $order = $this->prepareSupplierOrderData($order);
-            
+
             $pdf = Pdf::loadView('reports.supplier-lpo', [
-                'order' => $order
+                'order' => $order,
+                'company_info' => Setup::first()?->toArray() ?? [],
             ]);
 
             $pdf->setPaper('a4', 'portrait');
             $pdf->setOption('isHtml5ParserEnabled', true);
             $pdf->setOption('isRemoteEnabled', false);
-            
+
             $fileName = "LPO_" . preg_replace('/[^A-Za-z0-9_-]/', '_', $order->order_number) . ".pdf";
-            
-            return $pdf->download($fileName);
+
+            return response()->streamDownload(function () use ($pdf) {
+                echo $pdf->output();
+            }, $fileName, ['Content-Type' => 'application/pdf']);
         } catch (\Exception $e) {
-            \Log::error('Error downloading Supplier LPO PDF', [
+            Log::error('Error downloading Supplier LPO PDF', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -276,12 +283,12 @@ class OrderReportService
             $pdf->setPaper('a4', 'portrait');
             $pdf->setOption('isHtml5ParserEnabled', true);
             $pdf->setOption('isRemoteEnabled', false);
-            
+
             $fileName = "Bulk_LPO_" . now()->format('Y-m-d_His') . ".pdf";
-            
+
             $path = "reports/lpo/{$fileName}";
             Storage::disk('public')->put($path, $pdf->output());
-            
+
             return $path;
         } catch (\Exception $e) {
             Log::error('Error generating bulk LPO PDF', [
@@ -296,7 +303,7 @@ class OrderReportService
     /**
      * Download bulk LPO report
      */
-    public function downloadBulkLPO(array $orderIds): \Illuminate\Http\Response
+    public function downloadBulkLPO(array $orderIds): StreamedResponse
     {
         try {
             $orders = Order::with([
@@ -319,12 +326,14 @@ class OrderReportService
             $pdf->setPaper('a4', 'portrait');
             $pdf->setOption('isHtml5ParserEnabled', true);
             $pdf->setOption('isRemoteEnabled', false);
-            
+
             $fileName = "Bulk_LPO_" . now()->format('Y-m-d_His') . ".pdf";
-            
-            return $pdf->download($fileName);
+
+            return response()->streamDownload(function () use ($pdf) {
+                echo $pdf->output();
+            }, $fileName, ['Content-Type' => 'application/pdf']);
         } catch (\Exception $e) {
-            \Log::error('Error downloading bulk LPO PDF', [
+            Log::error('Error downloading bulk LPO PDF', [
                 'order_ids' => $orderIds,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()

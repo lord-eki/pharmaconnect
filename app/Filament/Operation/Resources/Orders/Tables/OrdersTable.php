@@ -13,7 +13,9 @@ use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\BadgeColumn;
@@ -25,20 +27,22 @@ use Filament\Tables\Filters\Indicator;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class OrdersTable
 {
     public static function configure(Table $table): Table
     {
-        return $table->modifyQueryUsing(fn (Builder $query) => $query->with([
-                'externalOrder',
-                'supplier',
-                'prescription.patient.insuranceProvider',
-                'delivery',
-                'invoices',
-                'items.medicine',
-            ]))
+        return $table->modifyQueryUsing(fn(Builder $query) => $query->with([
+            'externalOrder',
+            'supplier',
+            'prescription.patient.insuranceProvider',
+            'delivery',
+            'invoices',
+            'items.medicine',
+        ]))
             ->columns([
                 TextColumn::make('order_number')
                     ->label('Order #')
@@ -52,10 +56,10 @@ class OrdersTable
                 TextColumn::make('source')
                     ->label('Source')
                     ->badge()
-                    ->getStateUsing(fn ($record) => $record->external_order_id ? 'Insurer' : 'Prescription')
-                    ->color(fn (string $state): string => $state === 'Insurer' ? 'warning' : 'gray')
-                    ->icon(fn (string $state): string => $state === 'Insurer' ? 'heroicon-m-building-office' : 'heroicon-m-document-text')
-                    ->tooltip(fn ($record) => $record->external_order_id
+                    ->getStateUsing(fn($record) => $record->external_order_id ? 'Insurer' : 'Prescription')
+                    ->color(fn(string $state): string => $state === 'Insurer' ? 'warning' : 'gray')
+                    ->icon(fn(string $state): string => $state === 'Insurer' ? 'heroicon-m-building-office' : 'heroicon-m-document-text')
+                    ->tooltip(fn($record) => $record->external_order_id
                         ? "External order: {$record->externalOrder?->order_number} — {$record->externalOrder?->recipient_name}"
                         : 'Standard prescription order'),
 
@@ -63,7 +67,7 @@ class OrdersTable
                     ->label('Supplier')
                     ->searchable()
                     ->sortable()
-                    ->description(fn ($record) => $record->supplier?->phone)
+                    ->description(fn($record) => $record->supplier?->phone)
                     ->wrap(),
 
                 TextColumn::make('prescription.patient.full_name')
@@ -71,22 +75,26 @@ class OrdersTable
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         return $query->where(function (Builder $query) use ($search) {
                             $query
-                                ->orWhereHas('prescription.patient', fn (Builder $q) =>
+                                ->orWhereHas(
+                                    'prescription.patient',
+                                    fn(Builder $q) =>
                                     $q->where('first_name', 'like', "%{$search}%")
-                                      ->orWhere('last_name', 'like', "%{$search}%")
-                                      ->orWhereRaw("CONCAT(first_name, ' ', last_name) like ?", ["%{$search}%"])
+                                        ->orWhere('last_name', 'like', "%{$search}%")
+                                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) like ?", ["%{$search}%"])
                                 )
-                                ->orWhereHas('externalOrder', fn (Builder $q) =>
+                                ->orWhereHas(
+                                    'externalOrder',
+                                    fn(Builder $q) =>
                                     $q->where('recipient_name', 'like', "%{$search}%")
                                 );
                         });
                     })
                     ->toggleable()
                     ->wrap()
-                    ->getStateUsing(fn ($record) => $record->prescription?->patient?->full_name
+                    ->getStateUsing(fn($record) => $record->prescription?->patient?->full_name
                         ?? $record->externalOrder?->recipient_name
                         ?? '—')
-                    ->description(fn ($record) => $record->external_order_id
+                    ->description(fn($record) => $record->external_order_id
                         ? $record->externalOrder?->recipient_phone
                         : null),
 
@@ -106,7 +114,7 @@ class OrdersTable
                     ->colors([
                         'gray' => 'pending_review',
                         'info' => 'sent_to_supplier',
-                        'primary' => ['confirmed', 'processing', 'shipped','sent_to_supplier'],
+                        'primary' => ['confirmed', 'processing', 'shipped', 'sent_to_supplier'],
                         'success' => 'delivered',
                         'danger' => 'cancelled',
                     ])
@@ -119,7 +127,7 @@ class OrdersTable
                         'heroicon-m-check-badge' => 'delivered',
                         'heroicon-m-x-circle' => 'cancelled',
                     ])
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                    ->formatStateUsing(fn(string $state): string => match ($state) {
                         'pending_review' => 'Pending Review',
                         'sent_to_supplier' => 'Sent to Supplier',
                         'confirmed' => 'Confirmed',
@@ -144,7 +152,7 @@ class OrdersTable
                     ->sortable()
                     ->toggleable()
                     ->placeholder('Not sent')
-                    ->description(fn ($record) => $record->sent_to_supplier_at
+                    ->description(fn($record) => $record->sent_to_supplier_at
                         ? $record->sent_to_supplier_at->diffForHumans()
                         : null),
 
@@ -162,7 +170,7 @@ class OrdersTable
                     ->trueColor('danger')
                     ->falseColor('success')
                     ->toggleable()
-                    ->tooltip(fn ($record) => $record->is_overdue
+                    ->tooltip(fn($record) => $record->is_overdue
                         ? 'This order is overdue!'
                         : 'On track'),
 
@@ -195,7 +203,7 @@ class OrdersTable
 
                 Filter::make('overdue')
                     ->label('Overdue Orders')
-                    ->query(fn (Builder $query): Builder => $query
+                    ->query(fn(Builder $query): Builder => $query
                         ->where('expected_delivery', '<', now())
                         ->whereNotIn('status', ['delivered', 'cancelled']))
                     ->toggle(),
@@ -211,21 +219,21 @@ class OrdersTable
                         return $query
                             ->when(
                                 $data['ordered_from'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('ordered_at', '>=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('ordered_at', '>=', $date),
                             )
                             ->when(
                                 $data['ordered_until'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('ordered_at', '<=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('ordered_at', '<=', $date),
                             );
                     })
                     ->indicateUsing(function (array $data): array {
                         $indicators = [];
                         if ($data['ordered_from'] ?? null) {
-                            $indicators[] = Indicator::make('Ordered from '.\Carbon\Carbon::parse($data['ordered_from'])->toFormattedDateString())
+                            $indicators[] = Indicator::make('Ordered from ' . \Carbon\Carbon::parse($data['ordered_from'])->toFormattedDateString())
                                 ->removeField('ordered_from');
                         }
                         if ($data['ordered_until'] ?? null) {
-                            $indicators[] = Indicator::make('Ordered until '.\Carbon\Carbon::parse($data['ordered_until'])->toFormattedDateString())
+                            $indicators[] = Indicator::make('Ordered until ' . \Carbon\Carbon::parse($data['ordered_until'])->toFormattedDateString())
                                 ->removeField('ordered_until');
                         }
 
@@ -240,10 +248,10 @@ class OrdersTable
                         ->label('Edit Order Items')
                         ->icon('heroicon-o-pencil-square')
                         ->color('warning')
-                        ->visible(fn (Order $record): bool => $record->status === 'pending_review')
+                        ->visible(fn(Order $record): bool => $record->status === 'pending_review')
                         ->mountUsing(function (\Filament\Schemas\Schema  $form, Order $record) {
                             $form->fill([
-                                'items' => $record->items->map(fn ($item) => [
+                                'items' => $record->items->map(fn($item) => [
                                     'order_item_id' => $item->id,
                                     'medicine_name'  => $item->medicine?->generic_name ?? $item->medicine?->name ?? 'Unknown',
                                     'quantity'       => $item->quantity,
@@ -286,7 +294,7 @@ class OrdersTable
                                 ->columns(2)
                                 ->addable(false)
                                 ->reorderable(false)
-                                ->itemLabel(fn (array $state): ?string => $state['medicine_name'] ?? null)
+                                ->itemLabel(fn(array $state): ?string => $state['medicine_name'] ?? null)
                                 ->collapsible(),
                         ])
                         ->action(function (Order $record, array $data): void {
@@ -299,7 +307,7 @@ class OrdersTable
                                     ->success()
                                     ->send();
                             } catch (\Exception $e) {
-                                \Log::error('Order Item Edit Error', [
+                                Log::error('Order Item Edit Error', [
                                     'order_id' => $record->id,
                                     'error'    => $e->getMessage(),
                                 ]);
@@ -323,40 +331,18 @@ class OrdersTable
                         ->color('success')
                         ->action(function (Order $record) {
                             try {
-                                $reportService = app(OrderReportService::class);
-
-                                // Generate the PDF and store it temporarily
-                                $path = $reportService->generateLPO($record);
-
-                                // Create a download URL
-                                $url = Storage::url($path);
-
-                                // Notify user with download link
-                                Notification::make()
-                                    ->title('LPO Ready')
-                                    ->body('Your LPO has been generated successfully.')
-                                    ->success()
-                                    ->actions([
-                                        Action::make('download')
-                                            ->label('Download PDF')
-                                            ->url($url)
-                                            ->openUrlInNewTab(),
-                                    ])
-                                    ->persistent()
-                                    ->send();
-
-                            } catch (\Exception $e) {
-                                \Log::error('LPO Generation Error', [
+                                return app(OrderReportService::class)->downloadLPO($record);
+                            } catch (Throwable $e) {
+                                Log::error('LPO download error',[
                                     'order_id' => $record->id,
-                                    'error' => $e->getMessage(),
-                                    'trace' => $e->getTraceAsString(),
+                                    'error' =>$e->getMessage()
                                 ]);
 
                                 Notification::make()
-                                    ->title('Error generating LPO')
-                                    ->body('Unable to generate PDF. Please try again or contact support.')
-                                    ->danger()
-                                    ->send();
+                                ->title('Error generating LPO')
+                                ->body('Unable to generate PDF. Please try again later')
+                                ->danger()
+                                ->send();
                             }
                         })
                         ->requiresConfirmation(false)
@@ -366,7 +352,7 @@ class OrdersTable
                         ->label('Generate Invoice')
                         ->icon('heroicon-o-document-currency-dollar')
                         ->color('info')
-                        ->visible(fn (Order $record): bool => $record->isEligibleForInvoice())
+                        ->visible(fn(Order $record): bool => $record->isEligibleForInvoice())
                         ->form([
                             DatePicker::make('due_date')
                                 ->label('Due Date')
@@ -374,7 +360,7 @@ class OrdersTable
                                 ->required()
                                 ->minDate(now()),
 
-                            \Filament\Forms\Components\TextInput::make('discount_amount')
+                            TextInput::make('discount_amount')
                                 ->label('Discount Amount (Optional)')
                                 ->numeric()
                                 ->prefix('KES')
@@ -405,9 +391,8 @@ class OrdersTable
                                     ->body("Invoice {$invoice->invoice_number} is being processed. PDF will be available shortly.")
                                     ->success()
                                     ->send();
-
                             } catch (\Exception $e) {
-                                \Log::error('Invoice Generation Error', [
+                                Log::error('Invoice Generation Error', [
                                     'order_id' => $record->id,
                                     'error' => $e->getMessage(),
                                 ]);
@@ -429,9 +414,9 @@ class OrdersTable
                         ->label('Send Invoice')
                         ->icon('heroicon-o-envelope')
                         ->color('success')
-                        ->visible(fn (Order $record): bool => $record->invoices->isNotEmpty())
+                        ->visible(fn(Order $record): bool => $record->invoices->isNotEmpty())
                         ->form([
-                            \Filament\Forms\Components\TagsInput::make('cc')
+                            TagsInput::make('cc')
                                 ->label('CC Email Addresses')
                                 ->placeholder('Add email addresses to CC'),
 
@@ -454,9 +439,8 @@ class OrdersTable
                                     ->body("Invoice {$invoice->invoice_number} will be sent to {$invoice->order->prescription->patient->insuranceProvider->company_name} shortly.")
                                     ->success()
                                     ->send();
-
                             } catch (\Exception $e) {
-                                \Log::error('Invoice Send Error', [
+                                Log::error('Invoice Send Error', [
                                     'order_id' => $record->id,
                                     'error' => $e->getMessage(),
                                 ]);
@@ -470,7 +454,8 @@ class OrdersTable
                         })
                         ->requiresConfirmation()
                         ->modalHeading('Send Invoice to Insurance')
-                        ->modalDescription(fn (Order $record) => 'Send invoice to '.$record->prescription->patient->insuranceProvider?->company_name
+                        ->modalDescription(
+                            fn(Order $record) => 'Send invoice to ' . $record->prescription->patient->insuranceProvider?->company_name
                         )
                         ->modalSubmitActionLabel('Send Email')
                         ->tooltip('Email invoice to insurance company'),
@@ -479,15 +464,15 @@ class OrdersTable
                         ->label('Download Invoice')
                         ->icon('heroicon-o-arrow-down-tray')
                         ->color('primary')
-                        ->visible(fn (Order $record): bool => $record->invoices()->exists())
+                        ->visible(fn(Order $record): bool => $record->invoices()->exists())
                         ->action(function (Order $record) {
                             try {
                                 $invoice = $record->invoices()->latest()->first();
 
                                 // Check if PDF already exists
-                                $existingPath = 'reports/invoices/Invoice_'.
-                                               preg_replace('/[^A-Za-z0-9_-]/', '_', $invoice->invoice_number).
-                                               '_*.pdf';
+                                $existingPath = 'reports/invoices/Invoice_' .
+                                    preg_replace('/[^A-Za-z0-9_-]/', '_', $invoice->invoice_number) .
+                                    '_*.pdf';
 
                                 $files = Storage::disk('public')->files('reports/invoices');
                                 $matchingFile = collect($files)->first(function ($file) use ($invoice) {
@@ -496,7 +481,7 @@ class OrdersTable
 
                                 if ($matchingFile) {
                                     // PDF exists, provide immediate download
-                                    $url = Storage::url($matchingFile);
+                                    $url = Storage::disk('public')->url($matchingFile);
 
                                     Notification::make()
                                         ->title('Invoice PDF Ready')
@@ -517,9 +502,8 @@ class OrdersTable
                                         ->info()
                                         ->send();
                                 }
-
                             } catch (\Exception $e) {
-                                \Log::error('Invoice PDF Error', [
+                                Log::error('Invoice PDF Error', [
                                     'order_id' => $record->id,
                                     'error' => $e->getMessage(),
                                 ]);
@@ -538,7 +522,7 @@ class OrdersTable
                         ->label('Cancel')
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
-                        ->visible(fn (Order $record): bool => in_array($record->status, ['pending_review', 'sent_to_supplier', 'confirmed']))
+                        ->visible(fn(Order $record): bool => in_array($record->status, ['pending_review', 'sent_to_supplier', 'confirmed']))
                         ->form([
                             Textarea::make('reason')
                                 ->label('Cancellation Reason')
@@ -584,7 +568,7 @@ class OrdersTable
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data) {
                             try {
                                 // Filter only pending_review orders
-                                $eligibleOrders = $records->filter(fn ($order) => $order->status === 'pending_review');
+                                $eligibleOrders = $records->filter(fn($order) => $order->status === 'pending_review');
 
                                 if ($eligibleOrders->isEmpty()) {
                                     Notification::make()
@@ -609,9 +593,8 @@ class OrdersTable
                                     ->body("Processing {$eligibleOrders->count()} orders. Suppliers will be notified shortly.")
                                     ->success()
                                     ->send();
-
                             } catch (\Exception $e) {
-                                \Log::error('Bulk Send to Supplier Error', [
+                                Log::error('Bulk Send to Supplier Error', [
                                     'error' => $e->getMessage(),
                                     'trace' => $e->getTraceAsString(),
                                 ]);
@@ -635,7 +618,7 @@ class OrdersTable
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
                             try {
                                 // Filter only eligible orders
-                                $eligibleOrders = $records->filter(fn ($order) => $order->isEligibleForInvoice());
+                                $eligibleOrders = $records->filter(fn($order) => $order->isEligibleForInvoice());
 
                                 if ($eligibleOrders->isEmpty()) {
                                     Notification::make()
@@ -660,9 +643,8 @@ class OrdersTable
                                     ->body("Processing {$eligibleOrders->count()} orders. You'll be notified when complete.")
                                     ->info()
                                     ->send();
-
                             } catch (\Exception $e) {
-                                \Log::error('Bulk Invoice Generation Error', [
+                                Log::error('Bulk Invoice Generation Error', [
                                     'error' => $e->getMessage(),
                                 ]);
 
@@ -691,7 +673,7 @@ class OrdersTable
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data) {
                             try {
                                 // Get invoice IDs from selected orders
-                                $invoiceIds = $records->flatMap(fn ($order) => $order->invoices->pluck('id'))->toArray();
+                                $invoiceIds = $records->flatMap(fn($order) => $order->invoices->pluck('id'))->toArray();
 
                                 if (empty($invoiceIds)) {
                                     Notification::make()
@@ -712,12 +694,11 @@ class OrdersTable
 
                                 Notification::make()
                                     ->title('Invoice Sending Started')
-                                    ->body('Processing '.count($invoiceIds).' invoices. Emails will be sent shortly.')
+                                    ->body('Processing ' . count($invoiceIds) . ' invoices. Emails will be sent shortly.')
                                     ->info()
                                     ->send();
-
                             } catch (\Exception $e) {
-                                \Log::error('Bulk Invoice Send Error', [
+                                Log::error('Bulk Invoice Send Error', [
                                     'error' => $e->getMessage(),
                                 ]);
 
