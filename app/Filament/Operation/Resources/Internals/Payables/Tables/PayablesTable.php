@@ -23,6 +23,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class PayablesTable
@@ -207,6 +208,25 @@ class PayablesTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
-            ])->defaultSort('created_at', 'desc');
+            ])
+            ->modifyQueryUsing(fn(Builder $query) => $query->with(['order','vendor']))
+            ->defaultSort('created_at', 'desc');
+    }
+
+
+    protected static function siblingCommissionPayables(Payable $record) : Collection
+    {
+        $prescriptionId = $record->order?->prescription_id;
+
+        if(!$prescriptionId){
+            return collect();
+        }
+
+        return Payable::query()
+        ->where('vendor_type','physician')
+        ->where('vendor_id',$record->vendor_id)
+        ->whereKeyNot($record->getKey())
+        ->whereHas('order', fn(Builder $query) => $query->where('prescription_id',$prescriptionId))
+        ->get(['id','amount']);
     }
 }

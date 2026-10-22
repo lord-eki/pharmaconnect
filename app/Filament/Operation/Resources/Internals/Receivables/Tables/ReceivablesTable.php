@@ -86,11 +86,11 @@ class ReceivablesTable
 
             ])
             ->groups([
-                Group::make('external_order_id')
-                    ->label('By Insurance Claim')
-                    ->getTitleFromRecordUsing(fn (Receivable $record) => $record->external_order_id
-                        ? 'Claim — Order #' . $record->external_order_id
-                        : 'Not Insurance-Claim Based'),
+                // Group::make('external_order_id')
+                //     ->label('By Insurance Claim')
+                //     ->getTitleFromRecordUsing(fn (Receivable $record) => $record->external_order_id
+                //         ? 'Claim — Order #' . $record->external_order_id
+                //         : 'Not Insurance-Claim Based'),
                 Group::make('prescription_id')
                     ->label('By Prescription')
                     ->getTitleFromRecordUsing(fn (Receivable $record) => $record->prescription_id
@@ -166,7 +166,7 @@ class ReceivablesTable
                             Notification::make()
                                 ->success()
                                 ->title('Claim Submitted')
-                                ->body("Claim {$data['claim_reference']} submitted to {$record->insuranceProvider->company_name}")
+                                ->body("Claim {$data['claim_reference']} submitted to". ($record->insuranceProvider?->company_name ?? 'the insurer'))
                                 ->send();
                         }),
 
@@ -250,8 +250,7 @@ class ReceivablesTable
                             Notification::make()
                                 ->success()
                                 ->title('Payment Recorded')
-                                ->body('KES '.number_format($total, 2).' received from '.($record->payment_source === 'insurance' ? $record->insuranceProvider->company_name : $record->patient->last_name)
-                                    .($group->count() > 1 ? ' ('.$group->count().' receivables confirmed together)' : ''))
+                                ->body('KES '.number_format($total, 2).' received from '.($record->payment_source === 'insurance' ? ($record->insuranceProvider?->company_name ?? 'the insurer') : ($record->patient?->last_name ?? 'the patient')))
                                 ->send();
                         }),
 
@@ -292,13 +291,6 @@ class ReceivablesTable
             ])->defaultSort('created_at', 'desc');
     }
 
-    /**
-     * Other unreceived receivables that belong to the same claim (or, for
-     * patient-pay orders, the same prescription) as $record — i.e. siblings
-     * created when an order was split across multiple suppliers. Used so
-     * confirming payment on one always confirms the whole group together,
-     * rather than letting the same underlying payment be confirmed piecemeal.
-     */
     protected static function siblingReceivables(Receivable $record)
     {
         if ($record->external_order_id) {
