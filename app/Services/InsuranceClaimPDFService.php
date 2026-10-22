@@ -46,9 +46,9 @@ class InsuranceClaimPDFService
         if ($parentOrders) {
             $firstOrder = $parentOrders->sortBy('id')->first();
             if ($firstOrder) {
-                $firstOrder->load(['items' => fn($q) => $q->orderBy('id', 'asc')]);
+                $firstOrder->load('deliveryFeeItem');
 
-                $deliveryFeeItem = $firstOrder->items->firstWhere('is_delivery_fee', true);
+                $firstOrder->load('deliveryFeeItem');
 
                 if (! $deliveryFeeItem) {
                     $fee = Setting::deliveryFee();

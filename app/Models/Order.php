@@ -6,6 +6,7 @@ use App\Exceptions\StockShortageException;
 use App\Services\CommissionService;
 use App\Services\PaymentService;
 use App\Models\Setting;
+use App\Services\PricingService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -353,7 +354,7 @@ class Order extends Model
     public function reassignToSupplier(int $newSupplierId, ?string $reason = null): bool
     {
         return DB::transaction(function () use ($newSupplierId, $reason) {
-            $pricingService = app(\App\Services\PricingService::class);
+            $pricingService = app(PricingService::class);
 
             // Record original supplier in history
             $history = $this->reassignment_history ?? [];
@@ -415,7 +416,8 @@ class Order extends Model
             }
 
             // Preserve existing delivery fee item
-            $deliveryFeeItem = $this->items()->where('is_delivery_fee', true)->first();
+            $deliveryFeeItem = $this->deliveryFeeItem;
+
             $deliveryFee     = $deliveryFeeItem ? $deliveryFeeItem->total_price : 0;
 
             $this->supplier_total = $supplierTotal;
@@ -632,7 +634,12 @@ class Order extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(OrderItem::class);
+        return $this->hasMany(OrderItem::class)->where('is_delivery_fee', false);
+    }
+
+    public function allItems() : HasMany
+    {
+        return $this->hasMany(Order::class);
     }
 
     public function medicineItems(): HasMany
@@ -1165,7 +1172,7 @@ class Order extends Model
 
             // Recalculate order totals from remaining items
             $this->refresh();
-            $newTotal = $this->items()->sum(DB::raw('quantity * unit_price'));
+            $newTotal = $this->allItems()->sum(DB::raw('quantity * unit_price'));
 
             $this->update(['total_amount' => $newTotal]);
 

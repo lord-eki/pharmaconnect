@@ -469,6 +469,16 @@
                     <td class="text-right"><strong>{{ $invoice->currency }} {{ number_format($item->total_price ?? 0, 2) }}</strong></td>
                 </tr>
                 @endforeach
+
+                @if($invoice->order->deliveryFeeItem)
+                <tr>
+                    <td>{{ $invoice->order->items->count() + 1 }}</td>
+                    <td colspan="3"><strong>Delivery Fee</strong></td>
+                    <td class="text-right">{{ $invoice->currency }} {{ number_format($invoice->order->deliveryFeeItem->unit_price, 2) }}</td>
+                    <td class="text-right">{{ $invoice->currency }} 0.00</td>
+                    <td class="text-right"><strong>{{ $invoice->currency }} {{ number_format($invoice->order->deliveryFeeItem->total_price, 2) }}</strong></td>
+                </tr>
+@endif
             </tbody>
         </table>
 

@@ -61,7 +61,9 @@ class InvoiceService
         }
 
         // Calculate amounts
-        $subtotal = $order->items->sum('total_price');
+        $lines     = $order->allItems;
+        $subtotal  = $lines->sum('total_price');
+        $taxAmount = $lines->sum(fn($item) => $item->tax_amount ?? 0);
         $taxAmount = $order->items->sum(function ($item) {
             return $item->tax_amount ?? 0;
         });
