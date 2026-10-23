@@ -12,6 +12,10 @@ use Filament\Forms\Components\Select;
 use Filament\Actions\Action;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Payable;
+use Carbon\Carbon;
+use Closure;
+use Filament\Forms\Components\DatePicker;
+use Filament\Schemas\Components\Utilities\Get;
 
 class ListFinancials extends ListRecords
 {
@@ -19,15 +23,13 @@ class ListFinancials extends ListRecords
 
     public function getTableQuery(): ?Builder
     {
-       $supplier_id = Auth::user()->supplier->user_id;
+        $supplier_id = Auth::user()->supplier->user_id;
 
-       if($this->activeTab === 'pending')
-        {
-            return Payable::where('vendor_id',$supplier_id)->where('paid_at',null);
+        if ($this->activeTab === 'pending') {
+            return Payable::where('vendor_id', $supplier_id)->where('paid_at', null);
         }
 
         return parent::getTableQuery();
-
     }
 
     public function getTabs(): array
@@ -36,29 +38,29 @@ class ListFinancials extends ListRecords
 
         return [
             'all' => Tab::make('All Payments')
-                ->badge(fn () => Payment::where('payee_id', $supplier_id)->count()),
+                ->badge(fn() => Payment::where('payee_id', $supplier_id)->count()),
 
             'pending' => Tab::make('Pending')
-                 ->badge(fn () => Payable::where('vendor_id', $supplier_id)->count())
-                 ->badgeColor('warning'),
+                ->badge(fn() => Payable::where('vendor_id', $supplier_id)->count())
+                ->badgeColor('warning'),
 
             'processing' => Tab::make('Processing')
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'processing'))
-                ->badge(fn () => Payment::where('payee_id', $supplier_id)
+                ->modifyQueryUsing(fn(Builder $query) => $query->where('status', 'processing'))
+                ->badge(fn() => Payment::where('payee_id', $supplier_id)
                     ->where('status', 'processing')
                     ->count())
                 ->badgeColor('info'),
 
             'completed' => Tab::make('Completed')
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'completed'))
-                ->badge(fn () => Payment::where('payee_id', $supplier_id)
+                ->modifyQueryUsing(fn(Builder $query) => $query->where('status', 'completed'))
+                ->badge(fn() => Payment::where('payee_id', $supplier_id)
                     ->where('status', 'completed')
                     ->count())
                 ->badgeColor('success'),
 
             'failed' => Tab::make('Failed')
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'failed'))
-                ->badge(fn () => Payment::where('payee_id', $supplier_id)
+                ->modifyQueryUsing(fn(Builder $query) => $query->where('status', 'failed'))
+                ->badge(fn() => Payment::where('payee_id', $supplier_id)
                     ->where('status', 'failed')
                     ->count())
                 ->badgeColor('danger'),
@@ -78,45 +80,31 @@ class ListFinancials extends ListRecords
             Action::make('Download Statement')
                 ->icon('heroicon-o-arrow-down-tray')->outlined()
                 ->color('info')->form([
-                    Select::make('year')
-                        ->label('Year')
-                        ->options(function(){
-                            $start = 2024;
-                            $end = now()->year;
-                            $years =  range($end , $start);
-                            return array_combine($years , $years);
+                    DatePicker::make('from')
+                        ->label('From')
+                        ->default(now()->startOfMonth())
+                        ->maxDate(now())
+                        ->required()
+                        ->live(),
+                    DatePicker::make('until')
+                        ->label('Until')
+                        ->default(now())
+                        ->maxDate(now())
+                        ->afterOrEqual('from')
+                        ->rule(fn(Get $get) => function (string $attribute, $value, Closure $fail) use ($get) {
+                            if ($get('from') && Carbon::parse($get('from'))->diffInDays(Carbon::parse($value)) > 92) {
+                                $fail('Please choose a period of 3 months or less');
+                            }
                         })
-                        ->default(now()->year)
-                        ->required(),
-
-                    Select::make('month')
-                        ->label('Month')
-                        ->options([
-                            ''  => 'All months (Full Year)',
-                            1   => 'January',   2  => 'February',
-                            3   => 'March',     4  => 'April',
-                            5   => 'May',       6  => 'June',
-                            7   => 'July',      8  => 'August',
-                            9   => 'September', 10 => 'October',
-                            11  => 'November',  12 => 'December',
-                        ])
-                        ->default('')
-                        ->placeholder('All months (Full Year)'),
-                ])->action(function(array $data){
-                    $year = (int) $data['year'];
-                    $month = ! empty($data['month']) ? (int) $data['month'] : null;
-
-                    $url = route('supplier.financials.report', array_filter([
-                        'year' => $year,
-                        'month' => $month,
-                    ]));
-
-                    $this->redirect($url, navigate: false);
+                ])->action(function (array $data) {
+                    $this->redirect(route('supplier.financials.report', [
+                        'from'  => $data['from'],
+                        'until' => $data['until'],
+                    ]), navigate: false);
                 })
                 ->modalHeading('Download Statement')
                 ->modalDescription('Select the period for your statement.')
-                ->modalSubmitActionLabel('Download PDF')
-                ,
+                ->modalSubmitActionLabel('Download PDF'),
         ];
     }
 }

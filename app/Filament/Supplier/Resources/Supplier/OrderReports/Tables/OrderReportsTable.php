@@ -4,8 +4,12 @@ namespace App\Filament\Supplier\Resources\Supplier\OrderReports\Tables;
 
 use App\Filament\Supplier\Resources\Supplier\Orders\OrderResource;
 use App\Models\Order;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
@@ -31,7 +35,7 @@ class OrderReportsTable
                 TextColumn::make('status')
                     ->badge()
                     ->sortable()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'pending' => 'warning',
                         'confirmed' => 'info',
                         'processing' => 'primary',
@@ -41,7 +45,7 @@ class OrderReportsTable
                         default => 'gray',
                     }),
 
-            
+
 
                 TextColumn::make('supplier_total')
                     ->label('Amount')
@@ -65,13 +69,14 @@ class OrderReportsTable
                     ->dateTime('M d, Y')
                     ->sortable()
                     ->placeholder('Not delivered')
-                    ->color(fn ($state) => $state ? 'success' : 'gray'),
+                    ->color(fn($state) => $state ? 'success' : 'gray'),
 
                 TextColumn::make('expected_delivery')
                     ->label('Expected Delivery')
                     ->dateTime('M d, Y')
                     ->sortable()
-                    ->color(fn ($state, $record) => $state && $state->isPast() && $record->status !== 'delivered'
+                    ->color(
+                        fn($state, $record) => $state && $state->isPast() && $record->status !== 'delivered'
                             ? 'danger'
                             : 'warning'
                     ),
@@ -99,20 +104,20 @@ class OrderReportsTable
                         return $query
                             ->when(
                                 $data['ordered_from'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('ordered_at', '>=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('ordered_at', '>=', $date),
                             )
                             ->when(
                                 $data['ordered_until'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('ordered_at', '<=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('ordered_at', '<=', $date),
                             );
                     })
                     ->indicateUsing(function (array $data): array {
                         $indicators = [];
                         if ($data['ordered_from'] ?? null) {
-                            $indicators[] = 'Ordered from '.\Carbon\Carbon::parse($data['ordered_from'])->toFormattedDateString();
+                            $indicators[] = 'Ordered from ' . \Carbon\Carbon::parse($data['ordered_from'])->toFormattedDateString();
                         }
                         if ($data['ordered_until'] ?? null) {
-                            $indicators[] = 'Ordered until '.\Carbon\Carbon::parse($data['ordered_until'])->toFormattedDateString();
+                            $indicators[] = 'Ordered until ' . \Carbon\Carbon::parse($data['ordered_until'])->toFormattedDateString();
                         }
 
                         return $indicators;
@@ -131,20 +136,20 @@ class OrderReportsTable
                         return $query
                             ->when(
                                 $data['delivered_from'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('delivered_at', '>=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('delivered_at', '>=', $date),
                             )
                             ->when(
                                 $data['delivered_until'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('delivered_at', '<=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('delivered_at', '<=', $date),
                             );
                     })
                     ->indicateUsing(function (array $data): array {
                         $indicators = [];
                         if ($data['delivered_from'] ?? null) {
-                            $indicators[] = 'Delivered from '.\Carbon\Carbon::parse($data['delivered_from'])->toFormattedDateString();
+                            $indicators[] = 'Delivered from ' . \Carbon\Carbon::parse($data['delivered_from'])->toFormattedDateString();
                         }
                         if ($data['delivered_until'] ?? null) {
-                            $indicators[] = 'Delivered until '.\Carbon\Carbon::parse($data['delivered_until'])->toFormattedDateString();
+                            $indicators[] = 'Delivered until ' . \Carbon\Carbon::parse($data['delivered_until'])->toFormattedDateString();
                         }
 
                         return $indicators;
@@ -152,13 +157,14 @@ class OrderReportsTable
 
                 Filter::make('overdue_orders')
                     ->label('Overdue Orders')
-                    ->query(fn (Builder $query): Builder => $query->where('expected_delivery', '<', now())
-                        ->whereNotIn('status', ['delivered', 'cancelled'])
+                    ->query(
+                        fn(Builder $query): Builder => $query->where('expected_delivery', '<', now())
+                            ->whereNotIn('status', ['delivered', 'cancelled'])
                     )
                     ->toggle(),
             ])->actions([
                 Action::make('view')
-                    ->url(fn (Order $record): string => OrderResource::getUrl('view', ['record' => $record]))
+                    ->url(fn(Order $record): string => OrderResource::getUrl('view', ['record' => $record]))
                     ->icon('heroicon-o-eye')
                     ->color('info'),
             ])
@@ -167,60 +173,45 @@ class OrderReportsTable
                     ->label('Export CSV')->outlined()
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('success')
-                    ->action(function ($livewire) {
-                        return static::exportToCSV($livewire);
-                    }),
+                    ->modalHeading('Export Orders (CSV)')
+                    ->modalSubmitActionLabel('Export')
+                    ->form(static::periodForm(allowAll: true))
+                    ->action(fn(array $data, $livewire) => static::exportToCSV($livewire, $data)),
 
                 Action::make('export_pdf')
                     ->label('Export PDF')->outlined()
                     ->icon('heroicon-o-document-text')
                     ->color('danger')
-                    ->action(function ($livewire) {
-                        return static::exportToPDF($livewire);
-                    }),
+                    ->modalHeading('Export Orders (PDF)')
+                    ->modalSubmitActionLabel('Export')
+                    ->form(static::periodForm(allowAll: false))
+                    ->action(fn(array $data, $livewire) => static::exportToPDF($livewire, $data)),
             ])
             ->defaultSort('ordered_at', 'desc')
             ->poll('30s');
-
     }
 
-    protected static function exportToCSV($livewire)
+    protected static function exportToCSV($livewire, array $data)
     {
         $supplier = Auth::user()->supplier;
 
-        // Apply table filters
-        $query = $livewire->getFilteredTableQuery();
+        $query = static::applyPeriod($livewire->getFilteredTableQuery(), $data)
+            ->setEagerLoads([])      // CSV doesn't need the heavy relations
+            ->withCount('items');
 
-        $orders = $query->get();
+        $filename = 'orders_report_' . $supplier->company_name . '_' . now()->format('Y-m-d_His') . '.csv';
 
-        $filename = 'orders_report_'.$supplier->company_name.'_'.now()->format('Y-m-d_His').'.csv';
-
-        $headers = [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-        ];
-
-        $callback = function () use ($orders) {
+        return response()->streamDownload(function () use ($query) {
             $file = fopen('php://output', 'w');
 
-            // CSV Headers
-            fputcsv($file, [
-                'Order Number',
-                'Status',
-                'Amount (KES)',
-                'Items Count',
-                'Ordered Date',
-                'Expected Delivery',
-                'Delivered Date',
-            ]);
+            fputcsv($file, ['Order Number', 'Status', 'Amount (KES)', 'Items Count', 'Ordered Date', 'Expected Delivery', 'Delivered Date']);
 
-            // CSV Data
-            foreach ($orders as $order) {
+            foreach ($query->lazyById(500) as $order) {   // 500 rows in memory at a time
                 fputcsv($file, [
                     $order->order_number,
                     $order->status,
                     number_format($order->supplier_total, 2),
-                    $order->items->count(),
+                    $order->items_count,
                     $order->ordered_at?->format('Y-m-d H:i:s'),
                     $order->expected_delivery?->format('Y-m-d H:i:s'),
                     $order->delivered_at?->format('Y-m-d H:i:s') ?? 'Not delivered',
@@ -228,42 +219,83 @@ class OrderReportsTable
             }
 
             fclose($file);
-        };
-
-        return response()->stream($callback, 200, $headers);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
-    protected static function exportToPDF($livewire)
+    protected static function exportToPDF($livewire, array $data)
     {
+        $max      = 1000;
         $supplier = Auth::user()->supplier;
 
-        // Apply table filters
-        $query = $livewire->getFilteredTableQuery();
+        $orders = static::applyPeriod($livewire->getFilteredTableQuery(), $data)
+            ->orderByDesc('ordered_at')
+            ->limit($max + 1)
+            ->get();
 
-        $orders = $query->get();
+        if ($orders->count() > $max) {
+            Notification::make()
+                ->title('Too many orders for a PDF')
+                ->body("That period has more than {$max} orders. Narrow the dates or use the CSV export.")
+                ->warning()
+                ->send();
 
-        // Calculate summary statistics
-        $totalRevenue = $orders->sum('supplier_total');
-        $totalOrders = $orders->count();
-        $deliveredOrders = $orders->where('status', 'delivered')->count();
-        $pendingOrders = $orders->whereIn('status', ['confirmed', 'processing', 'shipped'])->count();
+            return;
+        }
 
         $html = view('pdf.orders-report', [
-            'supplier' => $supplier,
-            'orders' => $orders,
-            'totalRevenue' => $totalRevenue,
-            'totalOrders' => $totalOrders,
-            'deliveredOrders' => $deliveredOrders,
-            'pendingOrders' => $pendingOrders,
-            'generatedAt' => now(),
+            'supplier'        => $supplier,
+            'orders'          => $orders,
+            'totalRevenue'    => $orders->sum('supplier_total'),
+            'totalOrders'     => $orders->count(),
+            'deliveredOrders' => $orders->where('status', 'delivered')->count(),
+            'pendingOrders'   => $orders->whereIn('status', ['confirmed', 'processing', 'shipped'])->count(),
+            'generatedAt'     => now(),
         ])->render();
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
+        $pdf      = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
+        $filename = 'orders_report_' . $supplier->company_name . '_' . now()->format('Y-m-d_His') . '.pdf';
 
-        $filename = 'orders_report_'.$supplier->company_name.'_'.now()->format('Y-m-d_His').'.pdf';
+        return response()->streamDownload(fn() => print($pdf->output()), $filename);
+    }
 
-        return response()->streamDownload(function () use ($pdf) {
-            echo $pdf->output();
-        }, $filename);
+    protected static function periodForm(bool $allowAll): array
+    {
+        $fields = [];
+
+        if ($allowAll) {
+            $fields[] = Toggle::make('all_time')
+                ->label('Export all orders (no date limit)')
+                ->helperText('Can take longer for large histories.')
+                ->live();
+        }
+
+        $fields[] = DatePicker::make('from')
+            ->label('From')
+            ->default(now()->startOfMonth())
+            ->maxDate(now())
+            ->hidden(fn(Get $get) => $allowAll && $get('all_time'))
+            ->required(fn(Get $get) => ! ($allowAll && $get('all_time')));
+
+        $fields[] = DatePicker::make('until')
+            ->label('Until')
+            ->default(now())
+            ->maxDate(now())
+            ->afterOrEqual('from')
+            ->hidden(fn(Get $get) => $allowAll && $get('all_time'))
+            ->required(fn(Get $get) => ! ($allowAll && $get('all_time')));
+
+        return $fields;
+    }
+
+    protected static function applyPeriod(Builder $query, array $data): Builder
+    {
+        if ($data['all_time'] ?? false) {
+            return $query;
+        }
+
+        return $query->whereBetween('ordered_at', [
+            Carbon::parse($data['from'])->startOfDay(),
+            Carbon::parse($data['until'])->endOfDay(),
+        ]);
     }
 }

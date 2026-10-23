@@ -408,7 +408,7 @@ KES {{ number_format($totalAmount, 2) }}
 {{ $byMonth->count() }}
 </div>
 <div class="card-sub">
-{{ $month ? 'Single month' : 'Across '.$year }}
+{{ $month ? 'Single month' : 'Across selected period ' }}
 </div>
 </div>
 

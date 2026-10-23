@@ -6,6 +6,7 @@ use App\Jobs\BulkGenerateDeliveryNotesJob;
 use App\Jobs\SendDeliveryNoteEmailJob;
 use App\Models\Rider;
 use App\Services\DeliveryNoteService;
+use App\Services\RiderAssignmentService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
@@ -166,46 +167,32 @@ class DeliveriesTable
                         ->label('Reassign')
                         ->icon('heroicon-o-arrow-path')
                         ->color('warning')
-                        ->visible(fn($record) => $record->rider_id && in_array($record->status, ['assigned', 'ready_for_pickup']))
+                        ->visible(fn($record) => $record->rider_id && ! in_array($record->status, ['delivered', 'cancelled', 'failed']))
                         ->modalHeading('Reassign Rider')
                         ->modalDescription(fn($record) => "Current rider: {$record->rider->full_name}")
                         ->form([
                             Select::make('rider_id')
                                 ->label('New Rider')
-                                ->options(function () {
-                                    return Rider::query()
-                                        ->where('is_active', true)
-                                        ->orderBy('first_name')
-                                        ->get()
-                                        ->mapWithKeys(fn($rider) => [
-                                            $rider->id => "{$rider->full_name} - {$rider->phone}",
-                                        ]);
-                                })
+                                ->options(fn($record) => Rider::query()
+                                    ->active()
+                                    ->where('id', '!=', $record->rider_id)   // hide the current driver
+                                    ->orderBy('first_name')
+                                    ->get()
+                                    ->mapWithKeys(fn($r) => [$r->id => "{$r->full_name} - {$r->phone}"]))
                                 ->required()
-                                ->native(false)
-                                ->helperText('This will change the assigned rider'),
+                                ->searchable()
+                                ->native(false),
+                            Textarea::make('reason')->label('Reason for Reassignment')->required()->maxLength(500),
                         ])
                         ->action(function ($record, array $data) {
                             try {
-                                $oldRider = $record->rider;
                                 $newRider = Rider::findOrFail($data['rider_id']);
+                                app(RiderAssignmentService::class)->reassignRider($record, $newRider, $data['reason']);
 
-                                $record->update([
-                                    'rider_id' => $data['rider_id'],
-                                    'assigned_at' => now(),
-                                ]);
-
-                                Notification::make()
-                                    ->title('Rider Reassigned')
-                                    ->body("Changed from {$oldRider->full_name} to {$newRider->full_name}")
-                                    ->success()
-                                    ->send();
+                                Notification::make()->success()->title('Rider Reassigned')
+                                    ->body("New rider {$newRider->full_name} has been assigned.")->send();
                             } catch (\Exception $e) {
-                                Notification::make()
-                                    ->title('Reassignment Failed')
-                                    ->body($e->getMessage())
-                                    ->danger()
-                                    ->send();
+                                Notification::make()->danger()->title('Reassignment Failed')->body($e->getMessage())->send();
                             }
                         }),
 
@@ -437,7 +424,6 @@ class DeliveriesTable
                                         $record->update([
                                             'rider_id' => $data['rider_id'],
                                             'status' => 'assigned',
-                                            'assigned_at' => now(),
                                         ]);
                                         $assignedCount++;
                                     } catch (\Exception $e) {

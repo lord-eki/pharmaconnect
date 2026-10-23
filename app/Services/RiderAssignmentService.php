@@ -5,6 +5,9 @@ namespace App\Services;
 use App\Models\Delivery;
 use App\Models\Order;
 use App\Models\Rider;
+use App\Notifications\DeliveryStatusUpdatedNotification;
+use App\Notifications\RiderReassignedNotification;
+use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -76,7 +79,6 @@ class RiderAssignmentService
             ]);
 
             return null;
-
         } catch (\Exception $e) {
             Log::error('Error assigning rider', [
                 'delivery_id' => $delivery->id,
@@ -107,7 +109,7 @@ class RiderAssignmentService
             'order_id' => $order->id,
             'pickup_address' => $supplier->address,
             'delivery_address' => $patient->address ?? "{$patient->city}, {$patient->county}",
-            'pickup_latitude' => null, 
+            'pickup_latitude' => null,
             'pickup_longitude' => null,
             'delivery_latitude' => null,
             'delivery_longitude' => null,
@@ -158,12 +160,12 @@ class RiderAssignmentService
      */
     protected function estimateDistance($supplier, $patient): float
     {
-       
+
         if ($supplier->county === $patient->county) {
-            return 10.0; 
+            return 10.0;
         }
 
-        return 50.0; 
+        return 50.0;
     }
 
     /**
@@ -190,7 +192,7 @@ class RiderAssignmentService
                 case 'delivered':
                     $updates['actual_delivery'] = now();
                     $updates['proof_of_delivery'] = $data['proof_of_delivery'] ?? null;
-                    
+
                     if ($delivery->rider) {
                         $delivery->rider->update(['is_available' => true]);
                         $delivery->rider->incrementDeliveries();
@@ -206,7 +208,7 @@ class RiderAssignmentService
 
                 case 'failed':
                     $updates['delivery_notes'] = $data['failure_reason'] ?? 'Delivery failed';
-                    
+
                     if ($delivery->rider) {
                         $delivery->rider->update(['is_available' => true]);
                     }
@@ -225,10 +227,9 @@ class RiderAssignmentService
             ]);
 
             return true;
-
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Error updating delivery status', [
                 'delivery_id' => $delivery->id,
                 'error' => $e->getMessage(),
@@ -241,55 +242,29 @@ class RiderAssignmentService
     /**
      * Reassign rider to delivery
      */
-    public function reassignRider(Delivery $delivery, ?int $riderId = null): ?Rider
+    public function reassignRider(Delivery $delivery, Rider $newRider, string $reason): Delivery
     {
-        try {
-            DB::beginTransaction();
+        return DB::transaction(function () use ($delivery, $newRider, $reason) {
 
-            // Mark current rider as available
-            if ($delivery->rider) {
-                $delivery->rider->update(['is_available' => true]);
+            $oldRider = $delivery->rider;
+
+            if ($oldRider && $oldRider->is($newRider)) {
+                throw new \Exception('This delivery is already assigned to that rider.');
             }
-
-            // Assign new rider
-            if ($riderId) {
-                // Manual assignment
-                $rider = Rider::findOrFail($riderId);
-                
-                if (!$rider->is_available) {
-                    throw new \Exception('Selected rider is not available');
-                }
-
-                $delivery->update([
-                    'rider_id' => $rider->id,
-                    'status' => 'assigned',
-                ]);
-
-                $rider->update(['is_available' => false]);
-            } else {
-                // Auto-assignment
-                $rider = $this->assignRider($delivery);
-            }
-
-            DB::commit();
-
-            Log::info('Rider reassigned', [
-                'delivery_id' => $delivery->id,
-                'new_rider_id' => $rider?->id,
+            $delivery->update([
+                'rider_id' => $newRider->id,
+                'delivery_notes' => trim(($delivery->delivery_notes ?? '') . "\n\nRider reassigned: " . now()->toDateString() . "\nReason: " . $reason)
             ]);
 
-            return $rider;
+            $oldRider?->update(['is_available' => true]);
+            $newRider->update(['is_available' => false]);
 
-        } catch (\Exception $e) {
-            DB::rollBack();
-            
-            Log::error('Error reassigning rider', [
-                'delivery_id' => $delivery->id,
-                'error' => $e->getMessage(),
-            ]);
+            DB::afterCommit(function () use ($delivery, $oldRider, $newRider, $reason) {
+                $oldRider?->user?->notify(new DeliveryStatusUpdatedNotification($delivery, 'assigned', 'reassigned'));
+                $newRider->user?->notify(new  RiderReassignedNotification($delivery, $reason));
+            });
 
-            throw $e;
-        }
+            return $delivery->refresh();
+        });
     }
-
 }
