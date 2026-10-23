@@ -13,6 +13,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -38,11 +39,11 @@ class DeliveriesTable
                     ->sortable()
                     ->default('Not Assigned')
                     ->badge()
-                    ->color(fn ($state) => $state === 'Not Assigned' ? 'danger' : 'success'),
+                    ->color(fn($state) => $state === 'Not Assigned' ? 'danger' : 'success'),
 
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'pending' => 'gray',
                         'assigned' => 'info',
                         'ready_for_pickup' => 'warning',
@@ -61,7 +62,7 @@ class DeliveriesTable
                     ->falseIcon('heroicon-o-document')
                     ->trueColor('success')
                     ->falseColor('gray')
-                    ->tooltip(fn ($record) => $record->delivery_note_document_id ? 'Delivery note generated' : 'No delivery note'),
+                    ->tooltip(fn($record) => $record->delivery_note_document_id ? 'Delivery note generated' : 'No delivery note'),
 
                 TextColumn::make('delivery_address')
                     ->limit(30),
@@ -96,17 +97,17 @@ class DeliveriesTable
                     ->preload(),
 
                 Filter::make('unassigned')
-                    ->query(fn (Builder $query): Builder => $query->whereNull('rider_id'))
+                    ->query(fn(Builder $query): Builder => $query->whereNull('rider_id'))
                     ->label('Unassigned Only')
                     ->toggle(),
 
                 Filter::make('has_delivery_note')
-                    ->query(fn (Builder $query): Builder => $query->whereNotNull('delivery_note_document_id'))
+                    ->query(fn(Builder $query): Builder => $query->whereNotNull('delivery_note_document_id'))
                     ->label('Has Delivery Note')
                     ->toggle(),
 
                 Filter::make('no_delivery_note')
-                    ->query(fn (Builder $query): Builder => $query->whereNull('delivery_note_document_id')->where('status', 'delivered'))
+                    ->query(fn(Builder $query): Builder => $query->whereNull('delivery_note_document_id')->where('status', 'delivered'))
                     ->label('Delivered Without Note')
                     ->toggle(),
             ])
@@ -116,9 +117,9 @@ class DeliveriesTable
                         ->label('Assign')
                         ->icon('heroicon-o-user-plus')
                         ->color('primary')
-                        ->visible(fn ($record) => ! $record->rider_id && in_array($record->status, ['pending']))
+                        ->visible(fn($record) => ! $record->rider_id && in_array($record->status, ['pending']))
                         ->modalHeading('Assign Rider to Delivery')
-                        ->modalDescription(fn ($record) => "Delivery: {$record->delivery_number}")
+                        ->modalDescription(fn($record) => "Delivery: {$record->delivery_number}")
                         ->form([
                             Select::make('rider_id')
                                 ->label('Select Rider')
@@ -127,7 +128,7 @@ class DeliveriesTable
                                         ->where('is_active', true)
                                         ->orderBy('first_name')
                                         ->get()
-                                        ->mapWithKeys(fn ($rider) => [
+                                        ->mapWithKeys(fn($rider) => [
                                             $rider->id => "{$rider->full_name} - {$rider->phone}",
                                         ]);
                                 })
@@ -165,9 +166,9 @@ class DeliveriesTable
                         ->label('Reassign')
                         ->icon('heroicon-o-arrow-path')
                         ->color('warning')
-                        ->visible(fn ($record) => $record->rider_id && in_array($record->status, ['assigned', 'ready_for_pickup']))
+                        ->visible(fn($record) => $record->rider_id && in_array($record->status, ['assigned', 'ready_for_pickup']))
                         ->modalHeading('Reassign Rider')
-                        ->modalDescription(fn ($record) => "Current rider: {$record->rider->full_name}")
+                        ->modalDescription(fn($record) => "Current rider: {$record->rider->full_name}")
                         ->form([
                             Select::make('rider_id')
                                 ->label('New Rider')
@@ -176,7 +177,7 @@ class DeliveriesTable
                                         ->where('is_active', true)
                                         ->orderBy('first_name')
                                         ->get()
-                                        ->mapWithKeys(fn ($rider) => [
+                                        ->mapWithKeys(fn($rider) => [
                                             $rider->id => "{$rider->full_name} - {$rider->phone}",
                                         ]);
                                 })
@@ -212,8 +213,8 @@ class DeliveriesTable
                         ->label('View Orders')
                         ->icon('heroicon-o-shopping-bag')
                         ->color('info')
-                        ->modalHeading(fn ($record) => "Orders for Delivery {$record->delivery_number}")
-                        ->modalDescription(fn ($record) => $record->prescription
+                        ->modalHeading(fn($record) => "Orders for Delivery {$record->delivery_number}")
+                        ->modalDescription(fn($record) => $record->prescription
                             ? "Prescription: {$record->prescription->prescription_number} | {$record->orders->count()} order(s)"
                             : 'No prescription linked')
                         ->modalContent(function ($record) {
@@ -235,7 +236,7 @@ class DeliveriesTable
                         ->label('Generate Note')
                         ->icon('heroicon-o-document-plus')
                         ->color('success')
-                        ->visible(fn ($record) => $record->status === 'delivered' && ! $record->delivery_note_document_id)
+                        ->visible(fn($record) => $record->status === 'delivered' && ! $record->delivery_note_document_id)
                         ->form([
                             Checkbox::make('send_email')
                                 ->label('Send email to patient')
@@ -284,7 +285,7 @@ class DeliveriesTable
                         ->label('Download Note')
                         ->icon('heroicon-o-arrow-down-tray')
                         ->color('success')
-                        ->visible(fn ($record) => $record->delivery_note_document_id)
+                        ->visible(fn($record) => $record->delivery_note_document_id)
                         ->action(function ($record) {
                             try {
                                 $document = $record->deliveryNoteDocument;
@@ -326,10 +327,10 @@ class DeliveriesTable
                         ->label('Send Note')
                         ->icon('heroicon-o-envelope')
                         ->color('info')
-                        ->visible(fn ($record) => $record->status === 'delivered' && $record->delivery_note_document_id)
+                        ->visible(fn($record) => $record->status === 'delivered' && $record->delivery_note_document_id)
                         ->requiresConfirmation()
                         ->modalHeading('Send Delivery Note')
-                        ->modalDescription(fn ($record) => "Send delivery note to patient's email")
+                        ->modalDescription(fn($record) => "Send delivery note to patient's email")
                         ->action(function ($record) {
                             try {
                                 SendDeliveryNoteEmailJob::dispatch($record, auth()->user());
@@ -352,8 +353,8 @@ class DeliveriesTable
                         ->label('View Note')
                         ->icon('heroicon-o-document-magnifying-glass')
                         ->color('gray')
-                        ->visible(fn ($record) => $record->delivery_note_document_id)
-                        ->url(fn ($record) => $record->deliveryNoteDocument
+                        ->visible(fn($record) => $record->delivery_note_document_id)
+                        ->url(fn($record) => $record->deliveryNoteDocument
                             ? route('delivery-note.view', ['document' => $record->deliveryNoteDocument->id])
                             : null)
                         ->openUrlInNewTab(),
@@ -362,8 +363,40 @@ class DeliveriesTable
                         ->label('Details')
                         ->icon('heroicon-o-eye')
                         ->color('info')
-                        ->url(fn ($record) => route('filament.Operation.resources.internals.deliveries.view', ['record' => $record->id]))
+                        ->url(fn($record) => route('filament.Operation.resources.internals.deliveries.view', ['record' => $record->id]))
                         ->openUrlInNewTab(false),
+
+                    Action::make('rate_rider')
+                        ->label('Rate Rider')
+                        ->icon('heroicon-o-star')
+                        ->color('warning')
+                        ->visible(fn($record) => $record->status === 'delivered' && $record->rider_id && is_null($record->rating))
+                        ->form([
+                            Select::make('rating')
+                                ->label('Rating')
+                                ->options([
+                                    5 => '★★★★★ Excellent',
+                                    4 => '★★★★ Good',
+                                    3 => '★★★ Average',
+                                    2 => '★★ Poor',
+                                    1 => '★ Very poor',
+                                ])
+                                ->required(),
+                            Textarea::make('rating_comment')->label('Comment (optional)')->maxLength(500),
+                        ])
+                        ->action(function ($record, array $data) {
+                            DB::transaction(function () use ($record, $data) {
+                                $record->update([
+                                    'rating'         => $data['rating'],
+                                    'rating_comment' => $data['rating_comment'] ?? null,
+                                    'rated_at'       => now(),
+                                    'rated_by'       => auth()->id(),
+                                ]);
+                                $record->rider->updateRating();
+                            });
+
+                            Notification::make()->title('Rider rated')->success()->send();
+                        }),
                 ])->label('Actions')
                     ->icon('heroicon-o-ellipsis-vertical')
                     ->size('sm')->color('gray')->outlined()
@@ -385,7 +418,7 @@ class DeliveriesTable
                                         ->where('is_active', true)
                                         ->orderBy('first_name')
                                         ->get()
-                                        ->mapWithKeys(fn ($rider) => [
+                                        ->mapWithKeys(fn($rider) => [
                                             $rider->id => "{$rider->full_name} - {$rider->phone}",
                                         ]);
                                 })
@@ -419,8 +452,8 @@ class DeliveriesTable
                                 $rider = Rider::find($data['rider_id']);
                                 Notification::make()
                                     ->title('Bulk Assignment Complete')
-                                    ->body("{$assignedCount} deliveries assigned to {$rider->full_name}.".
-                                          ($skippedCount > 0 ? " {$skippedCount} skipped." : ''))
+                                    ->body("{$assignedCount} deliveries assigned to {$rider->full_name}." .
+                                        ($skippedCount > 0 ? " {$skippedCount} skipped." : ''))
                                     ->success()
                                     ->send();
                             } else {
@@ -476,7 +509,7 @@ class DeliveriesTable
 
                                     Notification::make()
                                         ->title('Bulk Generation Started')
-                                        ->body(count($deliveryIds).' delivery notes are being generated in the background.')
+                                        ->body(count($deliveryIds) . ' delivery notes are being generated in the background.')
                                         ->info()
                                         ->send();
                                 } else {

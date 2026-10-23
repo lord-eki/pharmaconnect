@@ -38,6 +38,10 @@ class Delivery extends Model
         'recipient_phone',
         'proof_of_delivery',
         'delivery_note_document_id',
+        'rating',
+        'rated_at',
+        'rating_comment',
+        'rated_by'
     ];
 
     protected $casts = [
@@ -53,6 +57,8 @@ class Delivery extends Model
         'actual_pickup' => 'datetime',
         'estimated_delivery' => 'datetime',
         'actual_delivery' => 'datetime',
+        'rating' => 'integer',
+        'rated_at' => 'datetime'
     ];
 
     public function prescription(): BelongsTo

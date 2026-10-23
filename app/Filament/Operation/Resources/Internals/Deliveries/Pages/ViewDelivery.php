@@ -23,6 +23,7 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Support\Colors\Color;
+use Illuminate\Support\Facades\DB;
 
 class ViewDelivery extends ViewRecord
 {
@@ -44,7 +45,7 @@ class ViewDelivery extends ViewRecord
                                 TextEntry::make('status')
                                     ->label('Status')
                                     ->badge()
-                                    ->color(fn (string $state): string => match ($state) {
+                                    ->color(fn(string $state): string => match ($state) {
                                         'pending' => 'gray',
                                         'assigned' => 'info',
                                         'ready_for_pickup' => 'warning',
@@ -58,7 +59,7 @@ class ViewDelivery extends ViewRecord
 
                                 TextEntry::make('orders_count')
                                     ->label('Orders')
-                                    ->state(fn ($record) => $record->orders->count())
+                                    ->state(fn($record) => $record->orders->count())
                                     ->badge()
                                     ->color('info'),
 
@@ -69,7 +70,7 @@ class ViewDelivery extends ViewRecord
 
                                 TextEntry::make('total_amount')
                                     ->label('Orders Total')
-                                    ->state(fn ($record) => $record->orders_subtotal)
+                                    ->state(fn($record) => $record->orders_subtotal)
                                     ->money('KES')
                                     ->weight('bold'),
                             ]),
@@ -77,207 +78,207 @@ class ViewDelivery extends ViewRecord
                     ->compact(),
 
 
-                    Grid::make(4)
-                        ->schema([
+                Grid::make(4)
+                    ->schema([
 
-                            Tabs::make()
-                                ->columnSpan(3)
-                                ->tabs([
+                        Tabs::make()
+                            ->columnSpan(3)
+                            ->tabs([
 
-                                    Tab::make('Delivery')
-                                        ->icon('heroicon-o-map-pin')
-                                        ->schema([
+                                Tab::make('Delivery')
+                                    ->icon('heroicon-o-map-pin')
+                                    ->schema([
 
-                                            Section::make('Pickup')
-                                                ->schema([
-                                                    Grid::make(3)
-                                                        ->schema([
-                                                            TextEntry::make('pickup_address')
-                                                                ->label('Address'),
+                                        Section::make('Pickup')
+                                            ->schema([
+                                                Grid::make(3)
+                                                    ->schema([
+                                                        TextEntry::make('pickup_address')
+                                                            ->label('Address'),
 
-                                                            TextEntry::make('scheduled_pickup')
-                                                                ->label('Scheduled')
-                                                                ->dateTime('M d, Y H:i'),
+                                                        TextEntry::make('scheduled_pickup')
+                                                            ->label('Scheduled')
+                                                            ->dateTime('M d, Y H:i'),
 
-                                                            TextEntry::make('actual_pickup')
-                                                                ->label('Actual')
-                                                                ->dateTime('M d, Y H:i')
-                                                                ->placeholder('—'),
-                                                        ]),
-                                                ])
-                                                ->compact(),
+                                                        TextEntry::make('actual_pickup')
+                                                            ->label('Actual')
+                                                            ->dateTime('M d, Y H:i')
+                                                            ->placeholder('—'),
+                                                    ]),
+                                            ])
+                                            ->compact(),
 
-                                            Section::make('Destination')
-                                                ->schema([
-                                                    Grid::make(4)
-                                                        ->schema([
-                                                            TextEntry::make('delivery_address')
-                                                                ->label('Address'),
+                                        Section::make('Destination')
+                                            ->schema([
+                                                Grid::make(4)
+                                                    ->schema([
+                                                        TextEntry::make('delivery_address')
+                                                            ->label('Address'),
 
-                                                            TextEntry::make('recipient_name')
-                                                                ->label('Recipient'),
+                                                        TextEntry::make('recipient_name')
+                                                            ->label('Recipient'),
 
-                                                            TextEntry::make('recipient_phone')
-                                                                ->label('Phone'),
+                                                        TextEntry::make('recipient_phone')
+                                                            ->label('Phone'),
 
 
-                                                            TextEntry::make('estimated_delivery')
-                                                                ->label('Est. Delivery')
-                                                                ->dateTime('M d, Y H:i'),
+                                                        TextEntry::make('estimated_delivery')
+                                                            ->label('Est. Delivery')
+                                                            ->dateTime('M d, Y H:i'),
 
-                                                            TextEntry::make('actual_delivery')
-                                                                ->label('Actual Delivery')
-                                                                ->dateTime('M d, Y H:i')
-                                                                ->placeholder('—'),
+                                                        TextEntry::make('actual_delivery')
+                                                            ->label('Actual Delivery')
+                                                            ->dateTime('M d, Y H:i')
+                                                            ->placeholder('—'),
 
-                                                            TextEntry::make('delivery_notes')
-                                                                ->label('Notes')
-                                                                ->placeholder('No notes'),
-                                                        ]),
-                                                ])
-                                                ->compact(),
-                                        ]),
+                                                        TextEntry::make('delivery_notes')
+                                                            ->label('Notes')
+                                                            ->placeholder('No notes'),
+                                                    ]),
+                                            ])
+                                            ->compact(),
+                                    ]),
 
-                                    Tab::make('Orders')
-                                        ->icon('heroicon-o-shopping-bag')
-                                        ->schema([
-                                            RepeatableEntry::make('orders')
-                                                ->label('')
-                                                ->schema([
-                                                    Grid::make(4)
-                                                        ->schema([
-                                                            TextEntry::make('order_number')
-                                                                ->label('Order #')
-                                                                ->weight('bold'),
+                                Tab::make('Orders')
+                                    ->icon('heroicon-o-shopping-bag')
+                                    ->schema([
+                                        RepeatableEntry::make('orders')
+                                            ->label('')
+                                            ->schema([
+                                                Grid::make(4)
+                                                    ->schema([
+                                                        TextEntry::make('order_number')
+                                                            ->label('Order #')
+                                                            ->weight('bold'),
 
-                                                            TextEntry::make('supplier.company_name')
-                                                                ->label('Supplier'),
+                                                        TextEntry::make('supplier.company_name')
+                                                            ->label('Supplier'),
 
-                                                            TextEntry::make('status')
-                                                                ->label('Status')
-                                                                ->badge()
-                                                                ->color(fn (string $state): string => match ($state) {
-                                                                    'pending_review' => 'warning',
-                                                                    'sent_to_supplier' => 'info',
-                                                                    'confirmed' => 'success',
-                                                                    'delivered' => 'success',
-                                                                    'cancelled' => 'danger',
-                                                                    default => 'gray',
-                                                                }),
+                                                        TextEntry::make('status')
+                                                            ->label('Status')
+                                                            ->badge()
+                                                            ->color(fn(string $state): string => match ($state) {
+                                                                'pending_review' => 'warning',
+                                                                'sent_to_supplier' => 'info',
+                                                                'confirmed' => 'success',
+                                                                'delivered' => 'success',
+                                                                'cancelled' => 'danger',
+                                                                default => 'gray',
+                                                            }),
 
-                                                            TextEntry::make('total_amount')
-                                                                ->label('Amount')
-                                                                ->money('KES')
-                                                                ->weight('bold'),
-                                                        ]),
+                                                        TextEntry::make('total_amount')
+                                                            ->label('Amount')
+                                                            ->money('KES')
+                                                            ->weight('bold'),
+                                                    ]),
 
-                                                    Grid::make(2)
-                                                        ->schema([
-                                                            TextEntry::make('pivot.pickup_status')
-                                                                ->label('Pickup Status')
-                                                                ->badge()
-                                                                ->color(fn ($state): string => match ($state) {
-                                                                    'picked_up' => 'success',
-                                                                    'pending' => 'warning',
-                                                                    'failed' => 'danger',
-                                                                    default => 'gray',
-                                                                })
-                                                                ->formatStateUsing(fn ($state): string => ucfirst($state ?? 'pending')),
+                                                Grid::make(2)
+                                                    ->schema([
+                                                        TextEntry::make('pivot.pickup_status')
+                                                            ->label('Pickup Status')
+                                                            ->badge()
+                                                            ->color(fn($state): string => match ($state) {
+                                                                'picked_up' => 'success',
+                                                                'pending' => 'warning',
+                                                                'failed' => 'danger',
+                                                                default => 'gray',
+                                                            })
+                                                            ->formatStateUsing(fn($state): string => ucfirst($state ?? 'pending')),
 
-                                                            TextEntry::make('pivot.picked_up_at')
-                                                                ->label('Picked Up At')
-                                                                ->dateTime('M d, Y H:i')
-                                                                ->placeholder('—'),
-                                                        ]),
-                                                ])
-                                                ->columns(1),
-                                        ]),
+                                                        TextEntry::make('pivot.picked_up_at')
+                                                            ->label('Picked Up At')
+                                                            ->dateTime('M d, Y H:i')
+                                                            ->placeholder('—'),
+                                                    ]),
+                                            ])
+                                            ->columns(1),
+                                    ]),
 
-                                    Tab::make('Prescription')
-                                        ->icon('heroicon-o-document-text')
-                                        ->visible(fn ($record) => $record->prescription_id !== null)
-                                        ->schema([
-                                            Grid::make(2)
-                                                ->schema([
-                                                    TextEntry::make('prescription.prescription_number')
-                                                        ->label('Prescription #')
-                                                        ->color(Color::Blue)
-                                                        ->weight('bold')
-                                                        ->placeholder('—'),
+                                Tab::make('Prescription')
+                                    ->icon('heroicon-o-document-text')
+                                    ->visible(fn($record) => $record->prescription_id !== null)
+                                    ->schema([
+                                        Grid::make(2)
+                                            ->schema([
+                                                TextEntry::make('prescription.prescription_number')
+                                                    ->label('Prescription #')
+                                                    ->color(Color::Blue)
+                                                    ->weight('bold')
+                                                    ->placeholder('—'),
 
-                                                    TextEntry::make('prescription.physician.name')
-                                                        ->label('Physician')
-                                                        ->placeholder('—'),
+                                                TextEntry::make('prescription.physician.name')
+                                                    ->label('Physician')
+                                                    ->placeholder('—'),
 
-                                                    TextEntry::make('prescription.patient.full_name')
-                                                        ->label('Patient')
-                                                        ->placeholder('—'),
+                                                TextEntry::make('prescription.patient.full_name')
+                                                    ->label('Patient')
+                                                    ->placeholder('—'),
 
-                                                    TextEntry::make('total_amount')
-                                                        ->label('Orders Total')
-                                                        ->state(fn ($record) => $record->orders->sum('total_amount'))
-                                                        ->money('KES')
-                                                        ->weight('bold'),
-                                                ]),
-                                        ]),
+                                                TextEntry::make('total_amount')
+                                                    ->label('Orders Total')
+                                                    ->state(fn($record) => $record->orders->sum('total_amount'))
+                                                    ->money('KES')
+                                                    ->weight('bold'),
+                                            ]),
+                                    ]),
 
-                                    Tab::make('Insurer Order')
-                                        ->icon('heroicon-o-building-office')
-                                        ->visible(fn ($record) => $record->prescription_id === null && $record->external_order_id !== null)
-                                        ->schema([
-                                            Grid::make(2)
-                                                ->schema([
-                                                    TextEntry::make('externalOrder.order_number')
-                                                        ->label('External Order #')
-                                                        ->color(Color::Blue)
-                                                        ->weight('bold'),
+                                Tab::make('Insurer Order')
+                                    ->icon('heroicon-o-building-office')
+                                    ->visible(fn($record) => $record->prescription_id === null && $record->external_order_id !== null)
+                                    ->schema([
+                                        Grid::make(2)
+                                            ->schema([
+                                                TextEntry::make('externalOrder.order_number')
+                                                    ->label('External Order #')
+                                                    ->color(Color::Blue)
+                                                    ->weight('bold'),
 
-                                                    TextEntry::make('externalOrder.insuranceProvider.company_name')
-                                                        ->label('Insurance Provider'),
+                                                TextEntry::make('externalOrder.insuranceProvider.company_name')
+                                                    ->label('Insurance Provider'),
 
-                                                    TextEntry::make('recipient_name')
-                                                        ->label('Recipient'),
+                                                TextEntry::make('recipient_name')
+                                                    ->label('Recipient'),
 
-                                                    TextEntry::make('total_amount')
-                                                        ->label('Orders Total')
-                                                        ->state(fn ($record) => $record->orders->sum('total_amount'))
-                                                        ->money('KES')
-                                                        ->weight('bold'),
-                                                ]),
-                                        ]),
-                                ]),
+                                                TextEntry::make('total_amount')
+                                                    ->label('Orders Total')
+                                                    ->state(fn($record) => $record->orders->sum('total_amount'))
+                                                    ->money('KES')
+                                                    ->weight('bold'),
+                                            ]),
+                                    ]),
+                            ]),
 
-                            Section::make('Rider')
-                                ->icon('heroicon-o-user-circle')
-                                ->columnSpan(1)
-                                ->schema([
-                                    TextEntry::make('rider.full_name')
-                                        ->label('Name')
-                                        ->default('Not Assigned')
-                                        ->badge()
-                                        ->color(fn ($state) => $state === 'Not Assigned' ? 'danger' : 'success'),
+                        Section::make('Rider')
+                            ->icon('heroicon-o-user-circle')
+                            ->columnSpan(1)
+                            ->schema([
+                                TextEntry::make('rider.full_name')
+                                    ->label('Name')
+                                    ->default('Not Assigned')
+                                    ->badge()
+                                    ->color(fn($state) => $state === 'Not Assigned' ? 'danger' : 'success'),
 
-                                    TextEntry::make('rider.phone')
-                                        ->label('Phone')
-                                        ->default('—'),
+                                TextEntry::make('rider.phone')
+                                    ->label('Phone')
+                                    ->default('—'),
 
-                                    TextEntry::make('rider.vehicle_type')
-                                        ->label('Vehicle')
-                                        ->default('—'),
+                                TextEntry::make('rider.vehicle_type')
+                                    ->label('Vehicle')
+                                    ->default('—'),
 
-                                    TextEntry::make('rider.vehicle_registration')
-                                        ->label('Plate')
-                                        ->default('—'),
+                                TextEntry::make('rider.vehicle_registration')
+                                    ->label('Plate')
+                                    ->default('—'),
 
-                                    TextEntry::make('rider.rating')
-                                        ->label('Rating')
-                                        ->default('—')
-                                        ->suffix(' / 5'),
-                                ])
-                                ->visible(fn ($record) => $record->rider_id !== null),
+                                TextEntry::make('rider.rating')
+                                    ->label('Rating')
+                                    ->default('—')
+                                    ->suffix(' / 5'),
+                            ])
+                            ->visible(fn($record) => $record->rider_id !== null),
 
-                        
-                ])->columnSpanFull(),
+
+                    ])->columnSpanFull(),
 
             ]);
     }
@@ -289,7 +290,7 @@ class ViewDelivery extends ViewRecord
                 ->label('Assign Rider')
                 ->icon('heroicon-o-user-plus')
                 ->color('success')
-                ->visible(fn ($record) => $record->status === 'pending' && ! $record->rider_id)
+                ->visible(fn($record) => $record->status === 'pending' && ! $record->rider_id)
                 ->form([
                     Select::make('rider_id')
                         ->label('Select Rider')
@@ -297,7 +298,7 @@ class ViewDelivery extends ViewRecord
                             Rider::available()
                                 ->available()
                                 ->get()
-                                ->mapWithKeys(fn ($rider) => [$rider->id => "{$rider->full_name} - {$rider->phone}"])
+                                ->mapWithKeys(fn($rider) => [$rider->id => "{$rider->full_name} - {$rider->phone}"])
                         )
                         ->required()
                         ->searchable()
@@ -336,7 +337,7 @@ class ViewDelivery extends ViewRecord
                 ->label('Reassign Rider')
                 ->icon('heroicon-o-arrow-path')
                 ->color('warning')
-                ->visible(fn ($record) => $record->rider_id && ! in_array($record->status, ['delivered', 'cancelled']))
+                ->visible(fn($record) => $record->rider_id && ! in_array($record->status, ['delivered', 'cancelled']))
                 ->form([
                     Select::make('rider_id')
                         ->label('Select New Rider')
@@ -344,7 +345,7 @@ class ViewDelivery extends ViewRecord
                             Rider::active()
                                 ->available()
                                 ->get()
-                                ->mapWithKeys(fn ($rider) => [$rider->id => "{$rider->full_name} - {$rider->phone}"])
+                                ->mapWithKeys(fn($rider) => [$rider->id => "{$rider->full_name} - {$rider->phone}"])
                         )
                         ->required()
                         ->searchable(),
@@ -368,9 +369,9 @@ class ViewDelivery extends ViewRecord
 
                         $record->update([
                             'rider_id' => $data['rider_id'],
-                            'delivery_notes' => ($record->delivery_notes ?? '').
-                                "\n\nRider reassigned: ".now()->toDateTimeString().
-                                "\nReason: ".$data['reason'],
+                            'delivery_notes' => ($record->delivery_notes ?? '') .
+                                "\n\nRider reassigned: " . now()->toDateTimeString() .
+                                "\nReason: " . $data['reason'],
                         ]);
 
                         $newRider->update(['is_available' => false]);
@@ -397,7 +398,7 @@ class ViewDelivery extends ViewRecord
                 ->label('Mark Picked Up')
                 ->icon('heroicon-o-truck')
                 ->color('info')
-                ->visible(fn ($record) => in_array($record->status, ['assigned']))
+                ->visible(fn($record) => in_array($record->status, ['assigned']))
                 ->requiresConfirmation()
                 ->action(function ($record) {
                     try {
@@ -412,7 +413,9 @@ class ViewDelivery extends ViewRecord
 
                         if ($record->rider && $record->rider->user) {
                             $record->rider->user->notify(new DeliveryStatusUpdatedNotification(
-                                $record, 'assigned', 'picked_up'
+                                $record,
+                                'assigned',
+                                'picked_up'
                             ));
                         }
 
@@ -434,14 +437,16 @@ class ViewDelivery extends ViewRecord
                 ->label('Mark In Transit')
                 ->icon('heroicon-o-arrow-right-circle')
                 ->color('primary')
-                ->visible(fn ($record) => $record->status === 'picked_up')
+                ->visible(fn($record) => $record->status === 'picked_up')
                 ->requiresConfirmation()
                 ->action(function ($record) {
                     $record->update(['status' => 'in_transit']);
 
                     if ($record->rider && $record->rider->user) {
                         $record->rider->user->notify(new DeliveryStatusUpdatedNotification(
-                            $record, 'picked_up', 'in_transit'
+                            $record,
+                            'picked_up',
+                            'in_transit'
                         ));
                     }
 
@@ -456,7 +461,7 @@ class ViewDelivery extends ViewRecord
                 ->label('Mark Delivered')
                 ->icon('heroicon-o-check-circle')
                 ->color('success')
-                ->visible(fn ($record) => in_array($record->status, ['picked_up', 'in_transit']))
+                ->visible(fn($record) => in_array($record->status, ['picked_up', 'in_transit']))
                 ->requiresConfirmation()
                 ->modalHeading('Confirm Delivery')
                 ->modalDescription('This will mark the delivery as completed and process all payments and commissions for all orders.')
@@ -474,7 +479,9 @@ class ViewDelivery extends ViewRecord
 
                         if ($record->rider && $record->rider->user) {
                             $record->rider->user->notify(new DeliveryStatusUpdatedNotification(
-                                $record, $record->getOriginal('status'), 'delivered'
+                                $record,
+                                $record->getOriginal('status'),
+                                'delivered'
                             ));
                         }
 
@@ -495,7 +502,7 @@ class ViewDelivery extends ViewRecord
                         $message = "Delivery completed! {$results['orders_processed']} order(s) processed.";
 
                         if (! empty($results['errors'])) {
-                            $message .= ' However, some errors occurred: '.implode(', ', $results['errors']);
+                            $message .= ' However, some errors occurred: ' . implode(', ', $results['errors']);
                         }
 
                         Notification::make()
@@ -507,7 +514,7 @@ class ViewDelivery extends ViewRecord
                         Notification::make()
                             ->danger()
                             ->title('Error')
-                            ->body('Failed to complete delivery: '.$e->getMessage())
+                            ->body('Failed to complete delivery: ' . $e->getMessage())
                             ->send();
                     }
                 }),
@@ -516,7 +523,7 @@ class ViewDelivery extends ViewRecord
                 ->label('Mark Failed')
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
-                ->visible(fn ($record) => in_array($record->status, ['assigned', 'picked_up', 'in_transit']))
+                ->visible(fn($record) => in_array($record->status, ['assigned', 'picked_up', 'in_transit']))
                 ->requiresConfirmation()
                 ->form([
                     Textarea::make('failure_reason')
@@ -531,7 +538,9 @@ class ViewDelivery extends ViewRecord
 
                         if ($record->rider && $record->rider->user) {
                             $record->rider->user->notify(new DeliveryStatusUpdatedNotification(
-                                $record, $record->getOriginal('status'), 'failed'
+                                $record,
+                                $record->getOriginal('status'),
+                                'failed'
                             ));
                         }
 
@@ -547,6 +556,37 @@ class ViewDelivery extends ViewRecord
                             ->body($e->getMessage())
                             ->send();
                     }
+                }),
+            Action::make('rate_rider')
+                ->label('Rate Rider')
+                ->icon('heroicon-o-star')
+                ->color('warning')
+                ->visible(fn($record) => $record->status === 'delivered' && $record->rider_id && is_null($record->rating))
+                ->form([
+                    Select::make('rating')
+                        ->label('Rating')
+                        ->options([
+                            5 => '★★★★★ Excellent',
+                            4 => '★★★★ Good',
+                            3 => '★★★ Average',
+                            2 => '★★ Poor',
+                            1 => '★ Very poor',
+                        ])
+                        ->required(),
+                    Textarea::make('rating_comment')->label('Comment (optional)')->maxLength(500),
+                ])
+                ->action(function ($record, array $data) {
+                    DB::transaction(function () use ($record, $data) {
+                        $record->update([
+                            'rating'         => $data['rating'],
+                            'rating_comment' => $data['rating_comment'] ?? null,
+                            'rated_at'       => now(),
+                            'rated_by'       => auth()->id(),
+                        ]);
+                        $record->rider->updateRating();
+                    });
+
+                    Notification::make()->title('Rider rated')->success()->send();
                 }),
         ];
     }

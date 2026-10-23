@@ -77,15 +77,16 @@ class Rider extends Model
     // Methods
     public function updateRating(): void
     {
-        $completedDeliveries = $this->deliveries()
-            ->where('status', 'delivered')
-            ->whereNotNull('rating')
-            ->get();
 
-        if ($completedDeliveries->count() > 0) {
-            $this->rating = $completedDeliveries->avg('rating');
-            $this->save();
+        $avg = $this->deliveries()
+        ->where('status','delivered')
+        ->whereNotNull('rating')
+        ->avg('rating');
+
+        if($avg !== null){
+            $this->update(['rating' => round($avg,2)]);
         }
+
     }
 
     public function incrementDeliveries(): void
