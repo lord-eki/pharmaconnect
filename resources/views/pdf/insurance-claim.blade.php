@@ -632,14 +632,11 @@
         <div class="amount-summary">
             @if(!empty($deliveryFeeItem))
             @php
-                // For new prescriptions the delivery fee is already baked into claimed_amount,
-                // so we can safely subtract it to show a medicines-only subtotal.
-                // For old prescriptions (is_synthesised = true) the fee was never in claimed_amount,
-                // so we show claimed_amount as-is and just append the fee line separately.
+               
                 $isSynthesised = !empty($deliveryFeeItem->is_synthesised);
                 $medicinesSubtotal = $isSynthesised
-                    ? $claim->claimed_amount
-                    : $claim->claimed_amount - $deliveryFeeItem->total_price;
+                    ? $claim->claimed_amount - $deliveryFeeItem->total_price
+                    : $claim->claimed_amount;
             @endphp
             <div class="amount-row">
                 <div class="amount-label">Medicines Subtotal:</div>
