@@ -13,10 +13,14 @@ use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
@@ -249,7 +253,7 @@ class OrdersTable
                         ->icon('heroicon-o-pencil-square')
                         ->color('warning')
                         ->visible(fn(Order $record): bool => $record->status === 'pending_review')
-                        ->mountUsing(function (\Filament\Schemas\Schema  $form, Order $record) {
+                        ->mountUsing(function (Schema  $form, Order $record) {
                             $form->fill([
                                 'items' => $record->items->map(fn($item) => [
                                     'order_item_id' => $item->id,
@@ -261,31 +265,30 @@ class OrdersTable
                             ]);
                         })
                         ->form([
-                            \Filament\Forms\Components\Repeater::make('items')
+                            Repeater::make('items')
                                 ->label('Order Items')
                                 ->schema([
-                                    \Filament\Forms\Components\Hidden::make('order_item_id'),
-
-                                    \Filament\Forms\Components\TextInput::make('medicine_name')
+                                    Hidden::make('order_item_id'),
+                                    TextInput::make('medicine_name')
                                         ->label('Medicine')
                                         ->disabled()
                                         ->columnSpan(2),
 
-                                    \Filament\Forms\Components\TextInput::make('quantity')
+                                    TextInput::make('quantity')
                                         ->label('Quantity')
                                         ->numeric()
                                         ->minValue(1)
                                         ->required()
                                         ->columnSpan(1),
 
-                                    \Filament\Forms\Components\TextInput::make('unit_price')
+                                    TextInput::make('unit_price')
                                         ->label('Unit Price (KES)')
                                         ->numeric()
                                         ->disabled()
                                         ->prefix('KES')
                                         ->columnSpan(1),
 
-                                    \Filament\Forms\Components\Toggle::make('remove')
+                                    Toggle::make('remove')
                                         ->label('Remove this item')
                                         ->helperText('Toggle ON to remove item from order')
                                         ->default(false)
@@ -300,7 +303,6 @@ class OrdersTable
                         ->action(function (Order $record, array $data): void {
                             try {
                                 $record->updateOrderItems($data['items']);
-
                                 Notification::make()
                                     ->title('Order Updated')
                                     ->body('Order items have been updated successfully.')
@@ -314,7 +316,7 @@ class OrdersTable
 
                                 Notification::make()
                                     ->title('Error updating order')
-                                    ->body($e->getMessage())
+                                    ->body('Unable to update order item . Try again later')
                                     ->danger()
                                     ->send();
                             }
@@ -333,16 +335,16 @@ class OrdersTable
                             try {
                                 return app(OrderReportService::class)->downloadLPO($record);
                             } catch (Throwable $e) {
-                                Log::error('LPO download error',[
+                                Log::error('LPO download error', [
                                     'order_id' => $record->id,
-                                    'error' =>$e->getMessage()
+                                    'error' => $e->getMessage()
                                 ]);
 
                                 Notification::make()
-                                ->title('Error generating LPO')
-                                ->body('Unable to generate PDF. Please try again later')
-                                ->danger()
-                                ->send();
+                                    ->title('Error generating LPO')
+                                    ->body('Unable to generate PDF. Please try again later')
+                                    ->danger()
+                                    ->send();
                             }
                         })
                         ->requiresConfirmation(false)

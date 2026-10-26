@@ -162,7 +162,6 @@ class Order extends Model
                     dispatch(function () use ($prescription) {
                         static::checkPrescriptionOrderCompletion($prescription);
                     })->delay(now()->addHours(24));
-
                 } catch (\Exception $e) {
                     Log::error('Failed to create delivery on order confirmation', [
                         'order_id' => $order->id,
@@ -204,7 +203,6 @@ class Order extends Model
 
                     // Update external order status
                     $externalOrder->update(['status' => 'processing']);
-
                 } catch (\Exception $e) {
                     Log::error('Failed to create delivery for external order', [
                         'order_id' => $order->id,
@@ -259,7 +257,6 @@ class Order extends Model
                 'confirmed_orders' => $confirmedCount,
                 'pending_orders' => $pendingCount,
             ]);
-
         }
     }
 
@@ -284,7 +281,7 @@ class Order extends Model
         $this->sent_to_supplier_at = now();
 
         if ($notes) {
-            $this->notes = ($this->notes ? $this->notes."\n\n" : '').'Sent to supplier: '.$notes;
+            $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . 'Sent to supplier: ' . $notes;
         }
 
         $saved = $this->save();
@@ -376,7 +373,7 @@ class Order extends Model
             $this->is_rejected          = false;
 
             if ($reason) {
-                $this->notes = ($this->notes ? $this->notes."\n\n" : '').'Reassigned: '.$reason;
+                $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . 'Reassigned: ' . $reason;
             }
 
             // Recalculate item prices for the new supplier
@@ -552,13 +549,13 @@ class Order extends Model
 
         // Collect delivered orders linked to this claim (via prescription or external order)
         $orders = static::where(function ($q) use ($claim) {
-                if ($claim->prescription_id) {
-                    $q->where('prescription_id', $claim->prescription_id);
-                }
-                if ($claim->external_order_id) {
-                    $q->orWhere('external_order_id', $claim->external_order_id);
-                }
-            })
+            if ($claim->prescription_id) {
+                $q->where('prescription_id', $claim->prescription_id);
+            }
+            if ($claim->external_order_id) {
+                $q->orWhere('external_order_id', $claim->external_order_id);
+            }
+        })
             ->where('status', 'delivered')
             ->get();
 
@@ -637,7 +634,7 @@ class Order extends Model
         return $this->hasMany(OrderItem::class)->where('is_delivery_fee', false);
     }
 
-    public function allItems() : HasMany
+    public function allItems(): HasMany
     {
         return $this->hasMany(Order::class);
     }
@@ -649,7 +646,7 @@ class Order extends Model
 
     public function deliveryFeeItem(): HasOne
     {
-        return $this->hasOne(OrderItem::class)->where('is_delivery_fee',true);
+        return $this->hasOne(OrderItem::class)->where('is_delivery_fee', true);
     }
 
 
@@ -752,7 +749,7 @@ class Order extends Model
      */
     public function scopePendingReassignment($query)
     {
-        return $query->whereIn('status', ['pending_reassignment', 'needs_manual_assignment','cancelled']);
+        return $query->whereIn('status', ['pending_reassignment', 'needs_manual_assignment', 'cancelled']);
     }
 
     /**
@@ -797,7 +794,7 @@ class Order extends Model
         $prefix = 'LPO';
         $year = date('Y');
         $month = date('m');
-        $ym = $year.$month;
+        $ym = $year . $month;
 
         // Get the last order for this year and month
         $lastOrder = static::whereYear('created_at', $year)
@@ -840,8 +837,8 @@ class Order extends Model
                     if ($supplierMedicine) {
                         if ($supplierMedicine->stock_quantity < $item->quantity) {
                             throw new \Exception(
-                                "Insufficient stock for {$item->medicine->generic_name}. ".
-                                "Required: {$item->quantity}, Available: {$supplierMedicine->stock_quantity}"
+                                "Insufficient stock for {$item->medicine->generic_name}. " .
+                                    "Required: {$item->quantity}, Available: {$supplierMedicine->stock_quantity}"
                             );
                         }
 
@@ -1112,18 +1109,12 @@ class Order extends Model
                 }
             }
         }
-
     }
 
-    /**
-     * Update order items before sending to supplier.
-     * Accepts an array of item data with optional 'remove' flag and updated 'quantity'.
-     * Recalculates total_amount after changes.
-     *
-     * @throws \Exception if order is not in pending_review status or all items are removed
-     */
+
     public function updateOrderItems(array $items): bool
     {
+
         if ($this->status !== 'pending_review') {
             throw new \Exception('Order items can only be edited while the order is in "Pending Review" status.');
         }
@@ -1151,6 +1142,7 @@ class Order extends Model
                         'medicine_id'   => $orderItem->medicine_id,
                     ]);
                 } else {
+
                     $newQty = (int) $itemData['quantity'];
 
                     if ($newQty < 1) {
@@ -1162,6 +1154,8 @@ class Order extends Model
                         'total_price' => $newQty * $orderItem->unit_price,
                     ]);
 
+
+
                     Log::info('Order item quantity updated', [
                         'order_id'      => $this->id,
                         'order_item_id' => $orderItem->id,
@@ -1170,9 +1164,10 @@ class Order extends Model
                 }
             }
 
-            // Recalculate order totals from remaining items
             $this->refresh();
-            $newTotal = $this->allItems()->sum(DB::raw('quantity * unit_price'));
+
+            $newTotal = OrderItem::where('order_id', $this->id)
+                ->sum(DB::raw('quantity * unit_price'));
 
             $this->update(['total_amount' => $newTotal]);
 
@@ -1189,14 +1184,14 @@ class Order extends Model
     public function cancel(string $reason): bool
     {
         if (! in_array($this->status, ['pending_review', 'sent_to_supplier', 'confirmed', 'processing', 'shipped'])) {
-            throw new \Exception('Cannot cancel order in current status: '.$this->status);
+            throw new \Exception('Cannot cancel order in current status: ' . $this->status);
         }
 
         return DB::transaction(function () use ($reason) {
             $oldStatus = $this->status;
 
             $this->status = 'cancelled';
-            $this->notes = ($this->notes ? $this->notes."\n\n" : '').'Cancelled: '.$reason;
+            $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . 'Cancelled: ' . $reason;
             $this->save();
 
             // Restore stock quantities if order was confirmed or beyond

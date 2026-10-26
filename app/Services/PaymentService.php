@@ -14,14 +14,7 @@ use Illuminate\Support\Str;
 
 class PaymentService
 {
-    /**
-     * Process all payments when order is delivered.
-     *
-     * @param  float|null  $approvedAmountOverride  When set (by Order::processApprovedClaimReceivables),
-     *                                               the receivable is created at this amount instead of
-     *                                               the order total — used to book the insurer-approved
-     *                                               share rather than the full claimed amount.
-     */
+
     public function processOrderPayments(Order $order, ?float $approvedAmountOverride = null): array
     {
         try {
@@ -36,19 +29,16 @@ class PaymentService
                 'errors' => [],
             ];
 
-            // 1. Create receivable from patient/insurance/insurer
             $receivable = $this->createReceivableForOrder($order, $approvedAmountOverride);
             if ($receivable) {
                 $results['receivable'] = $receivable;
             }
 
-            // 2. Create payable to supplier
             $supplierPayable = $this->createPayableToSupplier($order);
             if ($supplierPayable) {
                 $results['payables']['supplier'] = $supplierPayable;
             }
 
-            // 3. Create payable for physician commission (prescription orders only)
             $commissionPayable = $this->createCommissionPayable($order);
             if ($commissionPayable) {
                 $results['payables']['commission'] = $commissionPayable;
@@ -92,12 +82,11 @@ class PaymentService
                 ]);
                 return $existing;
             }
-            // External (insurer-originated) order
+
             if ($order->external_order_id && ! $order->prescription_id) {
                 return $this->createReceivableForExternalOrder($order, $approvedAmountOverride);
             }
 
-            // Prescription-based order 
             $order->load(['prescription.patient.insuranceProvider']);
 
             $prescription = $order->prescription;
@@ -146,8 +135,6 @@ class PaymentService
                 ]);
             }
 
-            // Use approved amount override when triggered post-claim-approval,
-            // otherwise use order total + any delivery fee
             $totalAmount = $approvedAmountOverride ?? $order->total_amount;
             if (! $approvedAmountOverride && $order->delivery) {
                 $totalAmount += $order->delivery->delivery_fee;
@@ -211,8 +198,7 @@ class PaymentService
             return null;
         }
 
-        // Use the override (approved share) when called from processApprovedClaimReceivables,
-        // otherwise fall back to the order total
+       
         $amount = $approvedAmountOverride ?? $order->total_amount;
 
         $receivable = Receivable::create([
@@ -255,7 +241,6 @@ class PaymentService
 
                 return $existing;
             }
-            // Supplier gets the supplier_total
             $supplierAmount = $order->supplier_total;
 
             $payable = Payable::create([
@@ -268,7 +253,6 @@ class PaymentService
                 'description' => "Payment to supplier for order {$order->order_number}",
             ]);
 
-            // Create transaction for tracking
             $this->createTransaction($payable, 'payable', 'pending');
 
             Log::info('Supplier payable created successfully', [
@@ -310,14 +294,11 @@ class PaymentService
                 $prescription = $order->prescription;
                 $physician = $prescription->physician;
 
-                // Get physician commission rate
                 $commissionRate = $this->getPhysicianCommissionRate($physician, $order);
 
-                // Calculate commission on markup amount
                 $markupAmount = $order->markup_total;
                 $commissionAmount = $markupAmount * ($commissionRate / 100);
 
-                // Don't create payable if commission is zero or negative
                 if ($commissionAmount <= 0) {
                     Log::info('Commission amount is zero or negative, skipping payable creation', [
                         'order_id' => $order->id,
@@ -343,7 +324,6 @@ class PaymentService
                     ],
                 ]);
 
-                // Create transaction for tracking
                 $this->createTransaction($payable, 'payable', 'pending');
 
                 Log::info('Commission payable created successfully', [
@@ -376,12 +356,10 @@ class PaymentService
      */
     protected function getPhysicianCommissionRate($physician, Order $order): float
     {
-        // Try to get rate from physician profile
         if ($physician->physician && $physician->physician->commission_rate) {
             return $physician->physician->commission_rate;
         }
 
-        // Default rate
         $defaultRate = 5.00;
 
         Log::info('Using default commission rate', [
