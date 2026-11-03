@@ -23,7 +23,7 @@ class PricingCatalogueResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCurrencyDollar;
 
     protected static string|UnitEnum|null $navigationGroup = 'Medicines & Pricing';
-    protected static ?string $navigationLabel = 'Pricing Catalogues';
+    protected static ?string $navigationLabel = 'Pricing Catalogue';
 
     public static function form(Schema $schema): Schema
     {

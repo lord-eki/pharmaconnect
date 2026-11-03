@@ -4,318 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Local Purchase Order - {{ $order->order_number }}</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: Arial, sans-serif;
-            font-size: 11pt;
-            line-height: 1.4;
-            color: #333;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .page-wrapper {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .container {
-            padding: 20px;
-            flex: 1;
-        }
-        
-        .header {
-            background-color: #f97316;
-            color: white;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .header-top {
-            width: 100%;
-            margin-bottom: 0;
-        }
-        
-        .header-top table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .company-info {
-            width: 60%;
-            vertical-align: top;
-        }
-        
-        .company-info h1 {
-            color: #ffffff;
-            font-size: 24pt;
-            margin-bottom: 5px;
-        }
-        
-        .company-info p {
-            font-size: 10pt;
-            color: #ffffff;
-            margin-bottom: 2px;
-        }
-        
-        .lpo-title {
-            width: 40%;
-            text-align: right;
-            vertical-align: top;
-        }
-        
-        .lpo-title h2 {
-            font-size: 28pt;
-            color: #ffffff;
-            font-weight: bold;
-            margin: 0;
-        }
-        
-        .lpo-title p {
-            font-size: 12pt;
-            color: #ffffff;
-            margin-top: 5px;
-        }
-        
-        .details-section {
-            width: 100%;
-            margin-bottom: 20px;
-        }
-        
-        .details-section table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .details-col {
-            width: 50%;
-            padding: 5px;
-            vertical-align: top;
-        }
-        
-        .info-box {
-            border: 1px solid #e5e7eb;
-            padding: 15px;
-            background-color: #f9fafb;
-            border-radius: 5px;
-            min-height: 150px;
-        }
-        
-        .info-box h3 {
-            font-size: 12pt;
-            color: #f97316;
-            margin-bottom: 10px;
-            border-bottom: 1px solid #fed7aa;
-            padding-bottom: 5px;
-        }
-        
-        .info-box p {
-            margin-bottom: 5px;
-            font-size: 10pt;
-        }
-        
-        .info-box strong {
-            color: #111;
-        }
-        
-        .items-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-        
-        .items-table thead {
-            background-color: #f97316;
-            color: white;
-        }
-        
-        .items-table th {
-            padding: 10px;
-            text-align: left;
-            font-size: 10pt;
-            font-weight: bold;
-        }
-        
-        .items-table td {
-            padding: 8px 10px;
-            border-bottom: 1px solid #e5e7eb;
-            font-size: 10pt;
-        }
-        
-        .items-table tbody tr:nth-child(even) {
-            background-color: #f9fafb;
-        }
-        
-        .text-right {
-            text-align: right;
-        }
-        
-        .text-center {
-            text-align: center;
-        }
-        
-        .totals-section {
-            margin-top: 20px;
-            width: 100%;
-        }
-        
-        .totals-wrapper {
-            width: 100%;
-        }
-        
-        .totals-wrapper table {
-            width: 40%;
-            margin-left: 60%;
-            border-collapse: collapse;
-        }
-        
-        .totals-table td {
-            padding: 8px 10px;
-            font-size: 10pt;
-        }
-        
-        .totals-table .label {
-            text-align: right;
-            font-weight: bold;
-            color: #666;
-        }
-        
-        .totals-table .amount {
-            text-align: right;
-            width: 40%;
-        }
-        
-        .totals-table .grand-total {
-            border-top: 2px solid #f97316;
-            font-weight: bold;
-            font-size: 12pt;
-            color: #f97316;
-            padding-top: 10px;
-        }
-        
-        .notes-section {
-            margin-top: 30px;
-            padding: 15px;
-            background-color: #fef3c7;
-            border-left: 4px solid #f59e0b;
-            border-radius: 5px;
-        }
-        
-        .notes-section h4 {
-            color: #92400e;
-            margin-bottom: 8px;
-            font-size: 11pt;
-        }
-        
-        .notes-section p {
-            color: #78350f;
-            font-size: 10pt;
-        }
-        
-        .terms-section {
-            margin-top: 30px;
-            padding: 15px;
-            background-color: #f3f4f6;
-            border-radius: 5px;
-        }
-        
-        .terms-section h4 {
-            color: #1f2937;
-            margin-bottom: 10px;
-            font-size: 11pt;
-        }
-        
-        .terms-section ul {
-            margin-left: 20px;
-            font-size: 9pt;
-            color: #4b5563;
-        }
-        
-        .terms-section li {
-            margin-bottom: 5px;
-        }
-        
-        .footer {
-            background-color: #f97316;
-            color: #ffffff;
-            padding: 15px 20px;
-            text-align: center;
-            margin-top: auto;
-        }
-
-        .footer p {
-            font-size: 9pt;
-            color: #ffffff;
-        }
-
-        @media print {
-            body {
-                min-height: 100vh;
-            }
-            .footer {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-            }
-        }
-        
-        .section-title {
-            margin-top: 20px;
-            margin-bottom: 10px;
-            color: #f97316;
-            font-size: 12pt;
-        }
-        
-        .signatures table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .signature-box {
-            width: 50%;
-            text-align: center;
-            padding: 20px;
-            vertical-align: top;
-        }
-        
-        .signature-line {
-            border-top: 1px solid #333;
-            margin: 40px 30px 10px 30px;
-        }
-        
-        .signature-label {
-            font-size: 10pt;
-            color: #666;
-        }
-        
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 9pt;
-            font-weight: bold;
-        }
-        
-        .badge-warning { background-color: #fef3c7; color: #92400e; }
-        .badge-info { background-color: #fff7ed; color: #c2410c; }
-        .badge-success { background-color: #d1fae5; color: #065f46; }
-        .badge-primary { background-color: #e0e7ff; color: #3730a3; }
-        .badge-danger { background-color: #fee2e2; color: #991b1b; }
-        
-        .signatures {
-            width: 100%;
-            margin-top: 40px;
-        }
-    </style>
+    <link rel="stylesheet" href="/resources/css/lpo.css"> 
 </head>
 <body>
     <div class="page-wrapper">
@@ -389,7 +78,7 @@
             </table>
         </div>
 
-        @if($order->prescription && $order->prescription->patient)
+        @if($order->prescription)
         <div class="details-section">
             <table>
                 <tr>
@@ -405,23 +94,34 @@
                             @endif
                         </div>
                     </td>
-                    @if($order->prescription->physician)
                     <td class="details-col">
                         <div class="info-box">
                             <h3>Physician Information</h3>
-                            <p><strong>Dr. {{ e($order->prescription->physician->full_name ?? 'N/A') }}</strong></p>
-                            @if($order->prescription->physician && $order->prescription->physician->specialty)
-                            <p>{{ e($order->prescription->physician->specialty) }}</p>
-                            @endif
-                            @if($order->prescription->physician && $order->prescription->physician->license_number)
-                            <p>License: {{ e($order->prescription->physician->license_number) }}</p>
-                            @endif
+                            <p><strong>Name:</strong>Dr. {{ e($order->prescription->physician->physician->practice_name ?? 'N/A') }}</p>
+                            <p><strong>Area of Speciality:</strong> {{ e($order->prescription->physician->physician->specialization) }}</p>
+                            <p><strong>License:</strong> {{ e($order->prescription->physician->physician->license_number) }}</p>
                         </div>
                     </td>
-                    @endif
                 </tr>
             </table>
         </div>
+        @endif
+
+        @if($order->external_order_id)
+            <div class="details-section">
+                <table>
+                    <tr>
+                        <td class="details-col">
+                            <div class="info-box">
+                                <h3>Recepient Information</h3>
+                                <p><strong> Name : </strong> {{$order->externalOrder->recipient_name}}</p>
+                                <p><strong> Phone Number : </strong> {{$order->externalOrder->recipient_phone}}</p>
+                                <p><strong> Address : </strong> {{$order->externalOrder->delivery_address}} , {{$order->externalOrder->delivery_city}}</p>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
         @endif
 
         <!-- Order Items -->
@@ -442,10 +142,8 @@
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td>
-                        <strong>{{ e($item->medicine->name ?? 'N/A') }}</strong>
-                        @if($item->medicine && $item->medicine->sku)
-                        <br><small style="color: #666;">SKU: {{ e($item->medicine->sku) }}</small>
-                        @endif
+                        <strong>{{ e($item->medicine->brand_name ?? 'N/A') }}</strong>
+                        <br><small style="color: #666;"> {{ e($item->medicine->generic_name) }}</small>
                         @if($item->notes ?? false)
                         <br><small style="color: #666;">{{ e($item->notes) }}</small>
                         @endif
@@ -538,6 +236,6 @@
             <p>This is a computer-generated document. No signature is required.</p>
             <p>&copy; {{ date('Y') }} {{ $company_info['company_name'] ?? 'PharmaConnect' }}. All rights reserved.</p>
         </div>
-    </div><!-- /.page-wrapper -->
+    </div>
 </body>
 </html>

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Operation\Resources\Orders\Tables;
 
+use App\Jobs\BulkGenerateInvoicesJob;
 use App\Jobs\BulkSendOrdersToSupplierJob;
 use App\Jobs\GenerateInvoicePdfJob;
 use App\Jobs\SendInvoiceEmailJob;
@@ -31,6 +32,7 @@ use Filament\Tables\Filters\Indicator;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -471,7 +473,6 @@ class OrdersTable
                             try {
                                 $invoice = $record->invoices()->latest()->first();
 
-                                // Check if PDF already exists
                                 $existingPath = 'reports/invoices/Invoice_' .
                                     preg_replace('/[^A-Za-z0-9_-]/', '_', $invoice->invoice_number) .
                                     '_*.pdf';
@@ -482,7 +483,6 @@ class OrdersTable
                                 });
 
                                 if ($matchingFile) {
-                                    // PDF exists, provide immediate download
                                     $url = Storage::disk('public')->url($matchingFile);
 
                                     Notification::make()
@@ -567,9 +567,8 @@ class OrdersTable
                                 ->rows(3)
                                 ->helperText('These notes will be added to all selected orders'),
                         ])
-                        ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data) {
+                        ->action(function (Collection $records, array $data) {
                             try {
-                                // Filter only pending_review orders
                                 $eligibleOrders = $records->filter(fn($order) => $order->status === 'pending_review');
 
                                 if ($eligibleOrders->isEmpty()) {
@@ -617,9 +616,8 @@ class OrdersTable
                         ->label('Generate Invoices')
                         ->icon('heroicon-o-document-currency-dollar')
                         ->color('info')
-                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        ->action(function (Collection $records) {
                             try {
-                                // Filter only eligible orders
                                 $eligibleOrders = $records->filter(fn($order) => $order->isEligibleForInvoice());
 
                                 if ($eligibleOrders->isEmpty()) {
@@ -635,7 +633,7 @@ class OrdersTable
                                 $orderIds = $eligibleOrders->pluck('id')->toArray();
 
                                 // Dispatch job to process in background
-                                \App\Jobs\BulkGenerateInvoicesJob::dispatch(
+                                BulkGenerateInvoicesJob::dispatch(
                                     $orderIds,
                                     auth()->id()
                                 );

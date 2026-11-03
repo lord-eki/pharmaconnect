@@ -174,7 +174,7 @@ class PaymentService
     /**
      * Create receivable for an external (insurer-originated) order.
      * The insurance provider is the payer — there is no patient on these orders.
-     * Called only after the insurance claim has been approved (gated in Order::markDelivered).
+     * Called only after the insurance claim has been approved 
      */
     protected function createReceivableForExternalOrder(Order $order, ?float $approvedAmountOverride = null): ?Receivable
     {

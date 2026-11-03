@@ -30,7 +30,6 @@ class OrderItem extends Model
         parent::boot();
 
         static::saving(function ($item) {
-            // Auto-calculate total price
             if ($item->quantity && $item->unit_price) {
                 $item->total_price = $item->quantity * $item->unit_price;
             }

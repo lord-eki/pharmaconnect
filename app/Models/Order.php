@@ -543,7 +543,7 @@ class Order extends Model
      * The approved_amount from the claim is used instead of the claimed (order) total,
      * ensuring we only ever book what the insurer actually agreed to pay.
      */
-    public static function processApprovedClaimReceivables(\App\Models\InsuranceClaim $claim): void
+    public static function processApprovedClaimReceivables(InsuranceClaim $claim): void
     {
         $paymentService = app(PaymentService::class);
 
