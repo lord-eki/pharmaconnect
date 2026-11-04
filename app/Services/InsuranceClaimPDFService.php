@@ -5,13 +5,15 @@ namespace App\Services;
 use App\Models\InsuranceClaim;
 use App\Models\Setting;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Barryvdh\DomPDF\PDF as DomPDF;
+use Symfony\Component\HttpFoundation\Response;
 
 class InsuranceClaimPDFService
 {
     /**
      * Generate branded claim form PDF
      */
-    public static function generate(InsuranceClaim $claim): \Barryvdh\DomPDF\PDF
+    public static function generate(InsuranceClaim $claim): DomPDF
     {
         $claim->load([
             'prescription.items.medicine',
@@ -43,23 +45,14 @@ class InsuranceClaimPDFService
             $parentOrders = $claim->externalOrder->orders;
         }
 
-        if ($parentOrders) {
-            $firstOrder = $parentOrders->sortBy('id')->first();
-            if ($firstOrder) {
-                $firstOrder->load('deliveryFeeItem');
-
-                $firstOrder->load('deliveryFeeItem');
-
-                if (! $deliveryFeeItem) {
-                    $fee = Setting::deliveryFee();
-                    $deliveryFeeItem = (object) [
-                        'total_price'     => $fee,
-                        'is_delivery_fee' => true,
-                        'is_synthesised'  => true,
-                    ];
-                }
-            }
+        if ($parentOrders && $parentOrders->isNotEmpty()) {
+            $deliveryFeeItem = (object) [
+                'total_price'     => Setting::deliveryFee(),
+                'is_delivery_fee' => true,
+                'is_synthesised'  => true,
+            ];
         }
+
 
         return PDF::loadView('pdf.insurance-claim', [
             'claim'           => $claim,
@@ -100,7 +93,7 @@ class InsuranceClaimPDFService
     /**
      * Download claim form
      */
-    public static function download(InsuranceClaim $claim): \Symfony\Component\HttpFoundation\Response
+    public static function download(InsuranceClaim $claim): Response
     {
         $pdf = self::generate($claim);
         $filename = "claim-{$claim->claim_number}.pdf";
@@ -113,8 +106,9 @@ class InsuranceClaimPDFService
     /**
      * Stream claim form 
      */
-    public static function stream(InsuranceClaim $claim): \Symfony\Component\HttpFoundation\Response
+    public static function stream(InsuranceClaim $claim): Response
     {
+
         $pdf = self::generate($claim);
         $filename = "claim-{$claim->claim_number}.pdf";
 

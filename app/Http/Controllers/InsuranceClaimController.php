@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\InsuranceClaim;
 use App\Services\InsuranceClaimPDFService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class InsuranceClaimController extends Controller
 {
@@ -38,16 +39,13 @@ class InsuranceClaimController extends Controller
         ]);
 
         try {
-            // \Mail::to($request->email)->send(
-            //     new \App\Mail\InsuranceClaimFormMail($claim, $request->message)
-            // );
-
+          
             return response()->json([
                 'success' => true,
                 'message' => 'Claim form sent successfully',
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to send claim form email', [
+            Log::error('Failed to send claim form email', [
                 'claim_id' => $claim->id,
                 'error' => $e->getMessage(),
             ]);

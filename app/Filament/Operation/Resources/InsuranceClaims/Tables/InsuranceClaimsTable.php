@@ -2,18 +2,10 @@
 
 namespace App\Filament\Operation\Resources\InsuranceClaims\Tables;
 
-use App\Models\InsuranceClaim;
-use App\Services\InsuranceClaimPDFService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
-use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -126,32 +118,13 @@ class InsuranceClaimsTable
                         ->color('success')
                     ->url(fn ($record) => route('insurance-claims.download', $record))
                     ->openUrlInNewTab(),
-                        // ->action(function ($record) {
-                        //     return InsuranceClaimPDFService::download($record);
-                        // }),
-
-                    // View Claim Form PDF 
+                 
                     Action::make('view_claim')
                         ->label('View Claim Form')
                         ->icon('heroicon-o-eye')
                         ->color('info')
                         ->url(fn ($record) => route('insurance-claims.pdf', $record))
                         ->openUrlInNewTab(),
-
-                
-                    // Action::make('mark_paid')
-                    //     ->icon('heroicon-o-currency-dollar')
-                    //     ->color('primary')
-                    //     ->visible(fn ($record) => $record->status === 'approved')
-                    //     ->requiresConfirmation()
-                    //     ->action(function (InsuranceClaim $record) {
-                    //         $record->markAsPaid();
-
-                    //         Notification::make()
-                    //             ->title('Claim Marked as Paid')
-                    //             ->success()
-                    //             ->send();
-                    //     }),
                 ]),
             ])
             ->toolbarActions([

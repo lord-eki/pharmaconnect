@@ -633,10 +633,11 @@
             @if(!empty($deliveryFeeItem))
             @php
                
-                $isSynthesised = !empty($deliveryFeeItem->is_synthesised);
-                $medicinesSubtotal = $isSynthesised
-                    ? $claim->claimed_amount - $deliveryFeeItem->total_price
-                    : $claim->claimed_amount;
+               $lineItems = $claim->prescription ? $claim->prescription->items : ($claim->externalOrder?->items ?? collect());
+
+               $medicinesSubtotal = (float) $lineItems->sum('total_price');
+               $deliveryFee = !empty($deliveryFeeItem) ? (float) $deliveryFeeItem->total_price : 0 ;
+               $grandTotal = $medicinesSubtotal + $deliveryFee ;
             @endphp
             <div class="amount-row">
                 <div class="amount-label">Medicines Subtotal:</div>
@@ -644,12 +645,12 @@
             </div>
             <div class="amount-row">
                 <div class="amount-label">Delivery Fee:</div>
-                <div class="amount-value">KES {{ number_format($deliveryFeeItem->total_price, 2) }}</div>
+                <div class="amount-value">KES {{ number_format($deliveryFee, 2) }}</div>
             </div>
             @endif
             <div class="amount-row">
                 <div class="amount-label">Total Claimed Amount:</div>
-                <div class="amount-value">KES {{ number_format($claim->claimed_amount, 2) }}</div>
+                <div class="amount-value">KES {{ number_format($grandTotal, 2) }}</div>
             </div>
             <div class="amount-row">
                 <div class="amount-label">Less: Deductible Amount:</div>
