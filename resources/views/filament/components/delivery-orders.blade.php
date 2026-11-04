@@ -67,9 +67,7 @@ $grandTotal = $ordersSubtotal + $deliveryFee;
                         {{ str_replace('_', ' ', ucfirst($order->status)) }}
                     </x-filament::badge>
                 </div>
-                <p class="text-lg font-bold text-gray-900 dark:text-white">
-                    KES {{ number_format($order->total_amount, 2) }}
-                </p>
+             
             </div>
 
             {{-- Supplier & Pickup Info --}}
