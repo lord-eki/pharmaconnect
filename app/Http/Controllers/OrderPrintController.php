@@ -19,7 +19,6 @@ class OrderPrintController extends Controller
     public function stream(Order $order): Response
     {
         $this->authorizeAccess($order);
-
         return $this->printService->streamPdf($order);
     }
 
