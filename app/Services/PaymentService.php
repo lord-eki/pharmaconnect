@@ -161,7 +161,7 @@ class PaymentService
                 $totalAmount = $approved > 0
                     ? $approved
                     : $this->deliveredOrdersTotal('prescription_id', $prescription->id)
-                    + (float) ($order->delivery?->delivery_fee ?? 0);
+                    + $prescription->deliveryFeeAmount();
             }
 
             $attributes = [
@@ -257,7 +257,8 @@ class PaymentService
         $amount = $approvedAmountOverride
             ?? ($approvedFromClaim > 0
                 ? $approvedFromClaim
-                : $this->deliveredOrdersTotal('external_order_id', $externalOrder->id));
+                : $this->deliveredOrdersTotal('external_order_id', $externalOrder->id)
+                + $externalOrder->deliveryFeeAmount());
 
         $attributes = [
             'reference'             => $this->generateReceivableReference(),

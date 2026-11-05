@@ -406,13 +406,10 @@ class Order extends Model
                 $markedUpTotal += $pricing['final_total'];
             }
 
-            $deliveryFeeItem = $this->deliveryFeeItem;
-
-            $deliveryFee     = $deliveryFeeItem ? $deliveryFeeItem->total_price : 0;
 
             $this->supplier_total = $supplierTotal;
             $this->markup_total   = $markedUpTotal - $supplierTotal;
-            $this->total_amount   = $markedUpTotal + $deliveryFee;
+            $this->total_amount   = $markedUpTotal;
             $this->save();
 
             Log::info('Order reassigned to new supplier', [

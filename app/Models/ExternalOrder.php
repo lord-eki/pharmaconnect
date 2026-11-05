@@ -186,16 +186,12 @@ class ExternalOrder extends Model
             ];
         }
 
-        $isFirstOrder = true;
 
         foreach ($itemsBySupplier as $supplierId => $supplierItems) {
-            $orderTotal    = array_sum(array_column($supplierItems, null) === $supplierItems
-                ? array_map(fn ($d) => $d['item']->total_price, $supplierItems)
-                : []);
+        
             $orderTotal    = collect($supplierItems)->sum(fn ($d) => $d['item']->total_price);
             $supplierTotal = collect($supplierItems)->sum(fn ($d) => $d['supplier_medicine']->unit_price * $d['item']->quantity);
 
-            $deliveryFee = $isFirstOrder ? Setting::deliveryFee() : 0.0;
 
             $order = Order::create([
                 'order_number'      => Order::generateOrderNumber(),
@@ -206,7 +202,7 @@ class ExternalOrder extends Model
                 'status'            => 'pending_review',
                 'ordered_at'        => now(),
                 'expected_delivery' => now()->addHours(24),
-                'total_amount'      => $orderTotal + $deliveryFee,
+                'total_amount'      => $orderTotal,
                 'supplier_total'    => $supplierTotal,
                 'markup_total'      => $orderTotal - $supplierTotal,
             ]);
@@ -226,20 +222,7 @@ class ExternalOrder extends Model
                 ]);
             }
 
-            if ($isFirstOrder) {
-                OrderItem::create([
-                    'order_id'             => $order->id,
-                    'medicine_id'          => $supplierItems[0]['item']->medicine_id,
-                    'quotation_item_id'    => null,
-                    'quantity'             => 1,
-                    'unit_price'           => $deliveryFee,
-                    'supplier_price'       => 0.00,
-                    'total_price'          => $deliveryFee,
-                    'is_delivery_fee'      => true,
-                ]);
-            }
 
-            $isFirstOrder = false;
 
             Log::info('Supplier order created from external order', [
                 'external_order_id' => $this->id,
@@ -540,6 +523,8 @@ class ExternalOrder extends Model
             ]);
         }
 
+        $claimedAmount += $this->deliveryFeeAmount();
+
         $claim = InsuranceClaim::create([
             'external_order_id'    => $this->id,
             'insurance_provider_id' => $this->insurance_provider_id,
@@ -598,5 +583,10 @@ class ExternalOrder extends Model
             'cancelled' => 'Cancelled',
             default => 'Unknown',
         };
+    }
+
+    public function deliveryFeeAmount(): float
+    {
+        return (float) ($this->delivery?->delivery_fee ?? Setting::deliveryFee());
     }
 }

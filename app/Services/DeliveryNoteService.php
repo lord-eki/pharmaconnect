@@ -10,7 +10,10 @@ use Illuminate\Support\Facades\Storage;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\DeliveryNoteMail;
+use App\Models\DocumentCategory;
 use App\Models\Setup;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Auth;
 
 class DeliveryNoteService
 {
@@ -27,21 +30,18 @@ class DeliveryNoteService
     public function generateDeliveryNote(Delivery $delivery, User $user): Document
     {
         return DB::transaction(function () use ($delivery, $user) {
-            // Generate PDF
             $pdf = $this->createDeliveryNotePdf($delivery);
             
-            // Save PDF to temporary file
             $fileName = $this->getDeliveryNoteFileName($delivery);
             $tempPath = storage_path('app/temp/' . $fileName);
             
-            // Ensure temp directory exists
             if (!file_exists(storage_path('app/temp'))) {
                 mkdir(storage_path('app/temp'), 0755, true);
             }
             
             $pdf->save($tempPath);
             
-            $uploadedFile = new \Illuminate\Http\UploadedFile(
+            $uploadedFile = new UploadedFile(
                 $tempPath,
                 $fileName,
                 'application/pdf',
@@ -70,12 +70,10 @@ class DeliveryNoteService
                 ]
             );
             
-            // Update delivery with document reference
             $delivery->update([
                 'delivery_note_document_id' => $document->id,
             ]);
             
-            // Clean up temp file
             @unlink($tempPath);
             
             return $document;
@@ -87,7 +85,6 @@ class DeliveryNoteService
      */
     protected function getPatientFromDelivery(Delivery $delivery)
     {
-        // Try different relationship paths
         if ($delivery->prescription && $delivery->prescription->patient) {
             return $delivery->prescription->patient;
         }
@@ -100,7 +97,6 @@ class DeliveryNoteService
             return $delivery->order->prescription->patient;
         }
         
-        // If delivery has multiple orders, get patient from first order
         $firstOrder = $delivery->orders()->with('prescription.patient')->first();
         if ($firstOrder) {
             if ($firstOrder->patient) {
@@ -136,7 +132,6 @@ class DeliveryNoteService
     {
         $patient = $this->getPatientFromDelivery($delivery);
         
-        // Get orders - handle both single order and multiple orders
         $orders = $delivery->orders ?? collect([$delivery->order])->filter();
         $company_data = Setup::first()?->toArray() ?? [];
         return [
@@ -163,11 +158,10 @@ class DeliveryNoteService
     public function sendDeliveryNoteEmail(Delivery $delivery, ?Document $document = null): bool
     {
         try {
-            // Generate document if not provided
             if (!$document) {
                 $document = $delivery->deliveryNoteDocument ?? $this->generateDeliveryNote(
                     $delivery,
-                    auth()->user()
+                    Auth::user()
                 );
             }
             
@@ -177,20 +171,17 @@ class DeliveryNoteService
                 throw new \Exception('Patient email not found');
             }
             
-            // Get PDF path
             $pdfPath = Storage::path($document->file_path);
             
             if (!file_exists($pdfPath)) {
                 throw new \Exception('Delivery note PDF file not found');
             }
             
-            // Send email
             Mail::to($patient->email)
                 ->send(new DeliveryNoteMail($delivery, $pdfPath));
             
-            // Log the action
             $document->logAccess(
-                auth()->user(),
+                Auth::user(),
                 'email_sent',
                 ['recipient' => $patient->email]
             );
@@ -315,8 +306,7 @@ class DeliveryNoteService
      */
     protected function getDeliveryNoteCategoryId(): ?int
     {
-        // Get or create delivery note category
-        $category = \App\Models\DocumentCategory::firstOrCreate(
+        $category = DocumentCategory::firstOrCreate(
             ['name' => 'Delivery Notes'],
             [
                 'description' => 'Delivery confirmation documents',

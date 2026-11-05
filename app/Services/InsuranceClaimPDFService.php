@@ -18,16 +18,15 @@ class InsuranceClaimPDFService
         $claim->load([
             'prescription.items.medicine',
             'prescription.physician',
-            'prescription.orders',
+            'prescription.delivery',
             'externalOrder.items.medicine',
-            'externalOrder.orders',
+            'externalOrder.delivery',
             'patient',
             'insuranceProvider',
         ]);
 
         $provider = $claim->insuranceProvider;
 
-        // Prepare branding data
         $branding = [
             'logo_url' => $provider->logo ? asset('storage/' . $provider->logo) : null,
             'header_text' => $provider->header_text ?: "Insurance Claim Form - {$provider->company_name}",
@@ -36,23 +35,15 @@ class InsuranceClaimPDFService
             'secondary_color' => $provider->secondary_color ?: '#666666',
         ];
 
-        $deliveryFeeItem = null;
+        $parent = $claim->prescription ?? $claim->externalOrder;
 
-        $parentOrders = null;
-        if ($claim->prescription) {
-            $parentOrders = $claim->prescription->orders;
-        } elseif ($claim->externalOrder) {
-            $parentOrders = $claim->externalOrder->orders;
-        }
-
-        if ($parentOrders && $parentOrders->isNotEmpty()) {
-            $deliveryFeeItem = (object) [
-                'total_price'     => Setting::deliveryFee(),
+        $deliveryFeeItem = $parent
+            ? (object) [
+                'total_price'     => $parent->deliveryFeeAmount(),
                 'is_delivery_fee' => true,
                 'is_synthesised'  => true,
-            ];
-        }
-
+            ]
+            : null;
 
         return PDF::loadView('pdf.insurance-claim', [
             'claim'           => $claim,

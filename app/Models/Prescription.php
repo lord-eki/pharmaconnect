@@ -127,12 +127,10 @@ class Prescription extends Model
         $cacheKey = "last_prescription_{$year}_{$month}";
         $lockKey = "lock_{$cacheKey}";
 
-        // Use cache lock to prevent race conditions
         return Cache::lock($lockKey, 5)->block(5, function () use ($cacheKey, $prefix, $year, $month) {
             $lastSequence = Cache::get($cacheKey, 0);
 
             if ($lastSequence === 0) {
-                // Only query DB if cache is empty
                 $lastPrescription = static::select('prescription_number')
                     ->whereYear('created_at', $year)
                     ->whereMonth('created_at', $month)
@@ -145,7 +143,7 @@ class Prescription extends Model
             }
 
             $sequence = $lastSequence + 1;
-            Cache::put($cacheKey, $sequence, 3600); // Cache for 1 hour
+            Cache::put($cacheKey, $sequence, 3600); 
 
             return sprintf('%s%s%s%05d', $prefix, $year, $month, $sequence);
         });
@@ -161,7 +159,6 @@ class Prescription extends Model
                 throw new \Exception('Cannot submit prescription without medicines');
             }
 
-            // Check interactions asynchronously
             dispatch(function () {
                 $this->checkDrugInteractions();
             });
@@ -193,7 +190,6 @@ class Prescription extends Model
                 throw $e;
             }
 
-            // Notify stakeholders asynchronously
             dispatch(function () {
                 $this->notifyStakeholders();
             });
@@ -208,8 +204,7 @@ class Prescription extends Model
      */
     public function createConsolidatedDelivery($orders): Delivery
     {
-        // Accept either Collection or array
-        if ($orders instanceof \Illuminate\Support\Collection) {
+        if ($orders instanceof Collection) {
             if ($orders->isEmpty()) {
                 throw new \Exception('Cannot create delivery without orders');
             }
@@ -217,7 +212,6 @@ class Prescription extends Model
             if (empty($orders)) {
                 throw new \Exception('Cannot create delivery without orders');
             }
-            // Convert array to collection for consistency
             $orders = collect($orders);
         } else {
             throw new \Exception('Orders must be a Collection or array');
@@ -225,10 +219,8 @@ class Prescription extends Model
 
         $patient = $this->patient;
 
-        // Collect all supplier pickup locations
         $pickupLocations = [];
         foreach ($orders as $order) {
-            // Ensure supplier relationship is loaded
             if (! $order->relationLoaded('supplier')) {
                 $order->load('supplier');
             }
@@ -246,7 +238,6 @@ class Prescription extends Model
             ];
         }
 
-        // Calculate delivery fee considering multiple pickups
         $deliveryFee = $this->calculateConsolidatedDeliveryFee($pickupLocations, $patient);
 
         $delivery = Delivery::create([
@@ -261,11 +252,10 @@ class Prescription extends Model
             'recipient_name' => $patient->full_name,
             'recipient_phone' => $patient->phone,
             'scheduled_pickup' => now()->addHours(2),
-            'estimated_delivery' => now()->addHours(6), // More time for multiple pickups
+            'estimated_delivery' => now()->addHours(6), 
             'order_statuses' => $this->initializeOrderStatuses($orders),
         ]);
 
-        // Attach all orders to this delivery
         foreach ($orders as $order) {
             $delivery->orders()->attach($order->id, [
                 'pickup_status' => 'pending',
@@ -314,7 +304,7 @@ class Prescription extends Model
      */
     protected function getPrimaryPickupAddress($pickupLocations): string
     {
-        if ($pickupLocations instanceof \Illuminate\Support\Collection) {
+        if ($pickupLocations instanceof Collection) {
             $pickupLocations = $pickupLocations->toArray();
         }
 
@@ -338,20 +328,17 @@ class Prescription extends Model
      */
     protected function estimateConsolidatedDistance($pickupLocations, $patient): float
     {
-        // Ensure pickupLocations is an array
-        if ($pickupLocations instanceof \Illuminate\Support\Collection) {
+        if ($pickupLocations instanceof Collection) {
             $pickupLocations = $pickupLocations->toArray();
         }
 
-        // Simple estimation: 10km per pickup + distance to patient
         $pickupDistance = count($pickupLocations) * 10.0;
 
-        // Add distance to patient estimate based on county
-        $toPatientDistance = 10.0; // Same county default
+        $toPatientDistance = 10.0; 
 
         foreach ($pickupLocations as $location) {
             if (($location['county'] ?? null) !== $patient->county) {
-                $toPatientDistance = 50.0; // Different county
+                $toPatientDistance = 50.0; 
                 break;
             }
         }
@@ -372,7 +359,6 @@ class Prescription extends Model
             'valid_until' => now()->addHours(24),
         ]);
 
-        // Single query to get all relevant supplier medicines
         $medicineIds = $this->items->pluck('medicine_id')->toArray();
 
        
@@ -448,12 +434,10 @@ class Prescription extends Model
             return;
         }
 
-        $isFirstOrder = true;
 
         foreach ($supplierGroups as $supplierId => $groupData) {
             try {
-                $this->createOrderForSupplier($quotation, $supplierId, $groupData, $isFirstOrder);
-                $isFirstOrder = false;
+                $this->createOrderForSupplier($quotation, $supplierId, $groupData);
             } catch (\Exception $e) {
                 Log::error('Error creating order for supplier', [
                     'supplier_id' => $supplierId,
@@ -470,7 +454,6 @@ class Prescription extends Model
     {
         $supplierGroups = [];
 
-        // Eager load relationships in one query
         $quotationItems = $quotation->items()
             ->with(['prescriptionItem', 'supplier'])
             ->get()
@@ -533,8 +516,6 @@ class Prescription extends Model
             $markedUpTotal += $pricing['final_total'];
         }
 
-        $deliveryFee = $isFirstOrder ? Setting::deliveryFee() : 0.0;
-
 
         $markupTotal = $markedUpTotal - $supplierTotal;
 
@@ -545,14 +526,13 @@ class Prescription extends Model
             'supplier_id'     => $supplierId,
             'supplier_total'  => $supplierTotal,
             'markup_total'    => $markupTotal,
-            'total_amount'    => $markedUpTotal + $deliveryFee,
+            'total_amount'    => $markedUpTotal,
             'status'          => 'pending_review',
             'ordered_at'      => now(),
             'expected_delivery' => now()->addHours(24),
             'notes'           => "Auto-generated from prescription {$this->prescription_number}",
         ]);
 
-        // Bulk insert medicine order items
         $orderItems = [];
         foreach ($groupData['quotation_items'] as $quotationItem) {
             $prescriptionItem = $quotationItem->prescriptionItem;
@@ -581,29 +561,12 @@ class Prescription extends Model
         }
 
 
-        if ($isFirstOrder) {
-            $orderItems[] = [
-                'order_id'          => $order->id,
-                'quotation_item_id' => null,
-                'medicine_id'       => $prescriptionItem->medicine_id, 
-                'quantity'          => 1,
-                'supplier_price'    => 0.00,
-                'unit_price'        => $deliveryFee,
-                'total_price'       => $deliveryFee,
-                'is_delivery_fee'   => true,
-                'status'            => 'pending',
-                'created_at'        => now(),
-                'updated_at'        => now(),
-            ];
-        }
-
         OrderItem::insert($orderItems);
 
         Log::info('Order created' . ($isFirstOrder ? ' with delivery fee line item' : ''), [
             'order_number'  => $order->order_number,
             'supplier_id'   => $supplierId,
-            'total_amount'  => $markedUpTotal + $deliveryFee,
-            'delivery_fee'  => $deliveryFee,
+            'total_amount'  => $markedUpTotal,
             'status'        => 'pending_review',
         ]);
 
@@ -616,7 +579,6 @@ class Prescription extends Model
 
     protected function notifyOperations(Order $order): void
     {
-        // Send notification to operations team
         try {
             $operationsUsers = User::whereHas('roles', function ($query) {
                 $query->where('name', 'operations');
@@ -643,7 +605,6 @@ class Prescription extends Model
      */
     public function createInsuranceClaim()
     {
-        // Verify insurance coverage is enabled
         if (! $this->insurance_covered) {
             Log::warning('Attempted to create insurance claim for non-insured prescription', [
                 'prescription_id' => $this->id,
@@ -655,7 +616,6 @@ class Prescription extends Model
             $this->load('patient');
         }
 
-        // Check if patient has insurance info (either FK or text field)
         if ((! $this->patient->insurance_provider_id && ! $this->patient->insurance_provider) || ! $this->patient->insurance_number) {
             Log::error('Patient missing insurance information', [
                 'prescription_id' => $this->id,
@@ -667,7 +627,6 @@ class Prescription extends Model
             throw new \Exception('Patient does not have complete insurance information');
         }
 
-        // If patient only has text provider, try to find and link the provider record
         if (! $this->patient->insurance_provider_id && $this->patient->insurance_provider) {
             Log::info('Patient has text insurance provider but no FK, attempting to link', [
                 'patient_id' => $this->patient_id,
@@ -676,9 +635,7 @@ class Prescription extends Model
 
             $provider = null;
 
-            // Check if the text field contains a numeric ID
             if (is_numeric($this->patient->insurance_provider)) {
-                // Try to find provider by ID
                 $provider = InsuranceProvider::find((int) $this->patient->insurance_provider);
 
                 if ($provider) {
@@ -690,7 +647,6 @@ class Prescription extends Model
                 }
             }
 
-            // If not found by ID, try to find by name
             if (! $provider) {
                 $provider = InsuranceProvider::where('company_name', 'LIKE', "%{$this->patient->insurance_provider}%")
                     ->orWhere('company_name', $this->patient->insurance_provider)
@@ -706,7 +662,6 @@ class Prescription extends Model
             }
 
             if ($provider) {
-                // Link the patient to the found provider
                 $this->patient->update(['insurance_provider_id' => $provider->id]);
 
                 Log::info('Successfully linked patient to existing insurance provider', [
@@ -716,10 +671,8 @@ class Prescription extends Model
                     'original_text_value' => $this->patient->insurance_provider,
                 ]);
 
-                // Reload patient to get the updated insurance_provider_id
                 $this->load('patient');
             } else {
-                // No matching provider found in system
                 $availableProviders = InsuranceProvider::active()
                     ->pluck('company_name', 'id')
                     ->toArray();
@@ -736,7 +689,6 @@ class Prescription extends Model
             }
         }
 
-        // Final validation - ensure we have insurance_provider_id at this point
         if (! $this->patient->insurance_provider_id) {
             Log::error('Patient still missing insurance_provider_id after linking attempt', [
                 'prescription_id' => $this->id,
@@ -747,7 +699,6 @@ class Prescription extends Model
             throw new \Exception('Unable to determine insurance provider. Please ensure the patient is linked to a valid insurance provider.');
         }
 
-        // Check if claim already exists
         if ($this->insuranceClaim) {
             Log::warning('Attempted to create duplicate insurance claim', [
                 'prescription_id' => $this->id,
@@ -780,13 +731,14 @@ class Prescription extends Model
             $ordersTotal = $this->total_amount;
         }
 
-        // Create the claim - insurance_provider_id is now guaranteed to be set
+        $claimedAmount =  $ordersTotal + $this->deliveryFeeAmount();
+
         $claim = InsuranceClaim::create([
             'prescription_id' => $this->id,
             'insurance_provider_id' => $this->patient->insurance_provider_id,
             'patient_id' => $this->patient_id,
             'policy_number' => $this->patient->insurance_number,
-            'claimed_amount' => $ordersTotal,
+            'claimed_amount' => $claimedAmount,
             'status' => 'submitted',
             'submitted_at' => now(),
             'notes' => 'Auto-generated claim for prescription '.$this->prescription_number.' after order confirmation',
@@ -799,7 +751,7 @@ class Prescription extends Model
             'claim_number' => $claim->claim_number,
             'prescription_id' => $this->id,
             'prescription_number' => $this->prescription_number,
-            'claimed_amount' => $ordersTotal,
+            'claimed_amount' => $claimedAmount,
             'insurance_provider_id' => $this->patient->insurance_provider_id,
             'patient_id' => $this->patient_id,
         ]);
@@ -816,7 +768,6 @@ class Prescription extends Model
     {
         try {
             if (! $claim) {
-                // Reload claim with all relationships
                 $this->load('insuranceClaim.insuranceProvider');
                 $claim = $this->insuranceClaim;
             }
@@ -1093,4 +1044,11 @@ class Prescription extends Model
             default => 'Unknown',
         };
     }
+
+    public function deliveryFeeAmount(): float
+    {
+        return (float) ($this->delivery?->delivery_fee ?? Setting::deliveryFee());
+    }
+
+
 }
