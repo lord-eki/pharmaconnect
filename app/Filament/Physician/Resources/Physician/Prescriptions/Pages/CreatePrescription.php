@@ -23,10 +23,13 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\Wizard\Step;
+use Filament\Support\Exceptions\Halt;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\HtmlString;
 
 class CreatePrescription extends CreateRecord
 {
@@ -36,18 +39,14 @@ class CreatePrescription extends CreateRecord
 
     protected static bool $canCreateAnother = false;
 
-    // ──────────────────────────────────────────────────────────────────────────
     // Draft cache key — unique per physician session
-    // ──────────────────────────────────────────────────────────────────────────
 
     protected function getDraftCacheKey(): string
     {
-        return 'prescription_draft_'.Auth::id().'_'.session()->getId();
+        return 'prescription_draft_' . Auth::id() . '_' . session()->getId();
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
     // Restore cached draft on page mount
-    // ──────────────────────────────────────────────────────────────────────────
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
@@ -60,10 +59,14 @@ class CreatePrescription extends CreateRecord
         return $data;
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
+    // Re-check live stock at the moment of saving
+
+    protected function beforeCreate(): void
+    {
+        $this->haltIfOutOfStock();
+    }
+
     // Draft is saved only via the Clear Draft action and on final create.
-    // saveDraft() is available for explicit calls only — not hooked into Livewire lifecycle.
-    // ──────────────────────────────────────────────────────────────────────────
 
     protected function saveDraft(): void
     {
@@ -71,7 +74,6 @@ class CreatePrescription extends CreateRecord
             $data = $this->form->getRawState();
             Cache::put($this->getDraftCacheKey(), $data, now()->addHours(12));
         } catch (\Throwable $e) {
-            // Non-fatal — silently skip if state isn't ready yet
         }
     }
 
@@ -80,9 +82,7 @@ class CreatePrescription extends CreateRecord
         Cache::forget($this->getDraftCacheKey());
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
     // Wizard steps
-    // ──────────────────────────────────────────────────────────────────────────
 
     protected function getSteps()
     {
@@ -95,11 +95,11 @@ class CreatePrescription extends CreateRecord
                         ->relationship(
                             name: 'patient',
                             titleAttribute: 'first_name',
-                            modifyQueryUsing: fn (Builder $query) => $query
+                            modifyQueryUsing: fn(Builder $query) => $query
                                 ->where('physician_id', Auth::id())
                                 ->select(['id', 'first_name', 'last_name', 'patient_number'])
                         )
-                        ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->first_name} {$record->last_name} - {$record->patient_number}")
+                        ->getOptionLabelFromRecordUsing(fn($record) => "{$record->first_name} {$record->last_name} - {$record->patient_number}")
                         ->searchable(['first_name', 'last_name', 'patient_number'])
                         ->preload(true)
                         ->required()
@@ -124,12 +124,14 @@ class CreatePrescription extends CreateRecord
                         ])
                         ->live(onBlur: true)
                         ->afterStateUpdated(function ($state, Set $set) {
-                            $patient = Cache::remember("patient_info_{$state}", 3600,
-                                fn () => Patient::select('id', 'allergies', 'medical_conditions', 'insurance_provider_id', 'insurance_provider', 'insurance_number')->find($state)
+                            $patient = Cache::remember(
+                                "patient_info_{$state}",
+                                3600,
+                                fn() => Patient::select('id', 'allergies', 'medical_conditions', 'insurance_provider_id', 'insurance_provider', 'insurance_number')->find($state)
                             );
                             if ($patient) {
                                 $hasInsurance = ! empty($patient->insurance_number) &&
-                                               (! empty($patient->insurance_provider_id) || ! empty($patient->insurance_provider));
+                                    (! empty($patient->insurance_provider_id) || ! empty($patient->insurance_provider));
                                 $set('patient_has_insurance', $hasInsurance);
                                 if ($hasInsurance) {
                                     $set('insurance_covered', true);
@@ -149,19 +151,22 @@ class CreatePrescription extends CreateRecord
                             ->label('Insurance Coverage')
                             ->helperText('Does this prescription have insurance coverage?')
                             ->default(false)
-                            ->visible(fn (Get $get) => $get('patient_has_insurance') === true)
+                            ->visible(fn(Get $get) => $get('patient_has_insurance') === true)
                             ->live(),
                     ])->columns(3),
                 ]),
 
             Step::make('Medicines')
                 ->icon('heroicon-o-beaker')
+                ->afterValidation(function () {
+                    // Blocks "Next" when any medicine can't be supplied
+                    $this->haltIfOutOfStock();
+                })
                 ->schema([
-                    // ── Column header row ─────────────────────────────────────
                     Placeholder::make('_medicine_table_header')
                         ->hiddenLabel()
                         ->dehydrated(false)
-                        ->content(new \Illuminate\Support\HtmlString('
+                        ->content(new HtmlString('
                             <div style="display:grid;grid-template-columns:3fr 1fr 2fr 1fr 1fr 1fr 1fr 2fr;gap:0.5rem;padding:0.35rem 0.75rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:0.5rem 0.5rem 0 0;font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">
                                 <span>Medicine</span>
                                 <span>Dose</span>
@@ -183,9 +188,8 @@ class CreatePrescription extends CreateRecord
                                 ->placeholder('Medicine…')
                                 ->options(function (Get $get) {
                                     $selected = collect($get('../../items') ?? [])->pluck('medicine_id')->filter()->toArray();
-
                                     return collect(self::getCachedMedicineOptions())
-                                        ->reject(fn ($id) => in_array($id, $selected))
+                                        ->reject(fn($id) => in_array($id, $selected))
                                         ->toArray();
                                 })
                                 ->searchable()
@@ -209,7 +213,7 @@ class CreatePrescription extends CreateRecord
 
                             TextInput::make('dose_amount')
                                 ->hiddenLabel()
-                                ->placeholder(fn (Get $get) => $get('_medicine_type') === 'volume' ? 'ml' : 'units')
+                                ->placeholder(fn(Get $get) => $get('_medicine_type') === 'volume' ? 'ml' : 'units')
                                 ->numeric()->required()->minValue(0.1)->step(0.1)
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(function (Get $get, Set $set) {
@@ -239,6 +243,7 @@ class CreatePrescription extends CreateRecord
                                 ->hiddenLabel()
                                 ->placeholder('Days')
                                 ->numeric()->required()->minValue(1)
+                                ->rules(self::stockRules())
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(function (Get $get, Set $set) {
                                     self::refreshPreviews($get, $set);
@@ -263,25 +268,23 @@ class CreatePrescription extends CreateRecord
                                 ->placeholder('—')
                                 ->columnSpan(1),
 
-                            // Instructions ─ span 2
                             Textarea::make('dosage_instructions')
                                 ->hiddenLabel()
                                 ->placeholder('e.g. After meal..')
                                 ->rows(1)
                                 ->columnSpan(2),
 
-                            // Hidden meta — UI only, not persisted
                             TextInput::make('_medicine_type')->hidden()->dehydrated(false),
                             TextInput::make('_unit_label')->hidden()->dehydrated(false),
                         ])
-                        ->columns(12)          // 12-col grid matching the header row
+                        ->columns(12)
                         ->defaultItems(1)
                         ->addActionLabel('+ Add Medicine')
-                        ->collapsible(false)   // keep rows flat for the table feel
+                        ->collapsible(false)
                         ->cloneable()
                         ->reorderable(false)
-                        ->deleteAction(fn ($action) => $action)
-                        ->itemLabel(null),     // no accordion labels — rows are already visible
+                        ->deleteAction(fn($action) => $action)
+                        ->itemLabel(null),
                 ]),
 
             Step::make('Summary')
@@ -292,26 +295,27 @@ class CreatePrescription extends CreateRecord
                         ->content(function (Get $get) {
                             $total = collect($get('items') ?? [])->sum('_preview_total_price');
 
-                            return 'KES '.number_format((float) $total, 2);
+                            return 'KES ' . number_format((float) $total, 2);
                         }),
                     Placeholder::make('medicine_count')
                         ->label('Total Medicines')
-                        ->content(fn (Get $get) => count($get('items') ?? []).' medicine(s)'),
+                        ->content(fn(Get $get) => count($get('items') ?? []) . ' medicine(s)'),
                 ]),
         ];
     }
 
     protected static function refreshPreviews(Get $get, Set $set): void
     {
-        $medicineId = $get('medicine_id');
-        $doseAmount = floatval($get('dose_amount'));
-        $frequency = $get('frequency');
-        $duration = intval($get('duration_days'));
+        $medicineId = (int) $get('medicine_id');
 
-        $frequencyMap = ['OD' => 1, 'Stat' => 1, 'PRN' => 1, 'Nocte' => 1, 'BDS' => 2, 'TDS' => 3, 'QID' => 4];
-        $timesPerDay = $frequencyMap[$frequency] ?? null;
+        $quantity = self::calculateQuantity(
+            $medicineId,
+            floatval($get('dose_amount')),
+            $get('frequency'),
+            intval($get('duration_days'))
+        );
 
-        if (! $medicineId || ! $doseAmount || ! $timesPerDay || ! $duration) {
+        if ($quantity === null) {
             $set('_preview_quantity', null);
             $set('_preview_unit_price', null);
             $set('_preview_total_price', null);
@@ -319,27 +323,24 @@ class CreatePrescription extends CreateRecord
             return;
         }
 
-        $totalRequired = $doseAmount * $timesPerDay * $duration;
-        $medicine = self::getMedicineDetails((int) $medicineId);
+        $priceData = self::getMedicinePricing($medicineId, $quantity);
 
-        if (! $medicine) {
+        $set('_preview_quantity', $quantity);
+
+        if (! $priceData['in_stock']) {
+            $set('_preview_unit_price', 'No stock');
+            $set('_preview_total_price', null);
+
             return;
         }
 
-        $quantity = $medicine['measurement_type'] === 'volume' && $medicine['volume_per_unit']
-            ? (int) ceil($totalRequired / $medicine['volume_per_unit'])
-            : (int) ceil($totalRequired);
-
-        $priceData = self::getMedicinePricing((int) $medicineId, $quantity);
-
-        $set('_preview_quantity', $quantity);
         $set('_preview_unit_price', $priceData['unit_price']);
         $set('_preview_total_price', round($priceData['unit_price'] * $quantity, 2));
     }
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['physician_id'] = auth()->id();
+        $data['physician_id'] = Auth::id();
         $data['status'] = 'draft';
 
         return $data;
@@ -391,6 +392,78 @@ class CreatePrescription extends CreateRecord
         ];
     }
 
+ 
+    /**
+     * Returns a list  for every item no single supplier can cover.
+     */
+    protected function stockProblems(array $items): array
+    {
+        $problems = [];
+
+        foreach ($items as $item) {
+            $medicineId = (int) ($item['medicine_id'] ?? 0);
+
+            $quantity = self::calculateQuantity(
+                $medicineId,
+                floatval($item['dose_amount'] ?? 0),
+                $item['frequency'] ?? null,
+                intval($item['duration_days'] ?? 0)
+            );
+
+            if (! $quantity) {
+                continue;
+            }
+
+            if (! self::getMedicinePricing($medicineId, $quantity)['in_stock']) {
+                $problems[] = (self::getMedicineName($medicineId) ?? "Medicine #{$medicineId}") . " (qty {$quantity})";
+            }
+        }
+
+        return $problems;
+    }
+
+    /**
+     * Shows a notification and stops the wizard step 
+     */
+    protected function haltIfOutOfStock(): void
+    {
+        $problems = $this->stockProblems($this->form->getRawState()['items'] ?? []);
+
+        if ($problems) {
+            Notification::make()
+                ->danger()
+                ->title('Not enough stock')
+                ->body('No single supplier can currently supply: ' . implode(', ', $problems) . '. Reduce the quantity or remove the medicine.')
+                ->persistent()
+                ->send();
+
+            throw new Halt();
+        }
+    }
+
+    /**
+     * Inline validation on the Days field
+     */
+    protected static function stockRules(): array
+    {
+        return [
+            fn(Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
+                $medicineId = (int) $get('medicine_id');
+
+                $quantity = self::calculateQuantity(
+                    $medicineId,
+                    floatval($get('dose_amount')),
+                    $get('frequency'),
+                    intval($value)
+                );
+
+                if ($quantity && ! self::getMedicinePricing($medicineId, $quantity)['in_stock']) {
+                    $fail("No supplier has enough stock.");
+                }
+            },
+        ];
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
 
     protected static function getCachedMedicineOptions(): array
@@ -415,8 +488,10 @@ class CreatePrescription extends CreateRecord
 
     protected static function getMedicineName(int $medicineId): ?string
     {
-        return Cache::remember("medicine_name_{$medicineId}_v2", 3600,
-            fn () => Medicine::where('id', $medicineId)->value('generic_name')
+        return Cache::remember(
+            "medicine_name_{$medicineId}_v2",
+            3600,
+            fn() => Medicine::where('id', $medicineId)->value('generic_name')
         );
     }
 
@@ -436,39 +511,76 @@ class CreatePrescription extends CreateRecord
         });
     }
 
+    /**
+     * Cheapest supplier price that is available AND has enough stock for the quantity.
+
+     */
     protected static function getMedicinePricing(int $medicineId, int $quantity = 1): array
     {
-        if ($quantity <= 0) {
-            $quantity = 1;
-        }
+        $quantity = max($quantity, 1);
 
         try {
-            return Cache::remember("medicine_price_{$medicineId}_q{$quantity}_v5", 600, function () use ($medicineId, $quantity) {
-                $supplierPrice = DB::table('supplier_medicines')
-                    ->where('medicine_id', $medicineId)
-                    ->where('is_available', true)
-                    ->where('stock_quantity', '>=', $quantity)
-                    ->orderBy('unit_price', 'asc')
-                    ->value('unit_price');
+            $supplierPrice = DB::table('supplier_medicines')
+                ->where('medicine_id', $medicineId)
+                ->where('is_available', true)
+                ->where('stock_quantity', '>=', $quantity)
+                ->orderBy('unit_price', 'asc')
+                ->value('unit_price');
 
-                if (! $supplierPrice) {
-                    return ['unit_price' => 0, 'supplier_price' => 0];
-                }
+            if ($supplierPrice === null) {
+                return ['unit_price' => 0, 'supplier_price' => 0, 'in_stock' => false];
+            }
 
-                $medicine = Medicine::find($medicineId);
-                if (! $medicine) {
-                    return ['unit_price' => $supplierPrice, 'supplier_price' => $supplierPrice];
-                }
+            $supplierPrice = (float) $supplierPrice;
 
-                $pricing = app(PricingService::class)->calculateFinalPrice($supplierPrice, $medicine, $quantity);
+            $medicine = Medicine::find($medicineId);
 
-                return ['unit_price' => $pricing['final_unit_price'], 'supplier_price' => $pricing['supplier_price']];
-            });
+            if (! $medicine) {
+                return ['unit_price' => $supplierPrice, 'supplier_price' => $supplierPrice, 'in_stock' => true];
+            }
+
+            $pricing = app(PricingService::class)->calculateFinalPrice($supplierPrice, $medicine, $quantity);
+
+            return [
+                'unit_price'     => $pricing['final_unit_price'],
+                'supplier_price' => $pricing['supplier_price'],
+                'in_stock'       => true,
+            ];
         } catch (\Exception $e) {
-            \Log::error('Error fetching medicine pricing', ['medicine_id' => $medicineId, 'quantity' => $quantity, 'error' => $e->getMessage()]);
+            Log::error('Error fetching medicine pricing', [
+                'medicine_id' => $medicineId,
+                'quantity'    => $quantity,
+                'error'       => $e->getMessage(),
+            ]);
 
-            return ['unit_price' => 0, 'supplier_price' => 0];
+            return ['unit_price' => 0, 'supplier_price' => 0, 'in_stock' => false];
         }
+    }
+
+    /**
+     * Units required, from dose x times per day x days (converted to units for volume medicines).
+     * Returns null until every input is filled in.
+     */
+    protected static function calculateQuantity(int $medicineId, float $dose, ?string $frequency, int $duration): ?int
+    {
+        $frequencyMap = ['OD' => 1, 'Stat' => 1, 'PRN' => 1, 'Nocte' => 1, 'BDS' => 2, 'TDS' => 3, 'QID' => 4];
+        $timesPerDay = $frequencyMap[$frequency] ?? null;
+
+        if (! $medicineId || ! $dose || ! $timesPerDay || ! $duration) {
+            return null;
+        }
+
+        $medicine = self::getMedicineDetails($medicineId);
+
+        if (! $medicine) {
+            return null;
+        }
+
+        $totalRequired = $dose * $timesPerDay * $duration;
+
+        return $medicine['measurement_type'] === 'volume' && $medicine['volume_per_unit']
+            ? (int) ceil($totalRequired / $medicine['volume_per_unit'])
+            : (int) ceil($totalRequired);
     }
 
     public static function getFormSchema(): array
@@ -481,22 +593,24 @@ class CreatePrescription extends CreateRecord
                         ->relationship(
                             name: 'patient',
                             titleAttribute: 'first_name',
-                            modifyQueryUsing: fn (Builder $query) => $query
+                            modifyQueryUsing: fn(Builder $query) => $query
                                 ->where('physician_id', Auth::id())
                                 ->select(['id', 'first_name', 'last_name', 'patient_number'])
                         )
-                        ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->first_name} {$record->last_name} - {$record->patient_number}")
+                        ->getOptionLabelFromRecordUsing(fn($record) => "{$record->first_name} {$record->last_name} - {$record->patient_number}")
                         ->searchable(['first_name', 'last_name', 'patient_number'])
                         ->preload()
                         ->required()
                         ->live(onBlur: true)
                         ->afterStateUpdated(function ($state, Set $set) {
-                            $patient = Cache::remember("patient_info_{$state}", 3600,
-                                fn () => Patient::select('id', 'allergies', 'medical_conditions', 'insurance_provider_id', 'insurance_provider', 'insurance_number')->find($state)
+                            $patient = Cache::remember(
+                                "patient_info_{$state}",
+                                3600,
+                                fn() => Patient::select('id', 'allergies', 'medical_conditions', 'insurance_provider_id', 'insurance_provider', 'insurance_number')->find($state)
                             );
                             if ($patient) {
                                 $hasInsurance = ! empty($patient->insurance_number) &&
-                                               (! empty($patient->insurance_provider_id) || ! empty($patient->insurance_provider));
+                                    (! empty($patient->insurance_provider_id) || ! empty($patient->insurance_provider));
                                 $set('patient_has_insurance', $hasInsurance);
                                 if ($hasInsurance) {
                                     $set('insurance_covered', true);
@@ -507,23 +621,23 @@ class CreatePrescription extends CreateRecord
 
             Section::make('Diagnosis & Details')
                 ->schema([
-                Textarea::make('diagnosis')->label('Diagnosis')->rows(1)->required()->columnSpanFull(),
-                Textarea::make('notes')->label('Prescription Notes')->rows(2)->required()->columnSpanFull()
+                    Textarea::make('diagnosis')->label('Diagnosis')->rows(1)->required()->columnSpanFull(),
+                    Textarea::make('notes')->label('Prescription Notes')->rows(2)->required()->columnSpanFull()
                         ->placeholder('Additional notes or instructions'),
-                Toggle::make('insurance_covered')
+                    Toggle::make('insurance_covered')
                         ->label('Insurance Coverage')
                         ->helperText('Does this prescription have insurance coverage?')
                         ->default(false)
-                        ->visible(fn (Get $get) => $get('patient_has_insurance') === true)
+                        ->visible(fn(Get $get) => $get('patient_has_insurance') === true)
                         ->live(),
-            ])->columns(3),
+                ])->columns(3),
 
             Section::make('Medicines')->columnSpanFull()
                 ->schema([
-                Placeholder::make('_medicine_table_header')
+                    Placeholder::make('_medicine_table_header')
                         ->hiddenLabel()
                         ->dehydrated(false)
-                        ->content(new \Illuminate\Support\HtmlString('
+                        ->content(new HtmlString('
                         <div style="display:grid;grid-template-columns:3fr 1fr 2fr 1fr 1fr 1fr 1fr 2fr;gap:0.5rem;padding:0.35rem 0.75rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:0.5rem 0.5rem 0 0;font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">
                             <span>Medicine</span><span>Dose</span><span>Frequency</span>
                             <span>Days</span><span>Qty</span><span>Unit (KES)</span>
@@ -531,16 +645,18 @@ class CreatePrescription extends CreateRecord
                         </div>
                     ')),
 
-                Repeater::make('items')
+                    Repeater::make('items')
                         ->relationship('items')
                         ->hiddenLabel()
                         ->schema([
                             Select::make('medicine_id')
                                 ->hiddenLabel()->placeholder('Medicine…')
-                                ->options(fn (Get $get) => collect(self::getCachedMedicineOptions())
-                                    ->reject(fn ($id) => in_array($id,
-                                        collect($get('../../items') ?? [])->pluck('medicine_id')->filter()->toArray()
-                                    ))->toArray()
+                                ->options(
+                                    fn(Get $get) => collect(self::getCachedMedicineOptions())
+                                        ->reject(fn($id) => in_array(
+                                            $id,
+                                            collect($get('../../items') ?? [])->pluck('medicine_id')->filter()->toArray()
+                                        ))->toArray()
                                 )
                                 ->searchable()->preload()->required()
                                 ->live(onBlur: true)
@@ -560,29 +676,33 @@ class CreatePrescription extends CreateRecord
                                 ->columnSpan(3),
 
                             TextInput::make('dose_amount')
-                                ->hiddenLabel()->placeholder(fn (Get $get) => $get('_medicine_type') === 'volume' ? 'ml' : 'units')
+                                ->hiddenLabel()->placeholder(fn(Get $get) => $get('_medicine_type') === 'volume' ? 'ml' : 'units')
                                 ->numeric()->required()->minValue(0.1)->step(0.1)
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn (Get $get, Set $set) => self::refreshPreviews($get, $set))
+                                ->afterStateUpdated(fn(Get $get, Set $set) => self::refreshPreviews($get, $set))
                                 ->columnSpan(1),
 
                             Select::make('frequency')
                                 ->hiddenLabel()->placeholder('Frequency…')
                                 ->options([
-                                    'OD' => 'OD – once daily', 'BDS' => 'BDS – twice daily',
-                                    'TDS' => 'TDS – three times daily', 'QID' => 'QID – four times daily',
-                                    'Nocte' => 'Nocte – once at night', 'Stat' => 'Stat – immediately',
+                                    'OD' => 'OD – once daily',
+                                    'BDS' => 'BDS – twice daily',
+                                    'TDS' => 'TDS – three times daily',
+                                    'QID' => 'QID – four times daily',
+                                    'Nocte' => 'Nocte – once at night',
+                                    'Stat' => 'Stat – immediately',
                                     'PRN' => 'PRN – as required',
                                 ])
                                 ->required()->searchable()->live()
-                                ->afterStateUpdated(fn (Get $get, Set $set) => self::refreshPreviews($get, $set))
+                                ->afterStateUpdated(fn(Get $get, Set $set) => self::refreshPreviews($get, $set))
                                 ->columnSpan(2),
 
                             TextInput::make('duration_days')
                                 ->hiddenLabel()->placeholder('Days')
                                 ->numeric()->required()->minValue(1)
+                                ->rules(self::stockRules())
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn (Get $get, Set $set) => self::refreshPreviews($get, $set))
+                                ->afterStateUpdated(fn(Get $get, Set $set) => self::refreshPreviews($get, $set))
                                 ->columnSpan(1),
 
                             TextInput::make('_preview_quantity')->hiddenLabel()->disabled()->dehydrated(false)->placeholder('—')->columnSpan(1),
@@ -599,7 +719,7 @@ class CreatePrescription extends CreateRecord
                         ->cloneable()
                         ->reorderable(false)
                         ->itemLabel(null),
-            ]),
+                ]),
         ];
     }
 }
