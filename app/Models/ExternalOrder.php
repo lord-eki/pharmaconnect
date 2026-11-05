@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Models\InsuranceClaim;
 use App\Models\Setting;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -60,7 +62,7 @@ class ExternalOrder extends Model
             }
 
             if (!$externalOrder->created_by_user_id) {
-                $externalOrder->created_by_user_id = auth()->id();
+                $externalOrder->created_by_user_id = Auth::id();
             }
         });
     }
@@ -246,17 +248,15 @@ class ExternalOrder extends Model
                 'items_count'       => count($supplierItems),
             ]);
 
-            // Notify supplier asynchronously 
             dispatch(fn () => $this->notifySupplier($order))->afterResponse();
         }
 
-        // Any items with no available supplier get their own order flagged
         if (!empty($unresolvableItems)) {
             $fallbackTotal = collect($unresolvableItems)->sum('total_price');
 
             $fallbackOrder = Order::create([
                 'order_number'      => Order::generateOrderNumber(),
-                'supplier_id'       => null,          // operations will assign
+                'supplier_id'       => null,          
                 'external_order_id' => $this->id,
                 'quotation_id'      => null,
                 'prescription_id'   => null,
@@ -297,7 +297,7 @@ class ExternalOrder extends Model
      */
     public function createConsolidatedDelivery($orders): Delivery
     {
-        if ($orders instanceof \Illuminate\Support\Collection) {
+        if ($orders instanceof Collection) {
             if ($orders->isEmpty()) {
                 throw new \Exception('Cannot create delivery without orders');
             }
@@ -310,7 +310,6 @@ class ExternalOrder extends Model
             throw new \Exception('Orders must be a Collection or array');
         }
 
-        // Collect all supplier pickup locations
         $pickupLocations = [];
         foreach ($orders as $order) {
             if (!$order->relationLoaded('supplier')) {
@@ -330,7 +329,6 @@ class ExternalOrder extends Model
             ];
         }
 
-        // Calculate delivery fee
         $deliveryFee = $this->calculateDeliveryFee($pickupLocations);
 
         $delivery = Delivery::create([
@@ -465,7 +463,6 @@ class ExternalOrder extends Model
             $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . 'Cancelled: ' . $reason;
             $this->save();
 
-            // Cancel all related supplier orders
             Order::where('external_order_id', $this->id)
                 ->whereIn('status', ['pending_review', 'sent_to_supplier', 'confirmed'])
                 ->each(function ($order) use ($reason) {
@@ -501,7 +498,6 @@ class ExternalOrder extends Model
             'status'                => $this->status,
         ]);
 
-        // Return existing if already loaded on the model
         if ($this->relationLoaded('insuranceClaim') && $this->insuranceClaim) {
             Log::info('[CLAIM-DIAG] Returning already-loaded claim', [
                 'claim_id' => $this->insuranceClaim->id,
@@ -565,7 +561,6 @@ class ExternalOrder extends Model
             'status'                => $claim->status,
         ]);
 
-        // Verify it actually persisted with external_order_id
         $verify = InsuranceClaim::where('external_order_id', $this->id)->first();
         Log::info('[CLAIM-DIAG] DB verification after create', [
             'found_in_db'                => (bool) $verify,

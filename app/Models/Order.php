@@ -6,12 +6,14 @@ use App\Exceptions\StockShortageException;
 use App\Services\CommissionService;
 use App\Services\PaymentService;
 use App\Models\Setting;
+use App\Services\OrderReassignmentService;
 use App\Services\PricingService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -75,7 +77,6 @@ class Order extends Model
         });
 
         static::saved(function ($order) {
-            // Update prescription status when order delivered
             if ($order->status === 'delivered') {
                 if ($order->prescription) {
                     $allDelivered = $order->prescription->orders()
@@ -87,7 +88,6 @@ class Order extends Model
                     }
                 }
 
-                // Handle external order
                 if ($order->externalOrder) {
                     $allDelivered = $order->externalOrder->orders()
                         ->where('status', '!=', 'delivered')
@@ -144,7 +144,6 @@ class Order extends Model
      */
     protected static function handleOrderConfirmation(Order $order): void
     {
-        // Handle prescription-based orders
         $prescription = $order->prescription;
         if ($prescription) {
             if (! $prescription->delivery) {
@@ -201,7 +200,6 @@ class Order extends Model
                         'total_orders' => $allOrders->count(),
                     ]);
 
-                    // Update external order status
                     $externalOrder->update(['status' => 'processing']);
                 } catch (\Exception $e) {
                     Log::error('Failed to create delivery for external order', [
@@ -267,7 +265,6 @@ class Order extends Model
             throw new \Exception('Order must be in pending_review status to send to supplier');
         }
 
-        // ── Stock check before sending 
         $shortages = $this->checkStockShortages();
 
         if (! empty($shortages)) {
@@ -315,7 +312,6 @@ class Order extends Model
             $availableStock = $supplierMedicine?->stock_quantity ?? 0;
 
             if ($availableStock < $item->quantity) {
-                // Find alternative suppliers with enough stock, sorted cheapest first
                 $alternatives = DB::table('supplier_medicines as sm')
                     ->join('suppliers as s', 's.id', '=', 'sm.supplier_id')
                     ->where('sm.medicine_id', $item->medicine_id)
@@ -353,14 +349,13 @@ class Order extends Model
         return DB::transaction(function () use ($newSupplierId, $reason) {
             $pricingService = app(PricingService::class);
 
-            // Record original supplier in history
             $history = $this->reassignment_history ?? [];
             $history[] = [
                 'from_supplier_id' => $this->supplier_id,
                 'to_supplier_id'   => $newSupplierId,
                 'reason'           => $reason ?? 'Stock shortage',
                 'reassigned_at'    => now()->toIso8601String(),
-                'reassigned_by'    => auth()->id(),
+                'reassigned_by'    => Auth::id(),
             ];
 
             if (! $this->original_supplier_id) {
@@ -376,7 +371,6 @@ class Order extends Model
                 $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . 'Reassigned: ' . $reason;
             }
 
-            // Recalculate item prices for the new supplier
             $supplierTotal  = 0;
             $markedUpTotal  = 0;
 
@@ -412,7 +406,6 @@ class Order extends Model
                 $markedUpTotal += $pricing['final_total'];
             }
 
-            // Preserve existing delivery fee item
             $deliveryFeeItem = $this->deliveryFeeItem;
 
             $deliveryFee     = $deliveryFeeItem ? $deliveryFeeItem->total_price : 0;
@@ -445,10 +438,8 @@ class Order extends Model
             return;
         }
 
-        // Reload prescription with patient insurance info
         $prescription->load(['orders', 'patient.insuranceProvider']);
 
-        // Check if all orders are confirmed or delivered
         $allConfirmed = $prescription->orders()
             ->whereNotIn('status', ['confirmed', 'delivered'])
             ->doesntExist();
@@ -460,10 +451,8 @@ class Order extends Model
                 'insurance_covered' => $prescription->insurance_covered,
             ]);
 
-            // Create insurance claim if needed
             if ($prescription->insurance_covered) {
                 try {
-                    // Check if patient has insurance setup
                     $patient = $prescription->patient;
 
                     $hasInsuranceProvider = ! empty($patient->insurance_provider_id) || ! empty($patient->insurance_provider);
@@ -486,7 +475,6 @@ class Order extends Model
                         return;
                     }
 
-                    // Check if claim already exists
                     if ($prescription->insuranceClaim) {
                         Log::info('Insurance claim already exists', [
                             'prescription_id' => $prescription->id,
@@ -494,7 +482,6 @@ class Order extends Model
                             'claim_number' => $prescription->insuranceClaim->claim_number,
                         ]);
 
-                        // Verify claim has provider_id, fix if missing
                         if (! $prescription->insuranceClaim->insurance_provider_id) {
                             $prescription->insuranceClaim->update([
                                 'insurance_provider_id' => $patient->insurance_provider_id,
@@ -506,7 +493,6 @@ class Order extends Model
                             ]);
                         }
                     } else {
-                        // Create new insurance claim
                         $claim = $prescription->createInsuranceClaim();
 
                         Log::info('Insurance claim created after all orders confirmed', [
@@ -668,7 +654,7 @@ class Order extends Model
      */
     public function reject(string $reason, ?int $rejectedBy = null): bool
     {
-        $reassignmentService = app(\App\Services\OrderReassignmentService::class);
+        $reassignmentService = app(OrderReassignmentService::class);
 
         return $reassignmentService->rejectOrder($this, $reason, $rejectedBy);
     }
@@ -742,22 +728,18 @@ class Order extends Model
      */
     public function isEligibleForInvoice(): bool
     {
-        // Must be delivered
         if ($this->status !== 'delivered') {
             return false;
         }
 
-        // Must have a prescription with patient
         if (! $this->prescription || ! $this->prescription->patient) {
             return false;
         }
 
-        // Patient must have insurance
         if (! $this->prescription->patient->insurance_provider_id) {
             return false;
         }
 
-        // Must not already have an invoice
         if ($this->invoices()->exists()) {
             return false;
         }
@@ -773,7 +755,6 @@ class Order extends Model
         $month = date('m');
         $ym = $year . $month;
 
-        // Get the last order for this year and month
         $lastOrder = static::whereYear('created_at', $year)
             ->whereMonth('created_at', $month)
             ->orderBy('id', 'desc')
@@ -785,7 +766,6 @@ class Order extends Model
             $sequence = (int) $matches[1] + 1;
         }
 
-        // Pad the sequence to 5 digits
         $sequencePadded = str_pad($sequence, 5, '0', STR_PAD_LEFT);
 
         return sprintf('%s%s-%s', $prefix, $ym, $sequencePadded);
@@ -804,7 +784,6 @@ class Order extends Model
             $this->status = 'confirmed';
             $this->save();
 
-            // Deduct stock
             if (in_array($oldStatus, ['sent_to_supplier', 'pending', 'pending_review'])) {
                 foreach ($this->items as $item) {
                     $supplierMedicine = $item->medicine->supplierMedicines()
@@ -831,7 +810,6 @@ class Order extends Model
                     }
                 }
 
-                // Clear medicine caches
                 $medicineIds = $this->items->pluck('medicine_id')->toArray();
                 Medicine::clearCachesForMedicines($medicineIds);
             }
@@ -859,7 +837,6 @@ class Order extends Model
             ]);
         }
 
-        // Notify stakeholders
         $this->notifyStakeholders('shipped');
 
         return true;
@@ -877,7 +854,6 @@ class Order extends Model
             return;
         }
 
-        // For external (insurer-originated) orders, delivery is handled at the ExternalOrder level
         if ($this->external_order_id && !$this->prescription_id) {
             Log::info('Skipping createDelivery for external order — handled at ExternalOrder level', [
                 'order_id' => $this->id,
@@ -945,7 +921,6 @@ class Order extends Model
             $this->delivered_at = now();
             $this->save();
 
-            // Handle prescription-based delivery
             if ($this->prescription) {
                 $prescription = $this->prescription;
 
@@ -966,7 +941,6 @@ class Order extends Model
                     }
                 }
 
-                // Process payments and commissions — only create receivables if insurance claim is approved (or not insured)
                 $claimApproved = !$prescription->insurance_covered
                     || ($prescription->insuranceClaim && in_array($prescription->insuranceClaim->status, ['approved', 'paid']));
 
@@ -1001,11 +975,9 @@ class Order extends Model
                 $this->prescription->markFulfilled();
             }
 
-            // Handle external order delivery
             if ($this->externalOrder) {
                 $externalOrder = $this->externalOrder;
 
-                // Check if all orders are delivered
                 $allDelivered = $externalOrder->orders()
                     ->where('status', '!=', 'delivered')
                     ->doesntExist();
@@ -1018,7 +990,6 @@ class Order extends Model
                         'order_number' => $externalOrder->order_number,
                     ]);
 
-                    // Create insurance claim for insurer-originated orders on delivery confirmation
                     if ($externalOrder->insurance_provider_id) {
                         try {
                             $externalOrder->load('insuranceClaim');
@@ -1040,7 +1011,6 @@ class Order extends Model
                     }
                 }
 
-                // Only process receivables if the insurance claim is approved (or no insurance)
                 if ($externalOrder->claimAllowsReceivables()) {
                     $paymentService = app(PaymentService::class);
                     try {
@@ -1070,7 +1040,6 @@ class Order extends Model
     protected function notifyStakeholders(string $event): void
     {
         if ($event === 'sent_to_supplier') {
-            // Send notification to supplier
             if ($this->supplier && $this->supplier->user) {
                 try {
                     $this->supplier->user->notify(new \App\Notifications\NewOrderNotification($this));
@@ -1171,7 +1140,6 @@ class Order extends Model
             $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . 'Cancelled: ' . $reason;
             $this->save();
 
-            // Restore stock quantities if order was confirmed or beyond
             if (in_array($oldStatus, ['confirmed', 'processing', 'shipped'])) {
                 foreach ($this->items as $item) {
                     $supplierMedicine = $item->medicine->supplierMedicines()
@@ -1191,7 +1159,6 @@ class Order extends Model
                     }
                 }
 
-                // Clear medicine caches
                 $medicineIds = $this->items->pluck('medicine_id')->toArray();
                 Medicine::clearCachesForMedicines($medicineIds);
 
@@ -1207,17 +1174,14 @@ class Order extends Model
                 ]);
             }
 
-            // Cancel delivery if exists
             if ($this->delivery) {
                 $this->delivery->update(['status' => 'cancelled']);
 
-                // Free up rider if assigned
                 if ($this->delivery->rider) {
                     $this->delivery->rider->update(['is_available' => true]);
                 }
             }
 
-            // Notify stakeholders
             $this->notifyStakeholders('cancelled');
 
             return true;

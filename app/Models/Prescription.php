@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -57,7 +58,7 @@ class Prescription extends Model
 
 
             if (! $prescription->physician_id) {
-                $prescription->physician_id = auth()->id();
+                $prescription->physician_id = Auth::id();
             }
 
             if (! $prescription->prescription_number) {
@@ -451,7 +452,6 @@ class Prescription extends Model
 
         foreach ($supplierGroups as $supplierId => $groupData) {
             try {
-                // The delivery fee line item is appended only to the first supplier order
                 $this->createOrderForSupplier($quotation, $supplierId, $groupData, $isFirstOrder);
                 $isFirstOrder = false;
             } catch (\Exception $e) {

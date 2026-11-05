@@ -85,11 +85,17 @@ class ReceivablesTable
 
             ])
             ->groups([
+                Group::make('external_order_id')
+                    ->label('By Insurance Claim')
+                    ->getKeyFromRecordUsing(fn(Receivable $record) => $record->external_order_id ?? 'none')
+                    ->getTitleFromRecordUsing(fn (Receivable $record) => $record->external_order_id ? 'Claim — Order #' . $record->external_order_id : 'Not Insurance-Claim Based')
+                    ->scopeQueryByKeyUsing(fn($query, string $key) => $key === 'none' ? $query->whereNull('external_order_id') : $query->where('external_order_id' , $key)),    
+
                 Group::make('prescription_id')
                     ->label('By Prescription')
-                    ->getTitleFromRecordUsing(fn (Receivable $record) => $record->prescription_id
-                        ? 'Prescription — ' . ($record->prescription?->prescription_number ?? "#{$record->prescription_id}")
-                        : 'Not Prescription-Based'),
+                    ->getKeyFromRecordUsing(fn(Receivable $record) => $record->prescription_id ?? 'none')
+                    ->getTitleFromRecordUsing(fn (Receivable $record) => $record->prescription_id ? 'Prescription — ' . ($record->prescription?->prescription_number ?? "#{$record->prescription_id}") : 'Not Prescription-Based')
+                    ->scopeQueryByKeyUsing(fn($query, string $key) => $key === 'none' ? $query->whereNull('prescription_id') : $query->where('prescription_id', $key)),
             ])
             ->defaultGroup('external_order_id')
             ->filters([
