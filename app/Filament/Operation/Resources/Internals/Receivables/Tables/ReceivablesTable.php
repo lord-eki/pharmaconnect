@@ -46,7 +46,6 @@ class ReceivablesTable
                     ->label('Prescription')
                     ->searchable()->placeholder('--')
                     ->sortable(),
-                // ->url(fn ($record) => $record->prescription_id ? route('filament.admin.resources.prescriptions.view', $record->prescription_id) : null),
 
                 TextColumn::make('patient.last_name')
                     ->label('Patient')
@@ -86,11 +85,6 @@ class ReceivablesTable
 
             ])
             ->groups([
-                // Group::make('external_order_id')
-                //     ->label('By Insurance Claim')
-                //     ->getTitleFromRecordUsing(fn (Receivable $record) => $record->external_order_id
-                //         ? 'Claim — Order #' . $record->external_order_id
-                //         : 'Not Insurance-Claim Based'),
                 Group::make('prescription_id')
                     ->label('By Prescription')
                     ->getTitleFromRecordUsing(fn (Receivable $record) => $record->prescription_id

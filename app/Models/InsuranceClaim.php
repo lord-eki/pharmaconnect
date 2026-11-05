@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class InsuranceClaim extends Model
@@ -222,29 +224,31 @@ class InsuranceClaim extends Model
      */
     public function approve(float $approvedAmount, ?string $notes = null, ?int $reviewedBy = null): void
     {
+
+    DB::transaction(function() use ($approvedAmount,$notes,$reviewedBy){
         $this->update([
             'status' => 'approved',
             'approved_amount' => $approvedAmount,
             'deductible_amount' => $this->claimed_amount - $approvedAmount,
             'reviewed_at' => now(),
-            'reviewed_by' => $reviewedBy ?? auth()->id(),
-            'notes' => $notes ?? $this->notes,
+            'reviewed_by' => $reviewedBy ?? Auth::id(),
+            'notes' => $notes ?? $this->notes
         ]);
 
-        if ($this->prescription_id) {
-            Receivable::where('prescription_id', $this->prescription_id)
-                ->whereNull('received_at')
-                ->update([
-                    'claim_status' => 'approved',
-                    'amount' => $approvedAmount,
-                ]);
+        Order::processApprovedClaimReceivables($this->fresh());
+
+        $open = $this->openReceivables()->get();
+
+        foreach($open as $receivable){
+            $receivable->update(['claim_status' => 'approved']);
         }
 
-        if ($this->external_order_id) {
-            Receivable::where('external_order_id', $this->external_order_id)
-                ->whereNull('received_at')
-                ->update(['claim_status' => 'approved']);
+        if($open->count() === 1){
+            $open->first()->update(['amount' => $approvedAmount]);
         }
+    });
+    
+       
     }
 
     /**
@@ -256,14 +260,25 @@ class InsuranceClaim extends Model
             'status' => 'rejected',
             'rejection_reason' => $reason,
             'reviewed_at' => now(),
-            'reviewed_by' => $reviewedBy ?? auth()->id(),
+            'reviewed_by' => $reviewedBy ?? Auth::id(),
         ]);
 
-        if ($this->prescription_id) {
-            Receivable::where('prescription_id', $this->prescription_id)
-                ->whereNull('received_at')
-                ->update(['claim_status' => 'rejected']);
-        }
+        $this->openReceivables()->update(['claim_status' => 'rejected']);
+
+     
+    }
+
+    public function openReceivables()
+    {
+        return Receivable::whereNull('received_at')->where(function($q){
+            if($this->prescription_id){
+                $q->where('prescription_id',$this->prescription_id);
+            }
+
+            if($this->external_order_id){
+                $q->orWhere('external_order_id',$this->external_order_id);
+            }
+        });
     }
 
     /**

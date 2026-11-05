@@ -538,16 +538,16 @@ class Order extends Model
         return $this->hasMany(Payable::class);
     }
 
-    /**
-     * Process receivables for all delivered orders once an insurance claim is approved.     *
-     * The approved_amount from the claim is used instead of the claimed (order) total,
-     * ensuring we only ever book what the insurer actually agreed to pay.
-     */
+
     public static function processApprovedClaimReceivables(InsuranceClaim $claim): void
     {
+
+        if (! $claim->prescription_id && ! $claim->external_order_id) {
+            return;
+        }
+        
         $paymentService = app(PaymentService::class);
 
-        // Collect delivered orders linked to this claim (via prescription or external order)
         $orders = static::where(function ($q) use ($claim) {
             if ($claim->prescription_id) {
                 $q->where('prescription_id', $claim->prescription_id);
@@ -561,39 +561,16 @@ class Order extends Model
 
         if ($orders->isEmpty()) {
             Log::warning('processApprovedClaimReceivables: no delivered orders found for claim', [
-                'claim_id'          => $claim->id,
-                'prescription_id'   => $claim->prescription_id,
-                'external_order_id' => $claim->external_order_id ?? null,
+                'claim_id' => $claim->id,
             ]);
             return;
         }
 
-        // Distribute the approved_amount proportionally across orders
-        $totalClaimed   = $orders->sum('total_amount');
         $approvedAmount = (float) $claim->approved_amount;
 
         foreach ($orders as $order) {
-            // Skip if receivable already exists for this order
-            if ($order->receivables()->exists()) {
-                Log::info('Receivable already exists — skipping', ['order_id' => $order->id]);
-                continue;
-            }
-
-            // Proportional share of the approved amount
-            $share = $totalClaimed > 0
-                ? round(($order->total_amount / $totalClaimed) * $approvedAmount, 2)
-                : $approvedAmount / $orders->count();
-
             try {
-                // Temporarily override the order amount so PaymentService books the right figure
-                $order->setRelation('_approvedAmountOverride', $share);
-                $paymentService->processOrderPayments($order, $share);
-
-                Log::info('Receivable created after claim approval', [
-                    'order_id'        => $order->id,
-                    'claim_id'        => $claim->id,
-                    'approved_share'  => $share,
-                ]);
+                $paymentService->processOrderPayments($order, $approvedAmount);
             } catch (\Exception $e) {
                 Log::error('Failed to create receivable after claim approval', [
                     'order_id' => $order->id,

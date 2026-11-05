@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\InsuranceClaim;
 use App\Models\Order;
 use App\Models\Patient;
 use App\Models\Payable;
@@ -68,21 +69,11 @@ class PaymentService
     }
 
     /**
-     * Create receivable from patient/insurance.
-     * Handles both prescription-based orders and external (insurer-originated) orders.
+     * Create one receivable per prescription or  external order) and payer.
      */
     protected function createReceivableForOrder(Order $order, ?float $approvedAmountOverride = null): ?Receivable
     {
         try {
-            $existing = Receivable::where('order_id', $order->id)->first();
-            if ($existing) {
-                Log::info('Receivable already exists for order -- skipping duplicate creation', [
-                    'order_id' => $order->id,
-                    'existing_receivable' => $existing->id,
-                ]);
-                return $existing;
-            }
-
             if ($order->external_order_id && ! $order->prescription_id) {
                 return $this->createReceivableForExternalOrder($order, $approvedAmountOverride);
             }
@@ -120,43 +111,83 @@ class PaymentService
                 $paymentSource = 'insurance';
 
                 Log::info('Receivable will be from insurance', [
-                    'order_id'             => $order->id,
-                    'patient_id'           => $patient->id,
+                    'order_id'              => $order->id,
+                    'patient_id'            => $patient->id,
                     'insurance_provider_id' => $patient->insurance_provider_id,
-                    'insurance_number'     => $patient->insurance_number,
+                    'insurance_number'      => $patient->insurance_number,
                 ]);
             } else {
                 Log::info('Receivable will be from patient', [
-                    'order_id'                      => $order->id,
-                    'patient_id'                    => $patient->id,
+                    'order_id'                       => $order->id,
+                    'patient_id'                     => $patient->id,
                     'prescription_insurance_covered' => $prescription->insurance_covered,
-                    'patient_has_provider'          => ! empty($patient->insurance_provider_id),
-                    'patient_has_number'            => ! empty($patient->insurance_number),
+                    'patient_has_provider'           => ! empty($patient->insurance_provider_id),
+                    'patient_has_number'             => ! empty($patient->insurance_number),
                 ]);
             }
 
-            $totalAmount = $approvedAmountOverride ?? $order->total_amount;
-            if (! $approvedAmountOverride && $order->delivery) {
-                $totalAmount += $order->delivery->delivery_fee;
+            $existing = Receivable::where('prescription_id', $prescription->id)
+                ->where('payment_source', $paymentSource)
+                ->first();
+
+            if ($existing) {
+                Log::info('Receivable already exists for prescription -- skipping duplicate creation', [
+                    'order_id'            => $order->id,
+                    'prescription_id'     => $prescription->id,
+                    'existing_receivable' => $existing->id,
+                ]);
+
+                return $existing;
             }
 
-            $receivable = Receivable::create([
-                'reference'            => $this->generateReceivableReference(),
-                'order_id'             => $order->id,
-                'prescription_id'      => $prescription->id,
-                'patient_id'           => $patient->id,
+            if (! $this->allOrdersDelivered('prescription_id', $prescription->id)) {
+                Log::info('Receivable deferred - other orders of this prescription are not delivered yet', [
+                    'order_id'        => $order->id,
+                    'prescription_id' => $prescription->id,
+                ]);
+
+                return null;
+            }
+
+            $approved = 0.0;
+
+            if ($approvedAmountOverride !== null) {
+                $totalAmount = $approvedAmountOverride;
+            } else {
+                if ($paymentSource === 'insurance') {
+                    $approved = (float) ($prescription->insuranceClaim?->approved_amount ?? 0);
+                }
+
+                $totalAmount = $approved > 0
+                    ? $approved
+                    : $this->deliveredOrdersTotal('prescription_id', $prescription->id)
+                    + (float) ($order->delivery?->delivery_fee ?? 0);
+            }
+
+            $attributes = [
+                'reference'             => $this->generateReceivableReference(),
+                'order_id'              => $order->id,
+                'prescription_id'       => $prescription->id,
+                'patient_id'            => $patient->id,
                 'insurance_provider_id' => $paymentSource === 'insurance' ? $patient->insurance_provider_id : null,
-                'amount'               => $totalAmount,
-                'payment_source'       => $paymentSource,
-            ]);
+                'amount'                => $totalAmount,
+                'payment_source'        => $paymentSource,
+            ];
+
+            if ($paymentSource === 'insurance' && ($approvedAmountOverride !== null || $approved > 0)) {
+                $attributes['claim_status'] = 'approved';
+            }
+
+            $receivable = Receivable::create($attributes);
 
             $this->createTransaction($receivable, 'receivable', 'pending');
 
             Log::info('Receivable created successfully', [
-                'receivable_id'        => $receivable->id,
-                'order_id'             => $order->id,
-                'amount'               => $totalAmount,
-                'payment_source'       => $paymentSource,
+                'receivable_id'         => $receivable->id,
+                'order_id'              => $order->id,
+                'prescription_id'       => $prescription->id,
+                'amount'                => $totalAmount,
+                'payment_source'        => $paymentSource,
                 'insurance_provider_id' => $receivable->insurance_provider_id,
             ]);
 
@@ -171,11 +202,6 @@ class PaymentService
         }
     }
 
-    /**
-     * Create receivable for an external (insurer-originated) order.
-     * The insurance provider is the payer — there is no patient on these orders.
-     * Called only after the insurance claim has been approved 
-     */
     protected function createReceivableForExternalOrder(Order $order, ?float $approvedAmountOverride = null): ?Receivable
     {
         $order->load(['externalOrder.insuranceClaim', 'externalOrder.insuranceProvider']);
@@ -187,40 +213,78 @@ class PaymentService
                 'order_id'          => $order->id,
                 'external_order_id' => $order->external_order_id,
             ]);
+
             return null;
         }
 
-        if (! $externalOrder->insurance_provider_id) {
+        $providerId = $externalOrder->insurance_provider_id
+            ?? $externalOrder->insuranceClaim?->insurance_provider_id;
+
+        if (! $providerId) {
             Log::error('Cannot create receivable for external order - no insurance provider', [
                 'order_id'          => $order->id,
                 'external_order_id' => $externalOrder->id,
             ]);
+
             return null;
         }
 
-       
-        $amount = $approvedAmountOverride ?? $order->total_amount;
+        $existing = Receivable::where('external_order_id', $externalOrder->id)->first();
 
-        $receivable = Receivable::create([
-            'reference'            => $this->generateReceivableReference(),
-            'order_id'             => $order->id,
-            'prescription_id'      => null,
-            'patient_id'           => null,
-            'external_order_id'    => $externalOrder->id,
-            'insurance_provider_id' => $externalOrder->insurance_provider_id,
-            'amount'               => $amount,
-            'payment_source'       => 'insurance',
-        ]);
+        if ($existing) {
+            Log::info('Receivable already exists for external order -- skipping duplicate creation', [
+                'order_id'            => $order->id,
+                'external_order_id'   => $externalOrder->id,
+                'existing_receivable' => $existing->id,
+            ]);
+
+            return $existing;
+        }
+
+        if (! $this->allOrdersDelivered('external_order_id', $externalOrder->id)) {
+            Log::info('Receivable deferred - other orders of this external order are not delivered yet', [
+                'order_id'          => $order->id,
+                'external_order_id' => $externalOrder->id,
+            ]);
+
+            return null;
+        }
+
+        $claim = $externalOrder->insuranceClaim;
+
+        $approvedFromClaim = (float) ($claim?->approved_amount ?? 0);
+
+        $amount = $approvedAmountOverride
+            ?? ($approvedFromClaim > 0
+                ? $approvedFromClaim
+                : $this->deliveredOrdersTotal('external_order_id', $externalOrder->id));
+
+        $attributes = [
+            'reference'             => $this->generateReceivableReference(),
+            'order_id'              => $order->id,
+            'prescription_id'       => null,
+            'patient_id'            => null,
+            'external_order_id'     => $externalOrder->id,
+            'insurance_provider_id' => $providerId,
+            'amount'                => $amount,
+            'payment_source'        => 'insurance',
+        ];
+
+        if ($approvedAmountOverride !== null || in_array($claim?->status, ['approved', 'paid'], true)) {
+            $attributes['claim_status'] = 'approved';
+        }
+
+        $receivable = Receivable::create($attributes);
 
         $this->createTransaction($receivable, 'receivable', 'pending');
 
         Log::info('Receivable created for external order (insurer pays)', [
-            'receivable_id'        => $receivable->id,
-            'order_id'             => $order->id,
-            'external_order_id'    => $externalOrder->id,
-            'insurance_provider_id' => $externalOrder->insurance_provider_id,
-            'amount'               => $amount,
-            'approved_override'    => $approvedAmountOverride !== null,
+            'receivable_id'         => $receivable->id,
+            'order_id'              => $order->id,
+            'external_order_id'     => $externalOrder->id,
+            'insurance_provider_id' => $providerId,
+            'amount'                => $amount,
+            'approved_override'     => $approvedAmountOverride !== null,
         ]);
 
         return $receivable;
@@ -352,6 +416,26 @@ class PaymentService
     }
 
     /**
+     * True when every non-cancelled order in the group (prescription or external order) is delivered.
+     */
+    protected function allOrdersDelivered(string $column, int $id): bool
+    {
+        return ! Order::where($column, $id)
+            ->whereNotIn('status', ['delivered', 'cancelled'])
+            ->exists();
+    }
+
+    /**
+     * Sum of total_amount across delivered orders in the group.
+     */
+    protected function deliveredOrdersTotal(string $column, int $id): float
+    {
+        return (float) Order::where($column, $id)
+            ->where('status', 'delivered')
+            ->sum('total_amount');
+    }
+
+    /**
      * Get physician commission rate
      */
     protected function getPhysicianCommissionRate($physician, Order $order): float
@@ -385,7 +469,6 @@ class PaymentService
                 'paid_at' => now(),
             ]);
 
-            // Update transaction status
             if ($payable->transaction) {
                 $payable->transaction->update([
                     'status' => 'completed',
@@ -429,13 +512,11 @@ class PaymentService
                 'gateway_reference' => $paymentData['gateway_reference'] ?? null,
             ]);
 
-            // Update claim status if insurance payment
             if ($receivable->payment_source === 'insurance' && $receivable->claim_reference) {
                 $receivable->update([
                     'claim_status' => 'paid',
                 ]);
 
-                // Update prescription-linked insurance claim
                 if ($receivable->prescription_id && $receivable->prescription?->insuranceClaim) {
                     $receivable->prescription->insuranceClaim->update([
                         'status'  => 'paid',
@@ -443,9 +524,8 @@ class PaymentService
                     ]);
                 }
 
-                // Update external-order-linked insurance claim
                 if ($receivable->external_order_id) {
-                    $externalOrderClaim = \App\Models\InsuranceClaim::where('external_order_id', $receivable->external_order_id)->first();
+                    $externalOrderClaim = InsuranceClaim::where('external_order_id', $receivable->external_order_id)->first();
                     if ($externalOrderClaim) {
                         $externalOrderClaim->update([
                             'status'  => 'paid',
@@ -455,7 +535,6 @@ class PaymentService
                 }
             }
 
-            // Update transaction status
             if ($receivable->transaction) {
                 $receivable->transaction->update([
                     'status' => 'completed',
@@ -524,10 +603,14 @@ class PaymentService
      */
     public function getOrderPaymentSummary(Order $order): array
     {
-        $receivables = Receivable::where('order_id', $order->id)->get();
+        $receivables = Receivable::where(function ($q) use ($order) {
+            $q->where('order_id', $order->id);
+            if ($order->prescription_id)   $q->orWhere('prescription_id', $order->prescription_id);
+            if ($order->external_order_id) $q->orWhere('external_order_id', $order->external_order_id);
+        })->get();
+        
         $payables = Payable::where('order_id', $order->id)->get();
 
-        // Separate payables by type
         $supplierPayables = $payables->where('vendor_type', 'supplier');
         $commissionPayables = $payables->where('vendor_type', 'physician');
 
